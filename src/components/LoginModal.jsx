@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./LoginModal.css";
+import { safeFetchJson } from "../utils/api";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "1028308432321-defaultplaceholder.apps.googleusercontent.com";
@@ -12,16 +13,11 @@ export default function LoginModal({ onClose }) {
 
   const handleGoogleLoginSuccess = async (response) => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/google-login`, {
+      const data = await safeFetchJson(`${API_BASE}/api/admin/google-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credential: response.credential })
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(`DEBUG INFO: ${data.details || data.error || "Google authentication failed."}`);
-      }
 
       localStorage.setItem("adminToken", data.token);
       localStorage.setItem("adminEmail", data.user.email);
@@ -75,16 +71,11 @@ export default function LoginModal({ onClose }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/login`, {
+      const data = await safeFetchJson(`${API_BASE}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Login failed.");
-      }
 
       localStorage.setItem("adminToken", data.token);
       localStorage.setItem("adminEmail", data.user.email);

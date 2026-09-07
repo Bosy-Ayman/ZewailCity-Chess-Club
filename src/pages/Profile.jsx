@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { safeFetchJson } from "../utils/api";
 import "./Profile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -29,19 +30,15 @@ export default function Profile() {
     setIsLoading(true);
     try {
       // Fetch Profile
-      const profRes = await fetch(`${API_BASE}/api/profile?email=${email}`);
-      const profData = await profRes.json();
-      if (profRes.ok) {
-        setProfile(profData);
-      } else {
-        throw new Error(profData.error || "Failed to load profile");
-      }
+      const profData = await safeFetchJson(`${API_BASE}/api/profile?email=${email}`);
+      setProfile(profData);
 
       // Fetch User's Tournaments
-      const tourRes = await fetch(`${API_BASE}/api/users/${email}/tournaments`);
-      const tourData = await tourRes.json();
-      if (tourRes.ok) {
-        setTournaments(tourData);
+      try {
+        const tourData = await safeFetchJson(`${API_BASE}/api/users/${email}/tournaments`);
+        setTournaments(tourData || []);
+      } catch (tErr) {
+        setTournaments([]);
       }
     } catch (err) {
       setError(err.message);
@@ -54,8 +51,8 @@ export default function Profile() {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be smaller than 5MB");
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Image must be smaller than 8MB");
       return;
     }
 
@@ -63,18 +60,14 @@ export default function Profile() {
     reader.onloadend = async () => {
       const base64Image = reader.result;
       try {
-        const res = await fetch(`${API_BASE}/api/profile/image`, {
+        const data = await safeFetchJson(`${API_BASE}/api/profile/image`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, profileImage: base64Image })
+          body: JSON.stringify({ email: profile?.email || email, profileImage: base64Image })
         });
         
-        if (res.ok) {
-          setProfile(prev => ({ ...prev, profileImage: base64Image }));
-        } else {
-          const data = await res.json();
-          alert(data.error || "Failed to update profile image");
-        }
+        setProfile(prev => ({ ...prev, profileImage: data?.profileImage || base64Image }));
+        alert("Profile image updated successfully!");
       } catch (err) {
         alert("Error updating profile image: " + err.message);
       }

@@ -1,85 +1,70 @@
-# ♟️ ZC Chess Club - Web App
+# Getting Started with Create React App
 
-Welcome to the official repository for the **ZC Chess Club Web App**, built with **React**. This platform serves as the central hub for the Zewail City Chess Club, allowing members to participate in tournaments, manage applications, and engage with chess challenges.
+This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
----
+## Available Scripts
 
-## ✨ Features Implemented So Far
+In the project directory, you can run:
 
-### 1. User Authentication & Profiles
-* **Sign Up & Login**: Secure user authentication.
-* **User Profiles**: View and edit personal profiles and track club activity.
+### `npm start`
 
-### 2. Admin Dashboard
-* **Centralized Management**: Dedicated admin dashboard to manage users, applications, and events.
-* **Role-Based Access**: Specialized features restricted to administrators.
+Runs the app in the development mode.\
+Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-### 3. Recruitment & Application Forms
-* **Dynamic Forms**: Specific application forms tailored for various club roles, including HR, Multimedia, OC Head, OC Member, Trainee, and Trainer.
-* **Applications Management**: Admin view to easily manage and review applicant submissions via an interactive table.
+The page will reload when you make changes.\
+You may also see any lint errors in the console.
 
-### 4. Tournaments & Events
-* **Tournaments Hub**: View ongoing and past tournaments.
-* **Tournament Details & Brackets**: Detailed view of tournaments, including knockout brackets.
-* **Event Calendar**: Interactive calendar to track upcoming club events, meetings, and matches. Includes an admin view for editing events.
+### `npm test`
 
-### 5. Interactive Chess Puzzles
-* **Puzzle Challenge**: A dedicated section for users to solve chess puzzles, practice tactics, and improve their skills interactively.
+Launches the test runner in the interactive watch mode.\
+See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### 6. Club Information & Content
-* **About & History**: Dedicated pages detailing the club's background and historical milestones.
-* **Club Roles**: Information on various structural roles within the club.
-* **Contact Us**: A form to get in touch with the club's management team.
+### `npm run build`
 
----
+Builds the app for production to the `build` folder.\
+It correctly bundles React in production mode and optimizes the build for the best performance.
 
-## 🚀 Getting Started
+The build is minified and the filenames include the hashes.\
+Your app is ready to be deployed!
 
-### ✅ Prerequisites
-* [Node.js](https://nodejs.org/) (v16 or later)
-* [npm](https://www.npmjs.com/)
-* [Git](https://git-scm.com/)
+See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### 📦 Installation
+### `npm run eject`
 
-1. **Clone the repository**
-```bash
-git clone https://github.com/your-username/zc-chess-club.git
-cd "zc-chess-club/my-app"
-```
+**Note: this is a one-way operation. Once you `eject`, you can't go back!**
 
-2. **Install dependencies**
-```bash
-npm install
-```
+If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
 
-3. **Run the development server**
-```bash
-npm start
-```
-The app will be running at `http://localhost:3000`.
+Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
 
----
+You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
 
-## 🛠️ Technology Stack
-* **Frontend**: React.js
-* **Styling**: Vanilla CSS
+## Learn More
 
----
+You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
-## 🙌 Contributing
-1. Fork the repository
-2. Create a new branch (`git checkout -b my-feature`)
-3. Commit your changes (`git commit -m "Add my feature"`)
-4. Push the branch (`git push origin my-feature`)
-5. Open a Pull Request 🚀
+To learn React, check out the [React documentation](https://reactjs.org/).
 
----
+### Code Splitting
 
-## 📃 License
-This project is licensed under the [MIT License](LICENSE).
+This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
 
----
+### Analyzing the Bundle Size
 
-## 👏 Credits
-Made with 💖 by the ZC Chess Club Team
+This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+
+### Making a Progressive Web App
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+
+### Advanced Configuration
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+
+### Deployment
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+
+### `npm run build` fails to minify
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

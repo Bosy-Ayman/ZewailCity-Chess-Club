@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { safeFetchJson } from "../utils/api";
 import "./PuzzleChallenge.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -31,6 +33,8 @@ export default function PuzzleChallenge() {
   const [boardFen, setBoardFen] = useState("");
   const [correctMovesList, setCorrectMovesList] = useState([]);
   const [currentMoveIdx, setCurrentMoveIdx] = useState(0); // tracks index in correctMovesList
+  const [selectedSquare, setSelectedSquare] = useState(null);
+  const [optionSquares, setOptionSquares] = useState({});
 
   const timerRef = useRef(null);
   const boardLocked = useRef(false); // blocks input while opponent replies or puzzle advances
@@ -41,19 +45,24 @@ export default function PuzzleChallenge() {
 
   // Dynamic Board Width calculation to prevent piece drag offset
   const boardContainerRef = useRef(null);
-  const [boardWidth, setBoardWidth] = useState(380);
+  const [boardWidth, setBoardWidth] = useState(() => Math.min(window.innerWidth - 32, 380));
 
   useEffect(() => {
     const updateBoardWidth = () => {
       if (boardContainerRef.current) {
-        const clientW = boardContainerRef.current.clientWidth;
-        if (clientW > 0) {
-          setBoardWidth(clientW);
+        const innerW = boardContainerRef.current.clientWidth;
+        if (innerW > 0) {
+          setBoardWidth(innerW);
         }
+      } else {
+        const containerFallback = Math.min(window.innerWidth - 24, 380);
+        setBoardWidth(containerFallback);
       }
     };
 
     updateBoardWidth();
+    const t1 = setTimeout(updateBoardWidth, 50);
+    const t2 = setTimeout(updateBoardWidth, 200);
     window.addEventListener("resize", updateBoardWidth);
 
     let observer;
@@ -63,31 +72,62 @@ export default function PuzzleChallenge() {
     }
 
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       window.removeEventListener("resize", updateBoardWidth);
       if (observer) observer.disconnect();
     };
-  }, [isPlaying]);
+  }, [isPlaying, currentPuzzleIdx]);
 
   // User session cache
   const isLoggedIn = !!localStorage.getItem("adminToken");
   const userEmail = localStorage.getItem("adminEmail") || "";
+  const userRole = localStorage.getItem("userRole") || "member";
+  const isAdmin = userRole === "admin" || userRole === "oc" || userRole === "hr";
   const userName = userEmail ? userEmail.split("@")[0] : "Guest Player";
 
   // Fetch puzzle tournaments on load
   useEffect(() => {
     fetchTournaments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const MOCK_TOURNAMENTS = [
+    {
+      _id: "default-arena-1",
+      title: "Weekly Tactics Arena",
+      startDate: new Date().toISOString().split("T")[0],
+      timeLimit: 60,
+      puzzles: [
+        {
+          initialFen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+          mateIn: 1,
+          correctMoves: ["h5f7"],
+          description: "Find the classic Scholar's Mate in 1 move!"
+        },
+        {
+          initialFen: "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1",
+          mateIn: 1,
+          correctMoves: ["a1a8"],
+          description: "Exploit the weak back rank to deliver mate in 1!"
+        }
+      ],
+      leaderboard: []
+    }
+  ];
 
   const fetchTournaments = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/puzzle-tournaments`);
-      const data = await res.json();
-      if (res.ok) {
+      const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments`);
+      if (Array.isArray(data) && data.length > 0) {
         setTournaments(data);
+        return;
       }
+      setTournaments(MOCK_TOURNAMENTS);
     } catch (err) {
-      console.error("Failed to load puzzle tournaments:", err);
+      console.warn("Failed to load puzzle tournaments from server, using fallback:", err.message);
+      setTournaments(MOCK_TOURNAMENTS);
     } finally {
       setIsLoading(false);
     }
@@ -160,10 +200,106 @@ export default function PuzzleChallenge() {
     setTimeRemaining(timeLimit || 60);
     setGameFeedback("");
     setFeedbackType("");
+    setSelectedSquare(null);
+    setOptionSquares({});
+  };
+
+  // Helper to compute Lichess-style legal move dot overlay styles
+  const getMoveOptionsStyles = (sourceSquare, gameInstance) => {
+    if (!gameInstance || typeof gameInstance.moves !== "function") return {};
+
+    const moves = gameInstance.moves({
+      square: sourceSquare,
+      verbose: true
+    });
+
+    if (!moves || moves.length === 0) return {};
+
+    const newStyles = {};
+    
+    // Highlight selected piece square
+    newStyles[sourceSquare] = {
+      backgroundColor: "rgba(243, 193, 68, 0.4)",
+      boxShadow: "inset 0 0 0 2px #f3c144"
+    };
+
+    moves.forEach((move) => {
+      const targetPiece = gameInstance.get(move.to);
+      if (targetPiece) {
+        // Capture ring indicator (Lichess style)
+        newStyles[move.to] = {
+          background: "radial-gradient(circle, transparent 52%, rgba(243, 193, 68, 0.75) 53%, rgba(243, 193, 68, 0.75) 70%, transparent 71%)",
+          borderRadius: "50%"
+        };
+      } else {
+        // Empty destination dot indicator (Lichess style)
+        newStyles[move.to] = {
+          background: "radial-gradient(circle, rgba(243, 193, 68, 0.75) 24%, transparent 25%)",
+          borderRadius: "50%"
+        };
+      }
+    });
+
+    return newStyles;
+  };
+
+  const handleSquareClick = (square) => {
+    if (isFinished || boardLocked.current) return;
+
+    if (selectedSquare) {
+      if (selectedSquare === square) {
+        setSelectedSquare(null);
+        setOptionSquares({});
+        return;
+      }
+
+      const clickedPiece = chessGame.get(square);
+      if (clickedPiece && clickedPiece.color === chessGame.turn()) {
+        const styles = getMoveOptionsStyles(square, chessGame);
+        setSelectedSquare(square);
+        setOptionSquares(styles);
+        return;
+      }
+
+      const moveSuccess = onPieceDrop(selectedSquare, square);
+      if (moveSuccess) {
+        setSelectedSquare(null);
+        setOptionSquares({});
+        return;
+      }
+
+      setSelectedSquare(null);
+      setOptionSquares({});
+      return;
+    }
+
+    const piece = chessGame.get(square);
+    if (piece && piece.color === chessGame.turn()) {
+      const styles = getMoveOptionsStyles(square, chessGame);
+      setSelectedSquare(square);
+      setOptionSquares(styles);
+    } else {
+      setSelectedSquare(null);
+      setOptionSquares({});
+    }
+  };
+
+  const onPieceDragBegin = (piece, sourceSquare) => {
+    if (isFinished || boardLocked.current) return;
+    const styles = getMoveOptionsStyles(sourceSquare, chessGame);
+    setSelectedSquare(sourceSquare);
+    setOptionSquares(styles);
+  };
+
+  const onPieceDragEnd = () => {
+    setSelectedSquare(null);
+    setOptionSquares({});
   };
 
   // Move validation drag/drop handler
   const onPieceDrop = (sourceSquare, targetSquare) => {
+    setSelectedSquare(null);
+    setOptionSquares({});
     // Block input while opponent is replying, puzzle is advancing, or game is finished
     if (isFinished || boardLocked.current) return false;
 
@@ -301,7 +437,7 @@ export default function PuzzleChallenge() {
 
     // Submit score to database
     try {
-      const res = await fetch(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
+      const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -311,14 +447,12 @@ export default function PuzzleChallenge() {
           solvedCount: finalSolved
         })
       });
-      const data = await res.json();
-      if (res.ok && data.data) {
-        // Update active tournament leaderboard state with backend saved data immediately!
+      if (data && data.data) {
         setActiveTournament(data.data);
         fetchTournaments();
       }
     } catch (err) {
-      console.error("Failed to submit score:", err);
+      console.warn("Failed to submit score to server:", err.message);
     }
   };
 
@@ -368,6 +502,7 @@ export default function PuzzleChallenge() {
           /* SECTION 1: TOURNAMENT LISTING SCREEN (DASHBOARD REDESIGN) */
           <div className="puzzle-selection-view">
             <div className="puzzle-hero-section">
+              <div className="puzzle-hero-badge">♟ Tactics Arena</div>
               <h1 className="puzzle-header-title">Chess Tactics Arena</h1>
               <p className="puzzle-description">
                 Participate in active club puzzle challenges. Solve custom mate-in-1, mate-in-2, or mate-in-3 puzzles. You get 3 trials per puzzle. Earn speed bonus points!
@@ -389,18 +524,22 @@ export default function PuzzleChallenge() {
 
                 <div className="stats-indicator-grid">
                   <div className="stat-indicator-box">
+                    <span className="stat-icon">🏆</span>
                     <span className="stat-label">Total Score</span>
                     <span className="stat-value">{userStats.totalScore} pts</span>
                   </div>
                   <div className="stat-indicator-box">
+                    <span className="stat-icon">🎯</span>
                     <span className="stat-label">Arenas Played</span>
                     <span className="stat-value">{userStats.arenasPlayed}</span>
                   </div>
                   <div className="stat-indicator-box">
+                    <span className="stat-icon">⚡</span>
                     <span className="stat-label">Highest Score</span>
                     <span className="stat-value">{userStats.highestScore} pts</span>
                   </div>
                   <div className="stat-indicator-box">
+                    <span className="stat-icon">🧩</span>
                     <span className="stat-label">Puzzles Cleared</span>
                     <span className="stat-value">{userStats.solvedTotal}</span>
                   </div>
@@ -414,7 +553,14 @@ export default function PuzzleChallenge() {
 
               {/* Right Column: Arenas Grid */}
               <div className="arenas-grid-panel">
-                <h3 className="section-title">Active Arenas</h3>
+                <div className="arenas-header-row">
+                  <h3 className="section-title">Active Arenas</h3>
+                  {isAdmin && (
+                    <Link to="/admin" className="admin-manage-link">
+                      ⚙️ Manage Challenges
+                    </Link>
+                  )}
+                </div>
                 {tournaments.length === 0 ? (
                   <div className="no-tournaments-card">
                     <h3>No Puzzle Tournaments Available</h3>
@@ -425,13 +571,28 @@ export default function PuzzleChallenge() {
                     {tournaments.map((t) => (
                       <div key={t._id} className="tournament-card">
                         <div className="card-top">
-                          <span className="card-badge">LIVE ARENA</span>
+                          <span className="card-badge"><span className="card-badge-dot"></span>LIVE ARENA</span>
                           <h3>{t.title}</h3>
                         </div>
                         <div className="card-info">
-                          <div className="info-item">📅 Date: {t.startDate}</div>
-                          <div className="info-item">⏱️ Time Limit: {t.timeLimit}s / puzzle</div>
-                          <div className="info-item">🧩 Puzzles: {t.puzzles ? t.puzzles.length : 0}</div>
+                          <div className="info-item">
+                            <span>📅</span>
+                            <span><strong>Begins:</strong> {t.startDate} {t.startTime ? `at ${t.startTime}` : ""}</span>
+                          </div>
+                          {t.endDate && (
+                            <div className="info-item">
+                              <span>🏁</span>
+                              <span><strong>Ends:</strong> {t.endDate} {t.endTime ? `at ${t.endTime}` : ""}</span>
+                            </div>
+                          )}
+                          <div className="info-item">
+                            <span>⏱️</span>
+                            <span><strong>Time Limit:</strong> {t.timeLimit || 60}s / puzzle</span>
+                          </div>
+                          <div className="info-item">
+                            <span>🧩</span>
+                            <span><strong>Puzzles:</strong> {t.puzzles ? t.puzzles.length : 0} tactical challenge{t.puzzles && t.puzzles.length > 1 ? "s" : ""}</span>
+                          </div>
                         </div>
                         
                         {/* Leaderboard Summary preview */}
@@ -448,7 +609,7 @@ export default function PuzzleChallenge() {
                               </div>
                             ))
                           ) : (
-                            <p style={{ fontStyle: "italic", fontSize: "0.8rem", color: "#888", margin: "5px 0" }}>Be the first to participate!</p>
+                            <p className="no-scores-text">Be the first to participate!</p>
                           )}
                         </div>
 
@@ -472,10 +633,12 @@ export default function PuzzleChallenge() {
             <p>Well played, <strong>{userName}</strong>!</p>
             <div className="results-grid">
               <div className="result-box">
+                <span className="result-icon">🏆</span>
                 <span className="label">Total Score</span>
                 <span className="val">{score}</span>
               </div>
               <div className="result-box">
+                <span className="result-icon">✅</span>
                 <span className="label">Solved Puzzles</span>
                 <span className="val">{solvedCount} / {activeTournament.puzzles.length}</span>
               </div>
@@ -534,7 +697,7 @@ export default function PuzzleChallenge() {
               <div className="puzzle-header-title">
                 {activeTournament.title}
               </div>
-              <div className={`timer-badge ${timeRemaining <= 15 ? 'timer-pulse' : ''}`}>
+              <div className={`timer-badge ${timeRemaining <= 10 ? 'timer-pulse' : timeRemaining <= 20 ? 'timer-warning' : ''}`}>
                 ⏱️ {timeRemaining}s
               </div>
             </div>
@@ -560,8 +723,20 @@ export default function PuzzleChallenge() {
                   <Chessboard
                     position={boardFen}
                     onPieceDrop={onPieceDrop}
+                    onSquareClick={handleSquareClick}
+                    onPieceDragBegin={onPieceDragBegin}
+                    onPieceDragEnd={onPieceDragEnd}
+                    customSquareStyles={optionSquares}
                     boardWidth={boardWidth}
-                    arePiecesDraggable={true}
+                    arePiecesDraggable={!isFinished && !boardLocked.current}
+                    customDarkSquareStyle={{ backgroundColor: "#b58863" }}
+                    customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
+                    customBoardStyle={{
+                      borderRadius: "10px",
+                      boxShadow: "0 8px 30px rgba(0, 0, 0, 0.65), 0 0 1px rgba(243, 193, 68, 0.25)",
+                      width: "100%",
+                      height: "100%"
+                    }}
                   />
                 </div>
               </div>
@@ -613,7 +788,7 @@ export default function PuzzleChallenge() {
                         </div>
                       ))
                     ) : (
-                      <p style={{ fontStyle: "italic", fontSize: "0.8rem", color: "#888", textAlign: "center", margin: "10px 0" }}>No scores yet.</p>
+                      <p className="no-scores-text">No scores yet.</p>
                     )}
                   </div>
                 </div>

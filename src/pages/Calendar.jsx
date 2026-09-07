@@ -23,16 +23,24 @@ export default function Calendar() {
 
   useEffect(() => {
     fetch(`${API_BASE}/api/tournaments`)
-      .then(res => res.json())
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        return [];
+      })
       .then(data => {
-        const mappedEvents = data.map(t => ({
-          date: t.startDate,
-          title: t.title,
-          time: t.time,
-          location: t.location || 'Zewail Chess Club',
-          description: t.description || ''
-        }));
-        setEvents(mappedEvents);
+        if (Array.isArray(data)) {
+          const mappedEvents = data.map(t => ({
+            date: t.startDate,
+            title: t.title,
+            time: t.time,
+            location: t.location || 'Zewail Chess Club',
+            description: t.description || ''
+          }));
+          setEvents(mappedEvents);
+        }
       })
       .catch(err => console.error("Error fetching tournaments for calendar:", err));
   }, []);

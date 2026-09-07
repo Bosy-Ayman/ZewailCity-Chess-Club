@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, Calendar, MapPin, Zap, Lightbulb, RefreshCw } from "lucide-react";
+import { Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, Calendar, MapPin } from "lucide-react";
 import "./HomePage.css";
 
 const CountUp = ({ end, duration = 2000, suffix = "" }) => {
@@ -83,47 +83,6 @@ const HomePage = () => {
   ];
 
   const [heroIndex, setHeroIndex] = useState(0);
-  const [activeTacticianTab, setActiveTacticianTab] = useState("quote");
-  const [quoteIndex, setQuoteIndex] = useState(0);
-  const [tipIndex, setTipIndex] = useState(0);
-
-  const quotesList = [
-    {
-      text: "Chess is 99% tactics. Every game is a mental battle where strategy sets the trap, and calculation delivers the checkmate.",
-      author: "Garry Kasparov, 13th World Chess Champion"
-    },
-    {
-      text: "When you see a good move, look for a better one.",
-      author: "Emanuel Lasker, 2nd World Chess Champion"
-    },
-    {
-      text: "Tactics is knowing what to do when there is something to do; strategy is knowing what to do when there is nothing to do.",
-      author: "Savielly Tartakower, Chess Grandmaster"
-    },
-    {
-      text: "Play the opening like a book, the middle game like a magician, and the endgame like a machine.",
-      author: "Rudolf Spielmann, Master Tactician"
-    }
-  ];
-
-  const tipsList = [
-    {
-      title: "♟️ The Italian Game (1.e4 e5 2.Nf3 Nc6 3.Bc4)",
-      desc: "Control the center early, knight-out before bishop, castle quickly to safeguard your King, and launch tactical pawn lever attacks!"
-    },
-    {
-      title: "⚔️ The Sicilian Defense (1.e4 c5)",
-      desc: "Fight dynamically for central control from move one. Create asymmetric pawn structures and seize open tactical semi-files."
-    },
-    {
-      title: "🛡️ Principle of Two Weaknesses",
-      desc: "If your opponent defends one weakness stubbornly, create a second weakness on the opposite flank to stretch and overwhelm their defenses."
-    },
-    {
-      title: "👑 King Activity in Endgames",
-      desc: "In endgames, activate your King aggressively toward the center! A centralized King is worth as much as a minor piece."
-    }
-  ];
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -657,7 +616,7 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
-      {/* 🧠 Interactive Tactician Section */}
+      {/* 🧠 Interactive Tactician Section
       <section className="tactician-section">
         <div className="tactician-card glass-panel">
           <div className="tactician-header">
@@ -710,7 +669,7 @@ const HomePage = () => {
             )}
           </div>
         </div>
-      </section>
+      </section> */}
 
       <div className="section-divider" />
 

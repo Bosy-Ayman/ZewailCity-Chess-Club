@@ -27,7 +27,13 @@ export default function ClubRoles() {
       setIsLoggedIn(true);
       const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
       fetch(`${API_BASE}/api/applications`)
-        .then(res => res.json())
+        .then(res => {
+          const contentType = res.headers.get("content-type");
+          if (res.ok && contentType && contentType.includes("application/json")) {
+            return res.json();
+          }
+          return [];
+        })
         .then(data => {
           if (Array.isArray(data)) {
             const filtered = data.filter(app => app.email && app.email.toLowerCase() === email.toLowerCase());

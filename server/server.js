@@ -26,7 +26,8 @@ app.use(cors({
     "https://zc-chess-club-web-euimxokx7-bosy-aymans-projects.vercel.app" // your deployed frontend
   ]
 }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
 // Serverless-friendly database connection middleware
 const connectDB = async (req, res, next) => {
@@ -168,7 +169,10 @@ const PuzzleSchema = new mongoose.Schema({
 
 const PuzzleTournamentSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  startDate: { type: String, required: true }, // Format: YYYY-MM-DD
+  startDate: { type: String, required: true }, // Beginning Date: YYYY-MM-DD
+  startTime: { type: String, default: "" },    // Beginning Time: HH:MM
+  endDate: { type: String, default: "" },      // Ending Date: YYYY-MM-DD
+  endTime: { type: String, default: "" },      // Ending Time: HH:MM
   timeLimit: { type: Number, required: true, default: 60 }, // seconds per puzzle
   puzzles: [PuzzleSchema],
   leaderboard: [{
@@ -538,7 +542,7 @@ app.get('/api/profile', async (req, res) => {
 });
 
 // PUT: Update user profile image (base64 or URL)
-app.put('/api/profile/image', express.json({limit: '5mb'}), async (req, res) => {
+app.put('/api/profile/image', express.json({limit: '15mb'}), async (req, res) => {
   try {
     const { email, profileImage } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -553,6 +557,41 @@ app.put('/api/profile/image', express.json({limit: '5mb'}), async (req, res) => 
     res.json({ message: 'Profile image updated successfully', profileImage: user.profileImage });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update profile image', details: error.message });
+  }
+});
+
+// POST alias: Update user profile image (base64 or URL)
+app.post('/api/profile/image', express.json({limit: '15mb'}), async (req, res) => {
+  try {
+    const { email, profileImage } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    const user = await User.findOneAndUpdate(
+      { email },
+      { profileImage },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    res.json({ message: 'Profile image updated successfully', profileImage: user.profileImage });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update profile image', details: error.message });
+  }
+});
+
+// GET: fetch tournaments registered by user email
+app.get('/api/users/:email/tournaments', async (req, res) => {
+  try {
+    const userEmail = req.params.email.toLowerCase();
+    const tournaments = await Tournament.find({
+      $or: [
+        { 'registrations.email': userEmail },
+        { 'playersList.name': { $regex: userEmail, $options: 'i' } }
+      ]
+    }).sort({ startDate: -1 });
+    res.json(tournaments);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch user tournaments', details: error.message });
   }
 });
 
@@ -1329,7 +1368,7 @@ app.post('/api/tournaments/:id/leave', async (req, res) => {
 // POST: create a new puzzle tournament
 app.post('/api/puzzle-tournaments', async (req, res) => {
   try {
-    const { title, startDate, timeLimit, puzzles } = req.body;
+    const { title, startDate, startTime, endDate, endTime, timeLimit, puzzles } = req.body;
     if (!title || !startDate || !puzzles || puzzles.length === 0) {
       return res.status(400).json({ error: 'Title, startDate, and at least one puzzle are required' });
     }
@@ -1337,6 +1376,9 @@ app.post('/api/puzzle-tournaments', async (req, res) => {
     const newTournament = new PuzzleTournament({
       title,
       startDate,
+      startTime: startTime || "",
+      endDate: endDate || "",
+      endTime: endTime || "",
       timeLimit: timeLimit || 60,
       puzzles,
       leaderboard: []
@@ -1367,6 +1409,89 @@ app.get('/api/puzzle-tournaments/:id', async (req, res) => {
     res.json(tournament);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tournament', details: error.message });
+  }
+});
+
+// PUT: update an entire puzzle tournament (dates, times, puzzles, etc.)
+app.put('/api/puzzle-tournaments/:id', async (req, res) => {
+  try {
+    const { title, startDate, startTime, endDate, endTime, timeLimit, puzzles } = req.body;
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    if (title !== undefined) tournament.title = title;
+    if (startDate !== undefined) tournament.startDate = startDate;
+    if (startTime !== undefined) tournament.startTime = startTime;
+    if (endDate !== undefined) tournament.endDate = endDate;
+    if (endTime !== undefined) tournament.endTime = endTime;
+    if (timeLimit !== undefined) tournament.timeLimit = timeLimit;
+    if (puzzles !== undefined) tournament.puzzles = puzzles;
+
+    const saved = await tournament.save();
+    res.json({ message: 'Puzzle tournament updated successfully!', data: saved });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update puzzle tournament', details: error.message });
+  }
+});
+
+// DELETE: delete a puzzle tournament
+app.delete('/api/puzzle-tournaments/:id', async (req, res) => {
+  try {
+    const deleted = await PuzzleTournament.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Tournament not found' });
+    res.json({ message: 'Puzzle tournament deleted successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete tournament', details: error.message });
+  }
+});
+
+// POST: add a single puzzle to an existing tournament
+app.post('/api/puzzle-tournaments/:id/puzzles', async (req, res) => {
+  try {
+    const { initialFen, mateIn, correctMoves, description } = req.body;
+    if (!initialFen || !mateIn || !correctMoves || correctMoves.length === 0) {
+      return res.status(400).json({ error: 'initialFen, mateIn, and correctMoves are required' });
+    }
+
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    tournament.puzzles.push({
+      initialFen,
+      mateIn,
+      correctMoves,
+      description: description || `Mate in ${mateIn}`
+    });
+
+    const saved = await tournament.save();
+    res.json({ message: 'Puzzle added successfully!', data: saved });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add puzzle', details: error.message });
+  }
+});
+
+// DELETE: remove a puzzle from a tournament by puzzle index or id
+app.delete('/api/puzzle-tournaments/:id/puzzles/:puzzleIdOrIndex', async (req, res) => {
+  try {
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    const param = req.params.puzzleIdOrIndex;
+    if (!isNaN(param)) {
+      const idx = parseInt(param, 10);
+      if (idx >= 0 && idx < tournament.puzzles.length) {
+        tournament.puzzles.splice(idx, 1);
+      } else {
+        return res.status(400).json({ error: 'Invalid puzzle index' });
+      }
+    } else {
+      tournament.puzzles = tournament.puzzles.filter(p => p._id && p._id.toString() !== param);
+    }
+
+    const saved = await tournament.save();
+    res.json({ message: 'Puzzle removed successfully!', data: saved });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete puzzle', details: error.message });
   }
 });
 

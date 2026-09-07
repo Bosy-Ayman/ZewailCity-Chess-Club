@@ -629,23 +629,41 @@
   color: #ffffff;
 }
 
-/* 📱 Responsive */
+/* 📱 Responsive Media Queries */
 @media (max-width: 900px) {
+  .clubroles-container {
+    padding: 36px 20px 60px;
+  }
+
   .role-card {
     flex-direction: column-reverse;
   }
 
+  /* CRITICAL: Reset flex proportions so children stack at full width */
   .role-info {
-    padding: 24px;
+    flex: none;
+    width: 100%;
+    padding: 24px 20px;
+    box-sizing: border-box;
   }
 
   .role-image {
+    flex: none;
     width: 100%;
-    min-height: 200px;
+    min-height: 190px;
+    height: 190px;
+  }
+
+  .role-image-overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(25, 22, 17, 0.2) 0%,
+      rgba(25, 22, 17, 0.85) 100%
+    );
   }
 
   .intro-text h1 {
-    font-size: 1.9rem;
+    font-size: 2rem;
   }
 
   .roles-guest-notice {
@@ -656,5 +674,237 @@
 
   .roles-guest-notice .notice-content {
     text-align: center;
+    min-width: unset;
+  }
+
+  .role-info .desc {
+    max-width: 100%;
+  }
+
+  .apply-btn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .clubroles-container {
+    padding: 24px 14px 48px;
+  }
+
+  .intro-text {
+    margin-bottom: 24px;
+  }
+
+  .intro-text h1 {
+    font-size: 1.65rem;
+    letter-spacing: -0.3px;
+  }
+
+  .intro-text p {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .roles-hero-badge {
+    font-size: 0.72rem;
+    padding: 4px 12px;
+  }
+
+  .roles-section-header {
+    margin: 16px 0 18px;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+
+  .roles-season-tag {
+    font-size: 0.7rem;
+    padding: 3px 10px;
+  }
+
+  .role-card-container {
+    gap: 18px;
+  }
+
+  .role-card {
+    border-radius: 16px;
+  }
+
+  .role-card:hover {
+    transform: none;
+  }
+
+  .role-image {
+    min-height: 160px;
+    height: 160px;
+  }
+
+  .role-image-badge {
+    bottom: 12px;
+    right: 12px;
+    font-size: 0.68rem;
+    padding: 3px 10px;
+  }
+
+  .role-info {
+    padding: 18px 16px;
+  }
+
+  .role-header-line {
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+
+  .role-info .department {
+    font-size: 0.78rem;
+  }
+
+  .role-card-status-chip {
+    font-size: 0.68rem;
+    padding: 2px 8px;
+    margin-left: 0;
+  }
+
+  .role-info .title {
+    font-size: 1.35rem;
+    margin-bottom: 8px;
+  }
+
+  .role-info .desc {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin-bottom: 14px;
+    max-width: 100%;
+  }
+
+  .role-perks-list {
+    gap: 6px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .role-perk-tag {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+  }
+
+  .apply-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    box-sizing: border-box;
+    text-align: center;
+    border-radius: 12px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .apply-btn--applied {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .applications-status-section {
+    margin-top: 40px;
+    padding-top: 24px;
+  }
+
+  .status-section-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .status-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .status-card {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .status-badge-wrapper {
+    align-self: flex-start;
+  }
+
+  .auth-prompt-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+    max-width: calc(100vw - 40px);
+  }
+
+  .auth-prompt-header h3 {
+    font-size: 1.2rem;
+  }
+
+  .auth-prompt-header p {
+    font-size: 0.85rem;
+  }
+
+  .already-applied-status-box {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    padding: 6px 12px;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 380px) {
+  .clubroles-container {
+    padding: 20px 10px 40px;
+  }
+
+  .intro-text h1 {
+    font-size: 1.4rem;
+  }
+
+  .intro-text p {
+    font-size: 0.85rem;
+  }
+
+  .role-info .title {
+    font-size: 1.2rem;
+  }
+
+  .role-info .desc {
+    font-size: 0.82rem;
+  }
+
+  .role-info {
+    padding: 14px 12px;
+  }
+
+  .role-image {
+    min-height: 140px;
+    height: 140px;
+  }
+
+  .apply-btn {
+    font-size: 0.82rem;
+    padding: 10px 14px;
+  }
+
+  .role-perk-tag {
+    font-size: 0.68rem;
+    padding: 2px 8px;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
+  }
+
+  .roles-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 }

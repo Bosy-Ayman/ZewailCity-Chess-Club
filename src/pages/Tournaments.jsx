@@ -18,9 +18,17 @@ export default function Tournaments() {
   const fetchTournaments = () => {
     setIsLoading(true);
     fetch(`${API_BASE}/api/tournaments`)
-      .then(res => res.json())
+      .then(res => {
+        const contentType = res.headers.get("content-type");
+        if (res.ok && contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        return [];
+      })
       .then(data => {
-        setTournaments(data);
+        if (Array.isArray(data)) {
+          setTournaments(data);
+        }
         setIsLoading(false);
       })
       .catch(err => {
