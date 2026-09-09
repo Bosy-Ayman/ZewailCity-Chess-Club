@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ChallongeBracket from "../components/ChallongeBracket";
@@ -8,6 +9,7 @@ import { getPlayerAvatarUrl } from "../utils/api";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
@@ -508,6 +510,7 @@ export default function TournamentDetails() {
 
     setSelectedPlayerModal({
       name: clean,
+      email: profileFromDb.email || "",
       avatar: avatarUrl,
       major: profileFromDb.major || extra.major || standing?.major || "Zewail City Tactician",
       batch: profileFromDb.batch || "ZC '25",
@@ -534,6 +537,33 @@ export default function TournamentDetails() {
     e.preventDefault();
     setChallengeSent(true);
   };
+
+  // Derive podium winners for celebration modal (works for both Swiss and Knockout formats)
+  let podiumP1 = (swissStandings && swissStandings[0]) || null;
+  let podiumP2 = (swissStandings && swissStandings[1]) || null;
+  let podiumP3 = (swissStandings && swissStandings[2]) || null;
+
+  if (!podiumP1 && tournament) {
+    if (tournament.winner) {
+      podiumP1 = { name: tournament.winner, points: "Champion" };
+    }
+    const matches = tournament.matches || [];
+    if (matches.length > 0) {
+      const maxRound = Math.max(...matches.map(m => m.round || 1));
+      const finalMatch = matches.find(m => m.round === maxRound && m.result && m.result !== "Pending");
+      if (finalMatch) {
+        const champ = finalMatch.result === "1-0" ? finalMatch.white : (finalMatch.result === "0-1" ? finalMatch.black : null);
+        const runnerUp = finalMatch.result === "1-0" ? finalMatch.black : (finalMatch.result === "0-1" ? finalMatch.white : null);
+        if (champ && !podiumP1) podiumP1 = { name: champ, points: "1st Place" };
+        if (runnerUp && !podiumP2) podiumP2 = { name: runnerUp, points: "Finalist" };
+      }
+    }
+    if (tournament.podium && Array.isArray(tournament.podium)) {
+      if (tournament.podium[0] && !podiumP1) podiumP1 = tournament.podium[0];
+      if (tournament.podium[1] && !podiumP2) podiumP2 = tournament.podium[1];
+      if (tournament.podium[2] && !podiumP3) podiumP3 = tournament.podium[2];
+    }
+  }
 
   return (
     <div className="tournament-wrapper">
@@ -1778,40 +1808,97 @@ export default function TournamentDetails() {
               &times;
             </button>
             <h2 style={{ fontSize: "2rem", color: "#f3c144", marginBottom: "10px" }}>🏆 Tournament Complete! 🏆</h2>
-            <p style={{ color: "#bab19c", marginBottom: "30px", fontSize: "1.1rem" }}>
-              Congratulations to our top players for their outstanding performance!
+            <p style={{ color: "#bab19c", marginBottom: "24px", fontSize: "1.05rem" }}>
+              Congratulations to our top tacticians for their outstanding tournament performance!
             </p>
             
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: "15px", marginBottom: "30px" }}>
+            {/* Top 3 Podium with Player Photos & Profile Redirects */}
+            <div className="celebration-podium-container">
               {/* 2nd Place */}
-              {swissStandings[1] && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ fontSize: "3rem", marginBottom: "10px" }}>🥈</div>
-                  <div style={{ background: "linear-gradient(180deg, #d0d0d0, #888)", padding: "15px", borderRadius: "12px 12px 0 0", minWidth: "120px", height: "100px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <h4 style={{ color: "#fff", margin: 0, fontSize: "1.1rem" }}>{swissStandings[1].name}</h4>
-                    <p style={{ color: "#fff", margin: 0, fontWeight: "bold" }}>{swissStandings[1].points} pts</p>
+              {podiumP2 && (
+                <div className="celebration-podium-col celebration-col-silver">
+                  <div className="celebration-avatar-wrapper">
+                    <img 
+                      src={getPlayerAvatarUrl(podiumP2.name, tournament?.playerAvatars)} 
+                      alt={podiumP2.name} 
+                      className="celebration-avatar celebration-avatar-silver"
+                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                    />
+                    <span className="celebration-medal-badge">🥈</span>
+                  </div>
+                  <div className="celebration-pedestal celebration-pedestal-silver">
+                    <h4 className="celebration-player-name" title={podiumP2.name}>{podiumP2.name}</h4>
+                    <p className="celebration-player-pts">{podiumP2.points != null ? `${podiumP2.points} pts` : "Runner-Up"}</p>
+                    <button 
+                      type="button" 
+                      className="celebration-profile-btn"
+                      onClick={() => {
+                        setCelebrationModalOpen(false);
+                        navigate(`/profile?name=${encodeURIComponent(podiumP2.name)}`);
+                      }}
+                    >
+                      Profile ↗
+                    </button>
                   </div>
                 </div>
               )}
               
               {/* 1st Place */}
-              {swissStandings[0] && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 2 }}>
-                  <div style={{ fontSize: "4rem", marginBottom: "10px" }}>🥇</div>
-                  <div style={{ background: "linear-gradient(180deg, #f3c144, #d4a32a)", padding: "20px", borderRadius: "12px 12px 0 0", minWidth: "140px", height: "130px", display: "flex", flexDirection: "column", justifyContent: "center", boxShadow: "0 -4px 15px rgba(243, 193, 68, 0.4)" }}>
-                    <h4 style={{ color: "#15120c", margin: 0, fontSize: "1.3rem", fontWeight: "900" }}>{swissStandings[0].name}</h4>
-                    <p style={{ color: "#15120c", margin: 0, fontWeight: "bold" }}>{swissStandings[0].points} pts</p>
+              {podiumP1 && (
+                <div className="celebration-podium-col celebration-col-gold">
+                  <div className="celebration-avatar-wrapper celebration-gold-wrapper">
+                    <div className="celebration-crown">👑</div>
+                    <img 
+                      src={getPlayerAvatarUrl(podiumP1.name, tournament?.playerAvatars)} 
+                      alt={podiumP1.name} 
+                      className="celebration-avatar celebration-avatar-gold"
+                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                    />
+                    <span className="celebration-medal-badge gold-badge">🥇</span>
+                  </div>
+                  <div className="celebration-pedestal celebration-pedestal-gold">
+                    <span className="champion-ribbon">CHAMPION</span>
+                    <h4 className="celebration-player-name gold-name" title={podiumP1.name}>{podiumP1.name}</h4>
+                    <p className="celebration-player-pts gold-pts">{podiumP1.points != null ? `${podiumP1.points} pts` : "Champion"}</p>
+                    <button 
+                      type="button" 
+                      className="celebration-profile-btn gold-btn"
+                      onClick={() => {
+                        setCelebrationModalOpen(false);
+                        navigate(`/profile?name=${encodeURIComponent(podiumP1.name)}`);
+                      }}
+                    >
+                      Profile ↗
+                    </button>
                   </div>
                 </div>
               )}
 
               {/* 3rd Place */}
-              {swissStandings[2] && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ fontSize: "2.5rem", marginBottom: "10px" }}>🥉</div>
-                  <div style={{ background: "linear-gradient(180deg, #cd7f32, #a05a2c)", padding: "10px", borderRadius: "12px 12px 0 0", minWidth: "110px", height: "80px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    <h4 style={{ color: "#fff", margin: 0, fontSize: "1rem" }}>{swissStandings[2].name}</h4>
-                    <p style={{ color: "#fff", margin: 0, fontWeight: "bold" }}>{swissStandings[2].points} pts</p>
+              {podiumP3 && (
+                <div className="celebration-podium-col celebration-col-bronze">
+                  <div className="celebration-avatar-wrapper">
+                    <img 
+                      src={getPlayerAvatarUrl(podiumP3.name, tournament?.playerAvatars)} 
+                      alt={podiumP3.name} 
+                      className="celebration-avatar celebration-avatar-bronze"
+                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                    />
+                    <span className="celebration-medal-badge">🥉</span>
+                  </div>
+                  <div className="celebration-pedestal celebration-pedestal-bronze">
+                    <h4 className="celebration-player-name" title={podiumP3.name}>{podiumP3.name}</h4>
+                    <p className="celebration-player-pts">{podiumP3.points != null ? `${podiumP3.points} pts` : "3rd Place"}</p>
+                    <button 
+                      type="button" 
+                      className="celebration-profile-btn"
+                      onClick={() => {
+                        setCelebrationModalOpen(false);
+                        navigate(`/profile?name=${encodeURIComponent(podiumP3.name)}`);
+                      }}
+                    >
+                      Profile ↗
+                    </button>
                   </div>
                 </div>
               )}
@@ -1889,6 +1976,24 @@ export default function TournamentDetails() {
                 <span className="opening-val">{selectedPlayerModal.favOpening}</span>
               </div>
             )}
+
+            {/* Direct Profile Link Button */}
+            <div className="player-modal-profile-action">
+              <button
+                type="button"
+                className="player-view-profile-btn"
+                onClick={() => {
+                  const target = selectedPlayerModal.email
+                    ? `/profile?email=${encodeURIComponent(selectedPlayerModal.email)}`
+                    : `/profile?name=${encodeURIComponent(selectedPlayerModal.name)}`;
+                  setSelectedPlayerModal(null);
+                  navigate(target);
+                }}
+              >
+                <span>👤 View Full Player Profile &amp; Stats</span>
+                <span className="btn-arrow">↗</span>
+              </button>
+            </div>
 
             {/* Interactive Social Actions */}
             <div className="player-modal-actions">

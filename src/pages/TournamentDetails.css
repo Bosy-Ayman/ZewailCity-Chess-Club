@@ -1185,3 +1185,290 @@
   font-weight: 700;
   padding: 6px;
 }
+
+/* ==========================================================================
+   Tournament Celebration Modal & Podium Styles
+   ========================================================================== */
+
+.celebration-card {
+  position: relative;
+  background: linear-gradient(145deg, #1d1a15, #110f0b);
+  border: 1px solid rgba(243, 193, 68, 0.4);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 35px rgba(243, 193, 68, 0.2);
+  border-radius: 18px;
+}
+
+.celebration-podium-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  margin: 30px 0 28px;
+  padding: 0 10px;
+}
+
+.celebration-podium-col {
+  flex: 1;
+  max-width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.celebration-col-gold {
+  order: 2;
+  transform: translateY(-12px);
+}
+
+.celebration-col-silver {
+  order: 1;
+}
+
+.celebration-col-bronze {
+  order: 3;
+}
+
+.celebration-avatar-wrapper {
+  position: relative;
+  margin-bottom: -18px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.celebration-avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #191712;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  border: 3px solid #bab19c;
+}
+
+.celebration-avatar-silver {
+  border-color: #d1d5db;
+  box-shadow: 0 0 16px rgba(209, 213, 219, 0.35);
+}
+
+.celebration-avatar-gold {
+  width: 88px;
+  height: 88px;
+  border: 4px solid #f3c144;
+  box-shadow: 0 0 25px rgba(243, 193, 68, 0.55);
+}
+
+.celebration-avatar-bronze {
+  border-color: #cd7f32;
+  box-shadow: 0 0 16px rgba(205, 127, 50, 0.35);
+}
+
+.celebration-crown {
+  position: absolute;
+  top: -24px;
+  font-size: 1.7rem;
+  filter: drop-shadow(0 2px 8px rgba(243, 193, 68, 0.7));
+  animation: crownBounce 2s infinite ease-in-out;
+}
+
+@keyframes crownBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.celebration-medal-badge {
+  position: absolute;
+  bottom: 0;
+  right: -2px;
+  background: rgba(18, 16, 12, 0.95);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.celebration-medal-badge.gold-badge {
+  width: 30px;
+  height: 30px;
+  font-size: 1.15rem;
+  bottom: 2px;
+  right: 0px;
+}
+
+.celebration-pedestal {
+  width: 100%;
+  padding: 24px 10px 14px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.celebration-pedestal-silver {
+  background: linear-gradient(180deg, rgba(209, 213, 219, 0.15) 0%, rgba(30, 27, 22, 0.95) 100%);
+  border: 1px solid rgba(209, 213, 219, 0.3);
+  min-height: 125px;
+}
+
+.celebration-pedestal-gold {
+  background: linear-gradient(180deg, rgba(243, 193, 68, 0.25) 0%, rgba(30, 27, 22, 0.95) 100%);
+  border: 1px solid rgba(243, 193, 68, 0.5);
+  min-height: 148px;
+  box-shadow: 0 8px 24px rgba(243, 193, 68, 0.15);
+}
+
+.celebration-pedestal-bronze {
+  background: linear-gradient(180deg, rgba(205, 127, 50, 0.15) 0%, rgba(30, 27, 22, 0.95) 100%);
+  border: 1px solid rgba(205, 127, 50, 0.3);
+  min-height: 110px;
+}
+
+.champion-ribbon {
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: #12100c;
+  background: linear-gradient(135deg, #f3c144, #d4a32a);
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.celebration-player-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #f0ede6;
+  margin: 0 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.celebration-player-name.gold-name {
+  font-size: 1.05rem;
+  color: #f3c144;
+  font-weight: 800;
+}
+
+.celebration-player-pts {
+  font-size: 0.8rem;
+  color: #b5afa1;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.celebration-player-pts.gold-pts {
+  color: #ffd978;
+  font-weight: 700;
+}
+
+.celebration-profile-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ded9cd;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.celebration-profile-btn:hover {
+  background: rgba(243, 193, 68, 0.2);
+  color: #f3c144;
+  border-color: rgba(243, 193, 68, 0.4);
+  transform: translateY(-1px);
+}
+
+.celebration-profile-btn.gold-btn {
+  background: rgba(243, 193, 68, 0.2);
+  color: #f3c144;
+  border: 1px solid rgba(243, 193, 68, 0.45);
+}
+
+.celebration-profile-btn.gold-btn:hover {
+  background: #f3c144;
+  color: #12100c;
+}
+
+/* ==========================================================================
+   Player Interactive Modal - Profile Redirect Button
+   ========================================================================== */
+
+.player-modal-profile-action {
+  margin-bottom: 12px;
+}
+
+.player-view-profile-btn {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(243, 193, 68, 0.15), rgba(243, 193, 68, 0.08));
+  color: #f3c144;
+  border: 1px solid rgba(243, 193, 68, 0.35);
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.player-view-profile-btn:hover {
+  background: rgba(243, 193, 68, 0.25);
+  border-color: #f3c144;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(243, 193, 68, 0.15);
+}
+
+.player-view-profile-btn .btn-arrow {
+  font-size: 0.95rem;
+  transition: transform 0.2s ease;
+}
+
+.player-view-profile-btn:hover .btn-arrow {
+  transform: translate(2px, -2px);
+}
+
+/* Responsive adjustment */
+@media (max-width: 520px) {
+  .celebration-podium-container {
+    gap: 8px;
+  }
+  .celebration-avatar {
+    width: 54px;
+    height: 54px;
+  }
+  .celebration-avatar-gold {
+    width: 68px;
+    height: 68px;
+  }
+  .celebration-player-name {
+    font-size: 0.78rem;
+  }
+  .celebration-player-name.gold-name {
+    font-size: 0.88rem;
+  }
+  .celebration-player-pts {
+    font-size: 0.72rem;
+  }
+  .celebration-profile-btn {
+    padding: 3px 6px;
+    font-size: 0.65rem;
+  }
+}
