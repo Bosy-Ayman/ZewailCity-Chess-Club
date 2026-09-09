@@ -22,6 +22,7 @@ export default function ContactUs() {
 
           <button className="send-button">Send Message</button>
         </form>
+        
       </main>
 
       <Footer />

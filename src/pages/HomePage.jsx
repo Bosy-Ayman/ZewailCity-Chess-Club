@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, Calendar, MapPin } from "lucide-react";
+import { 
+  Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, 
+  Calendar, MapPin, Users, Swords, Heart, Zap, 
+  CheckCircle2, XCircle, RotateCcw, Send,
+  Mail, Copy, Check, Crown, UserPlus, UserCheck, User
+} from "lucide-react";
+import Confetti from "react-confetti";
+import { useWindowSize } from "react-use";
+import { getPlayerAvatarUrl } from "../utils/api";
 import "./HomePage.css";
 
 const CountUp = ({ end, duration = 2000, suffix = "" }) => {
@@ -166,6 +174,378 @@ const HomePage = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeLightboxIndex, handleNextLightbox, handlePrevLightbox]);
 
+  // Window size for Confetti
+  const { width, height } = useWindowSize();
+
+  // Dynamic tournament & avatar data from backend
+  const [customAvatars, setCustomAvatars] = useState({});
+  const [liveTournament, setLiveTournament] = useState(null);
+  const [registeredUsers, setRegisteredUsers] = useState([
+    {
+      email: "s-bosy.mohamed@zewailcity.edu.eg",
+      name: "Bosy Ayman",
+      role: "hr",
+      fideRating: 1845,
+      chessComRating: 1980,
+      major: "Computer Science & AI (CSAI)",
+      batch: "2026",
+      verified: true
+    },
+    {
+      email: "ezzomar123ahmed@gmail.com",
+      name: "Omar Ezz",
+      role: "member",
+      fideRating: 1810,
+      chessComRating: 1960,
+      major: "Communications & Info Eng (CIE)",
+      batch: "2025",
+      verified: true
+    },
+    {
+      email: "s-youssef.elkha@zewailcity.edu.eg",
+      name: "Youssef Tarek",
+      role: "member",
+      fideRating: 1680,
+      chessComRating: 1795,
+      major: "Environmental Engineering (ENV)",
+      batch: "2027",
+      verified: true
+    },
+    {
+      email: "admin@zcchessclub.com",
+      name: "ZC Chess Club Admin",
+      role: "admin",
+      major: "Board & Governance",
+      batch: "Faculty / Board",
+      verified: true
+    }
+  ]);
+
+  // Campus Tacticians Community Network State
+  const [tacticiansFilter, setTacticiansFilter] = useState("all");
+  const [selectedTactician, setSelectedTactician] = useState(null);
+  const [tacticianModalOpen, setTacticianModalOpen] = useState(false);
+  const [tacticianCheers, setTacticianCheers] = useState({});
+  const [cheerBursts, setCheerBursts] = useState({});
+  const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
+  const [challengeLocation, setChallengeLocation] = useState("Academic Building Lounge");
+  const [challengeSent, setChallengeSent] = useState(false);
+  const [modalCheered, setModalCheered] = useState(false);
+
+  // Social & Admin State
+  const loggedInEmail = localStorage.getItem("adminEmail") || "";
+  const userRole = localStorage.getItem("userRole") || "member";
+  const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "admin@zcchessclub.com");
+  const [followingState, setFollowingState] = useState({});
+  const [copiedEmail, setCopiedEmail] = useState(null);
+  const [clubActivity, setClubActivity] = useState([]);
+
+  // Daily Tactics Puzzle State
+  const [selectedPuzzleOption, setSelectedPuzzleOption] = useState(null);
+  const [puzzleSolved, setPuzzleSolved] = useState(null);
+  const [puzzleSolvers, setPuzzleSolvers] = useState(154);
+
+  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
+  useEffect(() => {
+    const fetchLiveAndAvatars = async () => {
+      try {
+        const tRes = await fetch(`${API_BASE}/api/tournaments`);
+        if (tRes.ok) {
+          const tList = await tRes.json();
+          const ongoing = tList.find((t) => t.status === "Ongoing" || t.status === "In Progress");
+          if (ongoing) {
+            const detRes = await fetch(`${API_BASE}/api/tournaments/${ongoing._id}`);
+            if (detRes.ok) {
+              const detData = await detRes.json();
+              setLiveTournament(detData);
+              if (detData.playerAvatars) {
+                setCustomAvatars((prev) => ({ ...prev, ...detData.playerAvatars }));
+              }
+            } else {
+              setLiveTournament(ongoing);
+            }
+          }
+        }
+
+        const aRes = await fetch(`${API_BASE}/api/players/avatars`);
+        if (aRes.ok) {
+          const aData = await aRes.json();
+          if (aData.avatars) {
+            setCustomAvatars((prev) => ({ ...prev, ...aData.avatars }));
+          }
+        }
+
+        const uRes = await fetch(`${API_BASE}/api/users`);
+        if (uRes.ok) {
+          const uList = await uRes.json();
+          if (Array.isArray(uList)) {
+            const valid = uList.filter(u => u.email && u.email.toLowerCase() !== "admin2@zcchessclub.com");
+            if (valid.length > 0) {
+              setRegisteredUsers(valid);
+              // Initialize cheer counts from real DB values
+              const cheerMap = {};
+              valid.forEach(u => {
+                if (u.name) cheerMap[u.name] = u.cheers || 0;
+              });
+              setTacticianCheers(prev => ({ ...prev, ...cheerMap }));
+            }
+          }
+        }
+
+        const actRes = await fetch(`${API_BASE}/api/activity`);
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          if (Array.isArray(actData)) {
+            setClubActivity(actData);
+          }
+        }
+      } catch (err) {
+        console.log("Could not fetch live tournament / avatars / registered users / activity:", err);
+      }
+    };
+    fetchLiveAndAvatars();
+  }, [API_BASE]);
+
+  const handleCopyEmail = (email, e) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(email);
+    setCopiedEmail(email);
+    setTimeout(() => setCopiedEmail(null), 2500);
+  };
+
+  const handleToggleFollow = async (targetEmail, targetName, e) => {
+    if (e) e.stopPropagation();
+    if (!loggedInEmail) {
+      alert("Please log in with your Zewail City account to follow tacticians!");
+      window.location.href = "/?login=true";
+      return;
+    }
+    const current = !!followingState[targetEmail];
+    setFollowingState(prev => ({ ...prev, [targetEmail]: !current }));
+
+    try {
+      await fetch(`${API_BASE}/api/users/follow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ followerEmail: loggedInEmail, targetEmail })
+      });
+    } catch (err) {
+      console.warn("Follow toggle warning:", err.message);
+    }
+  };
+
+  const handleQuickCheer = async (name, email, e) => {
+    e.stopPropagation();
+    // Optimistic update
+    setTacticianCheers((prev) => ({
+      ...prev,
+      [name]: (prev[name] || 0) + 1,
+    }));
+    setCheerBursts((prev) => ({ ...prev, [name]: true }));
+    setTimeout(() => {
+      setCheerBursts((prev) => ({ ...prev, [name]: false }));
+    }, 1200);
+
+    // Persist to server
+    if (email) {
+      try {
+        const res = await fetch(`${API_BASE}/api/users/cheer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetEmail: email,
+            cheererEmail: loggedInEmail || '',
+            cheererName: localStorage.getItem('userName') || ''
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Update with confirmed server count
+          if (typeof data.cheers === 'number') {
+            setTacticianCheers(prev => ({ ...prev, [name]: data.cheers }));
+          }
+        }
+      } catch (err) {
+        console.warn('Cheer sync failed:', err.message);
+      }
+    }
+  };
+
+  const handleOpenTacticianModal = (tactician) => {
+    setSelectedTactician(tactician);
+    setTacticianModalOpen(true);
+    setChallengeSent(false);
+    setModalCheered(false);
+  };
+
+  const handleModalCheer = async () => {
+    if (!selectedTactician) return;
+    const name = selectedTactician.name;
+    const email = selectedTactician.email;
+    // Optimistic update
+    setTacticianCheers((prev) => ({
+      ...prev,
+      [name]: (prev[name] || 0) + 1,
+    }));
+    setModalCheered(true);
+    setTimeout(() => setModalCheered(false), 2000);
+
+    // Persist to server
+    if (email) {
+      try {
+        const res = await fetch(`${API_BASE}/api/users/cheer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetEmail: email,
+            cheererEmail: loggedInEmail || '',
+            cheererName: localStorage.getItem('userName') || ''
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.cheers === 'number') {
+            setTacticianCheers(prev => ({ ...prev, [name]: data.cheers }));
+          }
+        }
+      } catch (err) {
+        console.warn('Modal cheer sync failed:', err.message);
+      }
+    }
+  };
+
+  const handleSendChallenge = async (e) => {
+    e.preventDefault();
+    setChallengeSent(true);
+    if (selectedTactician?.email) {
+      try {
+        await fetch(`${API_BASE}/api/challenges`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fromEmail: loggedInEmail || "guest@zcchessclub.com",
+            fromName: localStorage.getItem("userName") || (loggedInEmail ? loggedInEmail.split("@")[0] : "Campus Visitor"),
+            targetEmail: selectedTactician.email,
+            timeControl: challengeTimeControl,
+            location: challengeLocation,
+            message: `Challenge dispatched from Home Page showcase for a ${challengeTimeControl} match at ${challengeLocation}.`
+          })
+        });
+      } catch (err) {
+        console.warn("Could not record challenge:", err.message);
+      }
+    }
+  };
+
+  const handlePuzzleSelect = (opt) => {
+    setSelectedPuzzleOption(opt.id);
+    if (opt.isCorrect) {
+      setPuzzleSolved(true);
+      setPuzzleSolvers((prev) => prev + 1);
+    } else {
+      setPuzzleSolved(false);
+    }
+  };
+
+  const handleResetPuzzle = () => {
+    setSelectedPuzzleOption(null);
+    setPuzzleSolved(null);
+  };
+
+  const campusTacticians = registeredUsers.map((u) => {
+    const emailKey = (u.email || "").toLowerCase().trim();
+    const fideRating = u.fideRating || 0;
+    const chessComRating = u.chessComRating || 0;
+    const lichessRating = u.lichessRating || 0;
+    const topRating = Math.max(fideRating, chessComRating, lichessRating);
+
+    const title = u.chessTitle || (u.role === "admin" ? "Chief Club Administrator" : (u.role === "hr" ? "HR & Operations Lead" : (u.role === "oc" ? "Organizing Committee" : "Club Tactician")));
+    const category = (u.role === "admin" || u.role === "hr" || u.role === "oc") ? "leaders" : (topRating >= 1800 ? "champions" : "competitors");
+    const badge = u.chessTitle 
+      ? `👑 ${u.chessTitle}` 
+      : (u.role === "admin" 
+          ? "👑 Club Leadership" 
+          : (u.role === "hr" 
+              ? "📋 Executive Board" 
+              : (u.role === "oc" 
+                  ? "⚡ Organizing Committee" 
+                  : (topRating > 0 ? `⚡ ${topRating} Elo` : "♟️ Verified Member"))));
+
+    return {
+      name: u.name || emailKey.split("@")[0],
+      email: u.email,
+      role: u.role || "member",
+      title,
+      category,
+      badge,
+      fideRating,
+      chessComRating,
+      lichessRating,
+      topRating,
+      major: u.major || "Zewail City",
+      batch: u.batch || "ZC",
+      opening: u.favOpening || "",
+      favOpening: u.favOpening || "",
+      bio: u.bio || "",
+      cheers: tacticianCheers[u.name] ?? u.cheers ?? 0,
+      followers: u.followers || [],
+      following: u.following || [],
+      verified: u.verified !== undefined ? u.verified : true,
+      profileImage: u.profileImage || ""
+    };
+  });
+
+  const filteredTacticians = campusTacticians.filter((t) => {
+    if (tacticiansFilter === "champions") return t.category === "champions";
+    if (tacticiansFilter === "leaders") return t.category === "leaders";
+    if (tacticiansFilter === "competitors") return t.category === "competitors";
+    return true;
+  });
+
+  const dailyTacticsPuzzle = {
+    title: "King's Quest IV Championship Decisive Tactic",
+    level: "Intermediate - Advanced (1950 Elo)",
+    toPlay: "White to Move & Win",
+    event: "Live Tournament Round 3 Spotlight",
+    theme: "Queen Sacrifice & Smothered Mate Pattern",
+    prompt: "White has built heavy kingside pressure against Black's castled king. Find the devastating move that forces immediate capitulation!",
+    options: [
+      {
+        id: "qxg7",
+        move: "1. Qxg7+!!",
+        badge: "Brilliant Sacrifice",
+        isCorrect: true,
+        summary: "Forced Checkmate Sequence",
+        explanation: "💥 BRILLIANT QUEEN SACRIFICE! 1. Qxg7+!! forces 1... Kxg7 (forced). Then 2. Nf5+ (double check / discovered check) Kh8 3. Nh6# delivers an unforgettable smothered checkmate! You have grandmaster tactical vision."
+      },
+      {
+        id: "re1",
+        move: "1. Re1",
+        badge: "Centralization",
+        isCorrect: false,
+        summary: "Too Slow",
+        explanation: "❌ Too slow! 1. Re1 gives Black time to consolidate defense with 1... Qe7 or 1... f6, locking down the kingside diagonal. Look for a forcing check!"
+      },
+      {
+        id: "qh4",
+        move: "1. Qh4",
+        badge: "Retreat",
+        isCorrect: false,
+        summary: "Misses the Tactic",
+        explanation: "❌ Inaccurate! 1. Qh4 retreats from the critical striking square. Black responds with 1... f5! shutting down the attack completely. Look for dynamic checks!"
+      },
+      {
+        id: "nf3",
+        move: "1. Nf3",
+        badge: "Slow Development",
+        isCorrect: false,
+        summary: "Passive Continuation",
+        explanation: "❌ In sharp attacking positions, tempo is everything. 1. Nf3 lets Black reorganize with 1... Re8. Search for a forcing sacrifice that rips open Black's king!"
+      }
+    ]
+  };
+
   const recentTournaments = [
     {
       id: "kq4-2026",
@@ -303,27 +683,46 @@ const HomePage = () => {
       location: "Academic Palm Tree",
       badge: "Squad Tournament",
       icon: "🛡️",
+      isTeam: true,
       winners: [
         {
           name: "Knights",
           place: "🥇 Champions",
           medal: "gold",
           image: "/Teams/25/Knights.png",
-          detail: "Ahmed Elkodariy, Omar Hafez, Omar Ezz"
+          logoBg: "#0d0b09",
+          detail: "Ahmed Elkodariy, Omar Hafez, Omar Ezz",
+          members: [
+            { name: "Ahmed Elkodariy", image: "/Winners/AhmedElkodariy.PNG", board: "Board 1" },
+            { name: "Omar Hafez", image: "/Winners/OmarHafez.jpeg", board: "Board 2" },
+            { name: "Omar Ezz", image: "/Winners/OmarEzz.jpg", board: "Board 3" }
+          ]
         },
         {
           name: "Gambling",
           place: "🥈 Runners-up",
           medal: "silver",
           image: "/Teams/25/Gambling.png",
-          detail: "Abdelrahman M., Abdelrahman M3, Mohamed Eslam"
+          logoBg: "#f8f9fa",
+          detail: "Abdelrahman Mohamed, Abdelrahman Mane3, Mohamed Eslam",
+          members: [
+            { name: "Abdelrahman Mohamed", image: "/Winners/AbdelrahmanMohamed.png", board: "Board 1" },
+            { name: "Abdelrahman Mane3", image: "/Winners/AbdelrahmanMane3.png", board: "Board 2" },
+            { name: "Mohamed Eslam", image: "/Winners/MohamedEslam.png", board: "Board 3" }
+          ]
         },
         {
           name: "Epsilon",
           place: "🥉 3rd Place",
           medal: "bronze",
           image: "/Teams/25/Epsilon.png",
-          detail: "NourEldin Newer, Amr Khaled, Youssef Yasser"
+          logoBg: "#f8f9fa",
+          detail: "NourEldin Newer, Amr Khaled, Youssef Yasser",
+          members: [
+            { name: "NourEldin Newer", image: "/Winners/NourEldinNewer.png", board: "Board 1" },
+            { name: "Amr Khaled", image: "/Winners/AmrKhaled.jpg", board: "Board 2" },
+            { name: "Youssef Yasser", image: "/Winners/YoussefYasser.jpg", board: "Board 3" }
+          ]
         }
       ]
     }
@@ -331,9 +730,35 @@ const HomePage = () => {
 
   const activeTournament = recentTournaments[activeTournamentIndex] || recentTournaments[0];
 
+  const liveMatch = liveTournament && liveTournament.matches 
+    ? (liveTournament.matches.find((m) => m.round === (liveTournament.currentRound || 3) && m.result === "Pending") || liveTournament.matches[0])
+    : { white: "Bosy Ayman", black: "Omar Ezz", round: 3 };
+
   return (
     <div className="homepage">
       <Header sidebarOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+
+      {/* 👑 Executive Administrator Mode Active Ribbon */}
+      {isAdmin && (
+        <div className="home-admin-ribbon">
+          <div className="admin-ribbon-left">
+            <span className="admin-ribbon-badge">
+              <Crown size={14} /> Executive Admin
+            </span>
+            <span className="admin-ribbon-text">
+              Active Administrator: <strong>{loggedInEmail || "admin@zcchessclub.com"}</strong>. You have full oversight over all tactician dossiers, pairings & roles.
+            </span>
+          </div>
+          <div className="admin-ribbon-links">
+            <a href="/profile" className="admin-ribbon-btn">
+              Admin Profile &amp; Inbox
+            </a>
+            <a href="/createtournament" className="admin-ribbon-btn highlight">
+              + Create Championship
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className="hero-section" id="hero">
@@ -415,10 +840,91 @@ const HomePage = () => {
         </a>
       </section>
 
+      {/* 🔴 Live Running Tournament Banner */}
+      {liveTournament && (
+        <section className="live-tourney-banner-section">
+          <div className="live-tourney-container">
+            <div className="live-tourney-left">
+              <div className="live-pulse-badge">
+                <span className="live-pulse-dot"></span>
+                <span className="live-pulse-text">LIVE TOURNAMENT IN PROGRESS</span>
+              </div>
+              <h2 className="live-tourney-heading">
+                {liveTournament.title || liveTournament.name || "King's Quest IV Championship"}
+              </h2>
+              <div className="live-tourney-submeta">
+                <span className="live-round-badge">
+                  ⚔️ Round {liveTournament.currentRound || 3} Active
+                </span>
+                <span className="live-system-badge">
+                  {liveTournament.type || "Swiss System"}
+                </span>
+                <span className="live-venue-badge">
+                  <MapPin size={12} /> {liveTournament.location || "Academic Building Lounge"}
+                </span>
+              </div>
+            </div>
+
+            <div className="live-tourney-center">
+              <div className="live-board-preview-card">
+                <span className="live-board-header-tag">BOARD 1 • FEATURED CLASH</span>
+                <div className="live-board-players-row">
+                  <div className="live-player-cell live-player-white">
+                    <div className="live-avatar-frame">
+                      <img 
+                        src={getPlayerAvatarUrl(liveMatch?.white || "Bosy Ayman", customAvatars)} 
+                        alt={liveMatch?.white || "White"} 
+                        className="live-avatar-img"
+                        onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
+                      />
+                      <span className="live-color-indicator white-indicator" title="Playing White">⚪</span>
+                    </div>
+                    <span className="live-player-name">{liveMatch?.white || "Bosy Ayman"}</span>
+                    <span className="live-player-score">White • Round {liveTournament.currentRound || 3}</span>
+                  </div>
+
+                  <div className="live-vs-divider">
+                    <span className="live-swords-icon">⚔️</span>
+                    <span className="live-vs-text">VS</span>
+                  </div>
+
+                  <div className="live-player-cell live-player-black">
+                    <div className="live-avatar-frame">
+                      <img 
+                        src={getPlayerAvatarUrl(liveMatch?.black || "Abdelrahman Mohamed", customAvatars)} 
+                        alt={liveMatch?.black || "Black"} 
+                        className="live-avatar-img"
+                        onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
+                      />
+                      <span className="live-color-indicator black-indicator" title="Playing Black">⚫</span>
+                    </div>
+                    <span className="live-player-name">{liveMatch?.black || "Abdelrahman Mohamed"}</span>
+                    <span className="live-player-score">Black • Round {liveTournament.currentRound || 3}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="live-tourney-right">
+              <a 
+                href={`/tournamentdetails?id=${liveTournament._id || '6aa0079fa457e9dc7b1adac1'}`} 
+                className="live-tourney-cta-btn"
+              >
+                <span>Watch Live Standings & Bracket</span>
+                <ExternalLink size={16} />
+              </a>
+              <span className="live-players-status">
+                <Users size={13} /> {liveTournament.players || (liveTournament.playersList ? liveTournament.playersList.length : 10)} Tacticians Competing Now
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="section-divider" />
 
       {/* Player of the Month Spotlight */}
-      <section className="potm-section" id="spotlight">
+      {/* <section className="potm-section" id="spotlight">
         <div className="potm-glass-card">
           <div className="potm-badge">
             <Sparkles size={14} />
@@ -435,9 +941,9 @@ const HomePage = () => {
                 <span className="potm-label">Signature Opening:</span>
                 <span className="potm-value">Bishop's Opening, Berlin Defense (1.e4 e5 2.Bc4 Nf6 3.Qf3)</span>
               </div>
-              {/* <blockquote className="potm-quote">
+               <blockquote className="potm-quote">
                 "Preparation in the opening is key, but adaptability in the middlegame is what truly wins tournaments."
-              </blockquote> */}
+              </blockquote> 
               <div className="potm-achievements">
                 <span className="potm-achievement-tag">🥇 5x Champion</span>
                 <span className="potm-achievement-tag">⚡ Blitz Specialist</span>
@@ -445,7 +951,7 @@ const HomePage = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <div className="section-divider" />
 
@@ -567,38 +1073,72 @@ const HomePage = () => {
         </div>
 
         {/* Balanced Podium Showcase Grid */}
-        <div className="podium-showcase-grid">
+        <div className={`podium-showcase-grid ${activeTournament.isTeam ? "podium-showcase-grid--teams" : ""}`}>
           {activeTournament.winners.map((winner, wIdx) => {
             const isGold = winner.medal === "gold";
             const isSilver = winner.medal === "silver";
+            const isTeamCard = !!(activeTournament.isTeam || winner.members);
             
             return (
               <div 
                 key={wIdx} 
-                className={`podium-card podium-card--${winner.medal} ${isGold ? "podium-card--gold" : ""}`}
+                className={`podium-card podium-card--${winner.medal} ${isGold ? "podium-card--gold" : ""} ${isTeamCard ? "podium-card--team" : ""}`}
               >
-                <div className="podium-avatar-wrapper">
-                  <img
-                    src={winner.image}
-                    alt={winner.name}
-                    className="podium-avatar"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = "/Icons/unknown.png";
-                    }}
-                  />
-                  <span className={`podium-medal-badge badge-${winner.medal}`}>
-                    {isGold ? "🥇" : isSilver ? "🥈" : "🥉"}
-                  </span>
+                <div className="podium-card-main">
+                  <div 
+                    className={`podium-avatar-wrapper ${isTeamCard ? "podium-avatar-wrapper--team" : ""}`}
+                    style={isTeamCard && winner.logoBg ? { background: winner.logoBg } : {}}
+                  >
+                    <img
+                      src={winner.image}
+                      alt={winner.name}
+                      className="podium-avatar"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "/Icons/unknown.png";
+                      }}
+                    />
+                    <span className={`podium-medal-badge badge-${winner.medal}`}>
+                      {isGold ? "🥇" : isSilver ? "🥈" : "🥉"}
+                    </span>
+                  </div>
+
+                  <div className="podium-info">
+                    <div className="podium-tag-row">
+                      <span className={`podium-tag tag-${winner.medal}`}>{winner.place}</span>
+                    </div>
+                    <h4 className="podium-name">{winner.name}</h4>
+                    {!isTeamCard && <p className="podium-detail">{winner.detail}</p>}
+                  </div>
                 </div>
 
-                <div className="podium-info">
-                  <div className="podium-tag-row">
-                    <span className={`podium-tag tag-${winner.medal}`}>{winner.place}</span>
+                {isTeamCard && winner.members && (
+                  <div className="podium-team-roster">
+                    <div className="podium-roster-header">
+                      <Users size={12} className="podium-roster-icon" />
+                      <span>Squad Roster</span>
+                    </div>
+                    <div className="podium-members-list">
+                      {winner.members.map((member, mIdx) => (
+                        <div key={mIdx} className="podium-member-chip">
+                          <div className="podium-member-chip-left">
+                            <img
+                              src={member.image}
+                              alt={member.name}
+                              className="podium-member-avatar"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = "/Icons/unknown.png";
+                              }}
+                            />
+                            <span className="podium-member-name">{member.name}</span>
+                          </div>
+                          <span className="podium-member-board">{member.board}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <h4 className="podium-name">{winner.name}</h4>
-                  <p className="podium-detail">{winner.detail}</p>
-                </div>
+                )}
               </div>
             );
           })}
@@ -701,6 +1241,403 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
+      {/* 👥 ZC Chess Club Community — Interactive Member Roster & Social Feed */}
+      <section className="tacticians-section" id="players">
+        <div className="tacticians-header">
+          <div className="tacticians-badge">
+            <Users size={14} />
+            <span>ZC Chess Community</span>
+          </div>
+          <h2>ZC Chess Club Community</h2>
+          <p className="tacticians-subtitle">
+            Connect with fellow campus chess players, follow your peers, challenge members to 1-on-1 matches, and celebrate tournament champions!
+          </p>
+        </div>
+
+        {/* Live Club Activity & Winner Feed */}
+        {clubActivity.length > 0 && (
+          <div className="club-activity-feed-wrapper">
+            <div className="activity-feed-pill">
+              <span className="live-dot" />
+              <span className="feed-title">Club Feed</span>
+            </div>
+            <div className="activity-feed-slider">
+              {clubActivity.map((act, i) => (
+                <div key={act.id || i} className="activity-feed-chip">
+                  <span className={`act-type-tag ${act.type}`}>
+                    {act.badge}
+                  </span>
+                  <span className="act-title">{act.title}</span>
+                  <span className="act-desc">{act.description}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Filter Tabs */}
+        <div className="tacticians-filter-bar">
+          <button 
+            className={`tactician-filter-btn ${tacticiansFilter === "all" ? "active" : ""}`}
+            onClick={() => setTacticiansFilter("all")}
+          >
+            All Members ({campusTacticians.length})
+          </button>
+          <button 
+            className={`tactician-filter-btn ${tacticiansFilter === "champions" ? "active" : ""}`}
+            onClick={() => setTacticiansFilter("champions")}
+          >
+            🏆 Campus Champions
+          </button>
+          <button 
+            className={`tactician-filter-btn ${tacticiansFilter === "leaders" ? "active" : ""}`}
+            onClick={() => setTacticiansFilter("leaders")}
+          >
+            👑 Club Leadership
+          </button>
+          <button 
+            className={`tactician-filter-btn ${tacticiansFilter === "competitors" ? "active" : ""}`}
+            onClick={() => setTacticiansFilter("competitors")}
+          >
+            ⚡ Active Players
+          </button>
+        </div>
+
+        {/* Tacticians Grid */}
+        <div className="tacticians-grid">
+          {filteredTacticians.length > 0 ? (
+            filteredTacticians.map((player, idx) => {
+              const isSelf = loggedInEmail && player.email && player.email.toLowerCase() === loggedInEmail.toLowerCase();
+              return (
+                <div 
+                  key={player.email || idx} 
+                  className={`tactician-card premium-card ${isSelf ? "is-self-card" : ""}`}
+                  onClick={() => handleOpenTacticianModal(player)}
+                >
+                  <div className="tactician-card-header">
+                    <div className="tactician-avatar-wrap">
+                      <img 
+                        src={player.profileImage || getPlayerAvatarUrl(player.name, customAvatars)} 
+                        alt={player.name}
+                        className="tactician-avatar-img"
+                        onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
+                      />
+                      <span className="tactician-rating-badge">{player.topRating > 0 ? player.topRating : (player.chessTitle || "ZC")}</span>
+                    </div>
+
+                    <div className="tactician-header-meta">
+                      {isSelf ? (
+                        <span className="tactician-badge-pill self-pill">✨ You</span>
+                      ) : (
+                        <span className="tactician-badge-pill">{player.badge}</span>
+                      )}
+                      {player.email && (
+                        <span 
+                          className="tactician-email-chip" 
+                          onClick={(e) => handleCopyEmail(player.email, e)}
+                          title={`Click to copy ${player.email}`}
+                        >
+                          <Mail size={11} />
+                          <span>{player.email.split('@')[0]}</span>
+                          {copiedEmail === player.email ? <Check size={10} className="copy-ok" /> : <Copy size={10} />}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="tactician-body">
+                    <div className="tactician-title-row">
+                      <h3 className="tactician-name">{player.name}</h3>
+                      {isAdmin && (
+                        <a 
+                          href={`/profile?email=${encodeURIComponent(player.email)}`}
+                          className="tactician-card-admin-pill"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Admin Controls"
+                        >
+                          <Crown size={11} /> Admin
+                        </a>
+                      )}
+                    </div>
+                    <p className="tactician-title">{player.title}</p>
+                    <span className="tactician-major-tag">{player.major}</span>
+
+                    <div className="tactician-opening-box">
+                      <span className="opening-label">Fav. Opening:</span>
+                      <span className="opening-val">{player.favOpening || player.opening || "Flexible"}</span>
+                    </div>
+                  </div>
+
+                  <div className="tactician-card-footer" onClick={(e) => e.stopPropagation()}>
+                    {isSelf ? (
+                      <a 
+                        href="/profile"
+                        className="tactician-self-profile-btn"
+                        title="Manage your profile and view your challenge invitations"
+                      >
+                        <User size={14} />
+                        <span>Manage My Profile</span>
+                      </a>
+                    ) : (
+                      <>
+                        <button 
+                          className={`tactician-cheer-btn ${cheerBursts[player.name] ? "bursting" : ""}`}
+                          onClick={(e) => handleQuickCheer(player.name, player.email, e)}
+                          title="Send a cheer to this player"
+                        >
+                          <Heart size={14} className={cheerBursts[player.name] ? "fill-heart" : ""} />
+                          <span>{tacticianCheers[player.name] ?? 0}</span>
+                        </button>
+
+                        <button 
+                          className={`tactician-follow-btn ${followingState[player.email] ? "active" : ""}`}
+                          onClick={(e) => handleToggleFollow(player.email, player.name, e)}
+                          title={followingState[player.email] ? "Following" : "Follow"}
+                        >
+                          {followingState[player.email] ? (
+                            <>
+                              <UserCheck size={13} />
+                              <span>Following</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={13} />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button 
+                          className="tactician-challenge-direct-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenTacticianModal(player);
+                          }}
+                          title={`Challenge ${player.name} to a 1-on-1 match`}
+                        >
+                          <Swords size={13} />
+                          <span>Duel</span>
+                        </button>
+
+                        <a 
+                          href={`/profile?email=${encodeURIComponent(player.email)}`}
+                          className="tactician-connect-btn"
+                          title="View Full Profile & Dossier"
+                        >
+                          <span>Profile</span>
+                          <ExternalLink size={12} />
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="empty-tacticians-notice glass-panel" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 20px", color: "#94a3b8" }}>
+              <p style={{ fontSize: "1.1rem", marginBottom: "8px", color: "#f8fafc" }}>No registered tacticians in this category.</p>
+              <p style={{ fontSize: "0.9rem" }}>Players will automatically appear here once they create their website account!</p>
+            </div>
+          )}
+        </div>
+
+        {/* Explore Full Community CTA */}
+        <div className="community-explore-cta-container">
+          <a href="/community" className="btn-explore-full-community">
+            <Users size={18} />
+            <span>Explore Full Community &amp; Member Directory ({registeredUsers.length}) ➔</span>
+          </a>
+        </div>
+      </section>
+
+      {/* ♟️ Interactive Player Profile & Challenge Modal */}
+      {tacticianModalOpen && selectedTactician && (
+        <div className="tactician-modal-overlay" onClick={() => setTacticianModalOpen(false)}>
+          <div className="tactician-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="tactician-modal-close" 
+              onClick={() => setTacticianModalOpen(false)}
+              aria-label="Close Profile"
+            >
+              ✕
+            </button>
+
+            {modalCheered && (
+              <Confetti width={width} height={height} recycle={false} numberOfPieces={80} />
+            )}
+
+            <div className="tactician-modal-header">
+              <div className="tactician-modal-avatar-frame">
+                <img 
+                  src={selectedTactician.profileImage || getPlayerAvatarUrl(selectedTactician.name, customAvatars)} 
+                  alt={selectedTactician.name} 
+                  className="tactician-modal-avatar"
+                  onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
+                />
+                <span className="tactician-modal-glow"></span>
+              </div>
+              <div className="tactician-modal-hero-info">
+                <div className="tactician-modal-badge">{selectedTactician.badge}</div>
+                <h2 className="tactician-modal-name">{selectedTactician.name}</h2>
+                <p className="tactician-modal-title">{selectedTactician.title}</p>
+                
+                {/* Email Display with Copy */}
+                {selectedTactician.email && (
+                  <div 
+                    className="modal-email-chip" 
+                    onClick={() => handleCopyEmail(selectedTactician.email)}
+                    title="Click to copy student email"
+                  >
+                    <Mail size={13} />
+                    <span>{selectedTactician.email}</span>
+                    {copiedEmail === selectedTactician.email ? (
+                      <span className="copy-tag ok"><Check size={11} /> Copied!</span>
+                    ) : (
+                      <span className="copy-tag"><Copy size={11} /> Copy</span>
+                    )}
+                  </div>
+                )}
+
+                <div className="tactician-modal-chips-row">
+                  <span className="modal-chip"><MapPin size={11} /> ZC Campus</span>
+                  <span className="modal-chip">{selectedTactician.major}</span>
+                  <span className="modal-chip">Class of {selectedTactician.batch}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Profile Link Row */}
+            <div className="tactician-modal-links-bar">
+              <a 
+                href={`/profile?email=${encodeURIComponent(selectedTactician.email)}`}
+                className="btn-modal-full-profile"
+              >
+                <span>View Full Profile, Tournaments &amp; Accolades ➔</span>
+              </a>
+
+              {isAdmin && (
+                <a 
+                  href={`/profile?email=${encodeURIComponent(selectedTactician.email)}`}
+                  className="btn-modal-admin-ctrl"
+                >
+                  <Crown size={14} />
+                  <span>Admin Controls (Manage User)</span>
+                </a>
+              )}
+            </div>
+
+            {/* Ratings & Real Profile Stats Strip */}
+            <div className="tactician-modal-stats-grid">
+              <div className="modal-stat-box">
+                <span className="modal-stat-num">{selectedTactician.fideRating > 0 ? selectedTactician.fideRating : "—"}</span>
+                <span className="modal-stat-label">FIDE Elo</span>
+              </div>
+              <div className="modal-stat-box">
+                <span className="modal-stat-num">{selectedTactician.chessComRating > 0 ? selectedTactician.chessComRating : "—"}</span>
+                <span className="modal-stat-label">Chess.com</span>
+              </div>
+              <div className="modal-stat-box">
+                <span className="modal-stat-num">{selectedTactician.lichessRating > 0 ? selectedTactician.lichessRating : "—"}</span>
+                <span className="modal-stat-label">Lichess</span>
+              </div>
+              <div className="modal-stat-box">
+                <span className="modal-stat-num">{(selectedTactician.followers || []).length}</span>
+                <span className="modal-stat-label">Followers</span>
+              </div>
+            </div>
+
+            {/* Bio & Tactical Details */}
+            <div className="tactician-modal-section">
+              <h4>Tactical Profile &amp; Bio</h4>
+              <p className="tactician-modal-bio">{selectedTactician.bio || "Active registered tactician of Zewail City Chess Club."}</p>
+              
+              <div className="tactician-attributes-row">
+                <div className="attribute-item">
+                  <span className="attr-label">Signature Opening:</span>
+                  <span className="attr-val">{selectedTactician.favOpening || selectedTactician.opening || "Flexible Openings"}</span>
+                </div>
+                <div className="attribute-item">
+                  <span className="attr-label">Campus Role:</span>
+                  <span className="attr-val">{selectedTactician.title || "Club Tactician"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Cheer & Challenge Actions */}
+            <div className="tactician-modal-actions-box">
+              <div className="tactician-cheer-action-row">
+                <button 
+                  className={`modal-cheer-cta ${modalCheered ? "active" : ""}`}
+                  onClick={handleModalCheer}
+                >
+                  <Heart size={16} className={modalCheered ? "fill-heart" : ""} />
+                  <span>Cheer for {selectedTactician.name.split(' ')[0]} ({tacticianCheers[selectedTactician.name] || 0})</span>
+                </button>
+                <span className="cheer-hint">Cheer on your campus friends!</span>
+              </div>
+
+              {/* Challenge Form */}
+              <div className="tactician-challenge-form-wrapper">
+                <h4 className="challenge-form-title">
+                  <Swords size={16} />
+                  <span>Send a Friendly Campus Challenge</span>
+                </h4>
+
+                {challengeSent ? (
+                  <div className="challenge-sent-alert">
+                    <CheckCircle2 size={24} className="challenge-check-icon" />
+                    <div>
+                      <h5>Challenge Invitation Recorded!</h5>
+                      <p>An in-app invitation for a {challengeTimeControl} match at {challengeLocation} has been delivered to {selectedTactician.name}'s account.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSendChallenge} className="campus-challenge-form">
+                    <div className="challenge-inputs-row">
+                      <div className="challenge-input-group">
+                        <label>Time Control</label>
+                        <select 
+                          value={challengeTimeControl} 
+                          onChange={(e) => setChallengeTimeControl(e.target.value)}
+                        >
+                          <option value="3+2 Blitz">⚡ 3+2 Blitz</option>
+                          <option value="5+3 Blitz">⚡ 5+3 Blitz</option>
+                          <option value="10+0 Rapid">⏱️ 10+0 Rapid</option>
+                          <option value="15+10 Rapid">⏱️ 15+10 Rapid</option>
+                          <option value="30+0 Classical">🏛️ 30+0 Classical</option>
+                        </select>
+                      </div>
+
+                      <div className="challenge-input-group">
+                        <label>Campus Venue</label>
+                        <select 
+                          value={challengeLocation} 
+                          onChange={(e) => setChallengeLocation(e.target.value)}
+                        >
+                          <option value="Academic Building Lounge">Academic Building Lounge</option>
+                          <option value="Zone E Chess Corner">Zone E Chess Corner</option>
+                          <option value="Student Union Courtyard">Student Union Courtyard</option>
+                          <option value="Online (Chess.com / Lichess)">Online (Chess.com / Lichess)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="challenge-submit-btn">
+                      <Send size={15} />
+                      <span>Issue Campus Challenge</span>
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      <div className="section-divider" />
+
       {/* Gallery Section */}
       <section className="gallery-section" id="gallery">
         <div className="gallery-section-header">
@@ -785,7 +1722,7 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
-      {/* Location Section */}
+      {/* Location Section
       <section className="location-section" id="location">
         <div className="location-section-header">
           <div className="location-badge">
@@ -809,7 +1746,7 @@ const HomePage = () => {
             title="Zewail City Location"
           />
         </div>
-      </section>
+      </section> */}
 
       <Footer />
     </div>

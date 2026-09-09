@@ -138,6 +138,12 @@ const TournamentSchema = new mongoose.Schema({
     bracket: { type: String, default: 'upper' }
   }],
   rounds: { type: Number, default: 0 }, // Total planned rounds
+  winner: { type: String, default: '' },
+  podium: [{
+    place: { type: Number },
+    name: { type: String },
+    points: { type: Number }
+  }],
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -154,10 +160,70 @@ const UserSchema = new mongoose.Schema({
   batch: { type: String, default: "" },
   role: { type: String, default: 'member' },
   profileImage: { type: String, default: "" },
+  
+  // Chess Profile & Rating Fields
+  fideRating: { type: Number, default: 0 },
+  fideId: { type: String, default: "" },
+  chessComRating: { type: Number, default: 0 },
+  chessComUsername: { type: String, default: "" },
+  lichessRating: { type: Number, default: 0 },
+  lichessUsername: { type: String, default: "" },
+  chessTitle: { type: String, default: "" },
+  favOpening: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  followers: [{ type: String }],
+  following: [{ type: String }],
+  challenges: [{
+    fromEmail: { type: String, required: true },
+    fromName: { type: String, required: true },
+    timeControl: { type: String, default: '3+2 Blitz' },
+    location: { type: String, default: 'Academic Building Lounge' },
+    message: { type: String, default: '' },
+    status: { type: String, default: 'Pending', enum: ['Pending', 'Accepted', 'Declined'] },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  verified: { type: Boolean, default: false },
+  cheers: { type: Number, default: 0 },
+  clubRoles: [{
+    department: { type: String },
+    position: { type: String },
+    assignedAt: { type: Date, default: Date.now }
+  }],
+  lastSeen: { type: Date, default: Date.now },
+  playstyle: { type: String, default: "" },
+  linkedHistoricalName: { type: String, default: "" },
+
   createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model('User', UserSchema, 'users');
+
+// --- Notification Schema & Model ---
+const NotificationSchema = new mongoose.Schema({
+  recipientEmail: { type: String, required: true, index: true },
+  type: { type: String, enum: ['follow', 'tournament_join', 'tournament_start', 'system'], default: 'system' },
+  actorName: { type: String, default: '' },
+  actorEmail: { type: String, default: '' },
+  actorAvatar: { type: String, default: '' },
+  message: { type: String, required: true },
+  link: { type: String, default: '/' },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Notification = mongoose.model('Notification', NotificationSchema, 'notifications');
+
+// Helper: create a notification record
+async function createNotification({ recipientEmail, type, actorName, actorEmail, actorAvatar, message, link }) {
+  try {
+    if (!recipientEmail || !message) return;
+    // Avoid self-notifications
+    if (recipientEmail.toLowerCase() === actorEmail?.toLowerCase()) return;
+    await Notification.create({ recipientEmail: recipientEmail.toLowerCase(), type, actorName, actorEmail, actorAvatar, message, link });
+  } catch (err) {
+    console.error('createNotification error:', err.message);
+  }
+}
 
 // --- Puzzle Tournament Schema & Model ---
 const PuzzleSchema = new mongoose.Schema({
@@ -256,6 +322,8 @@ async function seedPuzzleTournament() {
     console.error('Error seeding puzzle tournament:', err.message);
   }
 }
+
+
 
 async function seedDatabase() {
   await seedAdminUser();
@@ -373,7 +441,9 @@ app.post('/api/admin/login', async (req, res) => {
       token: token,
       user: {
         email: user.email,
-        role: user.role
+        role: user.role,
+        name: user.name,
+        picture: user.profileImage
       }
     });
   } catch (error) {
@@ -458,7 +528,9 @@ app.post('/api/admin/google-login', async (req, res) => {
       token: token,
       user: {
         email: user.email,
-        role: user.role
+        role: user.role,
+        name: user.name,
+        picture: user.profileImage
       }
     });
   } catch (error) {
@@ -513,69 +585,613 @@ app.post('/api/admin/signup', async (req, res) => {
   }
 });
 
-// GET: Retrieve user profile
+// GET: Retrieve user profile (supports email or name query)
 app.get('/api/profile', async (req, res) => {
   try {
-    const { email } = req.query;
-    if (!email) {
-      return res.status(400).json({ error: 'Email query parameter is required' });
+    const { email, name, viewerEmail } = req.query;
+    if (!email && !name) {
+      return res.status(400).json({ error: 'Email or name query parameter is required' });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    let query = null;
+    if (email) {
+      const cleanEmail = email.trim();
+      const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+      query = { email: emailRegex };
+    } else if (name) {
+      const cleanName = name.trim();
+      const nameRegex = new RegExp(`^${cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+      query = { name: nameRegex };
     }
+
+    let user = await User.findOne(query);
+
+    if (!user) {
+      return res.status(404).json({ 
+        error: 'Tactician profile not found. This player has not registered an account on the website yet.',
+        unregistered: true 
+      });
+    }
+
+    const cleanViewer = viewerEmail ? viewerEmail.trim().toLowerCase() : "";
+    const isOwner = cleanViewer && cleanViewer === (user.email || "").toLowerCase();
+    let viewerIsAdmin = false;
+    if (cleanViewer) {
+      if (cleanViewer === 'admin@zcchessclub.com') {
+        viewerIsAdmin = true;
+      } else {
+        const viewerDoc = await User.findOne({ email: new RegExp(`^${cleanViewer}$`, 'i') });
+        if (viewerDoc && viewerDoc.role === 'admin') {
+          viewerIsAdmin = true;
+        }
+      }
+    }
+    const canViewPrivatePhone = isOwner || viewerIsAdmin;
+
+    const isFollowing = cleanViewer ? (user.followers || []).some(f => f.toLowerCase() === cleanViewer) : false;
+    const followsViewer = cleanViewer ? (user.following || []).some(f => f.toLowerCase() === cleanViewer) : false;
+
+    // Populate user details for followers and following lists
+    const followerEmails = (user.followers || []).map(e => e.toLowerCase());
+    const followingEmails = (user.following || []).map(e => e.toLowerCase());
+
+    const followersList = followerEmails.length > 0
+      ? await User.find(
+          { email: { $in: followerEmails.map(e => new RegExp(`^${e}$`, 'i')) } },
+          { name: 1, email: 1, profileImage: 1, role: 1, chessTitle: 1, fideRating: 1, chessComRating: 1, major: 1, verified: 1, followers: 1, following: 1 }
+        )
+      : [];
+
+    const followingList = followingEmails.length > 0
+      ? await User.find(
+          { email: { $in: followingEmails.map(e => new RegExp(`^${e}$`, 'i')) } },
+          { name: 1, email: 1, profileImage: 1, role: 1, chessTitle: 1, fideRating: 1, chessComRating: 1, major: 1, verified: 1, followers: 1, following: 1 }
+        )
+      : [];
 
     res.json({
       name: user.name || "",
       email: user.email,
       idNumber: user.idNumber || "",
-      phone: user.phone || "",
+      phone: canViewPrivatePhone ? (user.phone || "") : "",
       major: user.major || "",
       batch: user.batch || "",
       role: user.role || "member",
-      profileImage: user.profileImage || ""
+      profileImage: user.profileImage || "",
+      fideRating: user.fideRating || 0,
+      fideId: user.fideId || "",
+      chessComRating: user.chessComRating || 0,
+      chessComUsername: user.chessComUsername || "",
+      lichessRating: user.lichessRating || 0,
+      lichessUsername: user.lichessUsername || "",
+      chessTitle: user.chessTitle || "",
+      favOpening: user.favOpening || "",
+      bio: user.bio || "",
+      playstyle: user.playstyle || "",
+      linkedHistoricalName: user.linkedHistoricalName || "",
+      verified: user.verified || false,
+      followersCount: followersList.length,
+      followingCount: followingList.length,
+      followers: followersList.map(u => u.email),
+      following: followingList.map(u => u.email),
+      followersList,
+      followingList,
+      challenges: user.challenges || [],
+      clubRoles: user.clubRoles || [],
+      isFollowing,
+      followsViewer
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error fetching user profile', details: error.message });
   }
 });
 
-// PUT: Update user profile image (base64 or URL)
-app.put('/api/profile/image', express.json({limit: '15mb'}), async (req, res) => {
+// GET: Fetch network (followers and following) with full user objects
+app.get('/api/users/:email/network', async (req, res) => {
+  try {
+    const cleanEmail = req.params.email.trim().toLowerCase();
+    const user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const followerEmails = (user.followers || []).map(e => e.toLowerCase());
+    const followingEmails = (user.following || []).map(e => e.toLowerCase());
+
+    const followers = followerEmails.length > 0
+      ? await User.find(
+          { email: { $in: followerEmails.map(e => new RegExp(`^${e}$`, 'i')) } },
+          { name: 1, email: 1, profileImage: 1, role: 1, chessTitle: 1, fideRating: 1, chessComRating: 1, major: 1, verified: 1, followers: 1, following: 1 }
+        )
+      : [];
+
+    const following = followingEmails.length > 0
+      ? await User.find(
+          { email: { $in: followingEmails.map(e => new RegExp(`^${e}$`, 'i')) } },
+          { name: 1, email: 1, profileImage: 1, role: 1, chessTitle: 1, fideRating: 1, chessComRating: 1, major: 1, verified: 1, followers: 1, following: 1 }
+        )
+      : [];
+
+    res.json({ followers, following });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch network', details: err.message });
+  }
+});
+
+// POST: Follow or Unfollow a player
+app.post('/api/users/follow', express.json(), async (req, res) => {
+  try {
+    const { followerEmail, targetEmail } = req.body;
+    if (!followerEmail || !targetEmail) {
+      return res.status(400).json({ error: 'Both followerEmail and targetEmail are required' });
+    }
+
+    const cleanFollower = followerEmail.trim().toLowerCase();
+    const cleanTarget = targetEmail.trim().toLowerCase();
+
+    if (cleanFollower === cleanTarget) {
+      return res.status(400).json({ error: 'Cannot follow yourself' });
+    }
+
+    const targetUser = await User.findOne({ email: new RegExp(`^${cleanTarget}$`, 'i') });
+    const followerUser = await User.findOne({ email: new RegExp(`^${cleanFollower}$`, 'i') });
+
+    if (!targetUser || !followerUser) {
+      return res.status(404).json({ error: 'One or both users not found in club directory' });
+    }
+
+    const isFollowing = (targetUser.followers || []).some(f => f.toLowerCase() === cleanFollower);
+
+    if (isFollowing) {
+      // Unfollow
+      await User.updateOne({ _id: targetUser._id }, { $pull: { followers: cleanFollower } });
+      await User.updateOne({ _id: followerUser._id }, { $pull: { following: cleanTarget } });
+      const updatedTarget = await User.findById(targetUser._id);
+      return res.json({
+        success: true,
+        isFollowing: false,
+        followersCount: (updatedTarget.followers || []).length,
+        message: `Unfollowed ${targetUser.name || cleanTarget}`
+      });
+    } else {
+      // Follow
+      await User.updateOne({ _id: targetUser._id }, { $addToSet: { followers: cleanFollower } });
+      await User.updateOne({ _id: followerUser._id }, { $addToSet: { following: cleanTarget } });
+      const updatedTarget = await User.findById(targetUser._id);
+
+      // 🔔 Notify the target that someone followed them
+      await createNotification({
+        recipientEmail: cleanTarget,
+        type: 'follow',
+        actorName: followerUser.name || cleanFollower,
+        actorEmail: cleanFollower,
+        actorAvatar: followerUser.profileImage || '',
+        message: `${followerUser.name || cleanFollower} started following you`,
+        link: `/profile?email=${encodeURIComponent(cleanFollower)}`
+      });
+
+      return res.json({
+        success: true,
+        isFollowing: true,
+        followersCount: (updatedTarget.followers || []).length,
+        message: `Now following ${targetUser.name || cleanTarget}!`
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update follow status', details: err.message });
+  }
+});
+
+// POST: Cheer for a player (increment their cheer count + optional notification)
+app.post('/api/users/cheer', express.json(), async (req, res) => {
+  try {
+    const { targetEmail, cheererEmail, cheererName } = req.body;
+    if (!targetEmail) return res.status(400).json({ error: 'targetEmail required' });
+
+    const cleanTarget = targetEmail.trim().toLowerCase();
+    const updatedUser = await User.findOneAndUpdate(
+      { email: new RegExp(`^${cleanTarget}$`, 'i') },
+      { $inc: { cheers: 1 } },
+      { new: true }
+    );
+
+    if (!updatedUser) return res.status(404).json({ error: 'User not found' });
+
+    // Optional: notify the person being cheered
+    if (cheererEmail && cheererEmail.toLowerCase() !== cleanTarget) {
+      await createNotification({
+        recipientEmail: cleanTarget,
+        type: 'system',
+        actorName: cheererName || cheererEmail,
+        actorEmail: cheererEmail.toLowerCase(),
+        actorAvatar: '',
+        message: `${cheererName || cheererEmail} cheered for you! 👏`,
+        link: `/profile?email=${encodeURIComponent(cheererEmail.toLowerCase())}`
+      });
+    }
+
+    res.json({ success: true, cheers: updatedUser.cheers });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to cheer', details: err.message });
+  }
+});
+
+// POST: Send a friendly campus challenge
+app.post('/api/challenges', express.json(), async (req, res) => {
+  try {
+    const { fromEmail, fromName, targetEmail, timeControl, location, message } = req.body;
+    if (!fromEmail || !targetEmail) {
+      return res.status(400).json({ error: 'fromEmail and targetEmail are required' });
+    }
+
+    const cleanTarget = targetEmail.trim().toLowerCase();
+    const targetUser = await User.findOne({ email: new RegExp(`^${cleanTarget}$`, 'i') });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target tactician not found' });
+    }
+
+    const newChallenge = {
+      fromEmail: fromEmail.trim(),
+      fromName: fromName || fromEmail.split('@')[0],
+      timeControl: timeControl || '3+2 Blitz',
+      location: location || 'Academic Building Lounge',
+      message: message || '',
+      status: 'Pending',
+      createdAt: new Date()
+    };
+
+    await User.updateOne(
+      { _id: targetUser._id },
+      { $push: { challenges: newChallenge } }
+    );
+
+    res.json({
+      success: true,
+      message: `Friendly challenge delivered to ${targetUser.name || cleanTarget}!`,
+      challenge: newChallenge
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send challenge', details: err.message });
+  }
+});
+
+// PUT: Respond to a campus challenge (Accept / Decline)
+app.put('/api/challenges/respond', express.json(), async (req, res) => {
+  try {
+    const { userEmail, challengeId, status } = req.body;
+    if (!userEmail || !challengeId || !status) {
+      return res.status(400).json({ error: 'userEmail, challengeId, and status are required' });
+    }
+
+    const cleanEmail = userEmail.trim().toLowerCase();
+    const result = await User.updateOne(
+      { email: new RegExp(`^${cleanEmail}$`, 'i'), "challenges._id": challengeId },
+      { $set: { "challenges.$.status": status } }
+    );
+
+    res.json({ success: true, message: `Challenge ${status.toLowerCase()}ed successfully.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to respond to challenge', details: err.message });
+  }
+});
+
+// POST: Heartbeat ping for real-time presence tracking
+app.post('/api/heartbeat', express.json(), async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (email) {
+      const cleanEmail = email.trim().toLowerCase();
+      await User.updateOne(
+        { email: new RegExp(`^${cleanEmail}$`, 'i') },
+        { $set: { lastSeen: new Date() } }
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Heartbeat error' });
+  }
+});
+
+// GET: Community Stats (Real Active Online Tacticians & Emails)
+app.get('/api/community/stats', async (req, res) => {
+  try {
+    const total = await User.countDocuments({});
+    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const realOnlineCount = await User.countDocuments({ lastSeen: { $gte: twoMinsAgo } });
+    const onlineUsers = await User.find(
+      { lastSeen: { $gte: twoMinsAgo } },
+      { email: 1, name: 1 }
+    );
+    res.json({
+      success: true,
+      totalTacticians: total || 1,
+      activeNow: realOnlineCount,
+      onlineEmails: onlineUsers.map(u => u.email)
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stats', details: err.message });
+  }
+});
+
+// GET: Dynamic Club Activity & Winner Feed
+app.get('/api/activity', async (req, res) => {
+  try {
+    const activities = [];
+
+    // 1. Check for tournaments and recent winners / status
+    const tournaments = await Tournament.find({}).sort({ updatedAt: -1, createdAt: -1 }).limit(5);
+    tournaments.forEach(t => {
+      if (t.status === 'Completed' && (t.winner || (t.playersList && t.playersList[0]))) {
+        const winnerName = t.winner || t.playersList[0].name;
+        activities.push({
+          id: `tour-win-${t._id}`,
+          type: 'tournament_win',
+          title: `🏆 ${winnerName} won ${t.title}!`,
+          description: `Crowned Champion of the campus ${t.type} tournament.`,
+          badge: 'Champion',
+          timestamp: t.endDate || t.createdAt || new Date(),
+          icon: 'trophy'
+        });
+      } else if (t.status === 'Ongoing') {
+        activities.push({
+          id: `tour-ongoing-${t._id}`,
+          type: 'tournament_live',
+          title: `⚡ ${t.title} is LIVE!`,
+          description: `Round battles currently in progress at ${t.location || 'ZC Campus'}.`,
+          badge: 'Live Tournament',
+          timestamp: t.startDate || t.createdAt || new Date(),
+          icon: 'swords'
+        });
+      }
+    });
+
+    // 2. Fetch challenges from registered users
+    const usersWithChallenges = await User.find(
+      { "challenges.0": { $exists: true } },
+      { name: 1, email: 1, challenges: 1 }
+    ).limit(10);
+
+    usersWithChallenges.forEach(u => {
+      (u.challenges || []).slice(-3).forEach((c, idx) => {
+        activities.push({
+          id: `chal-${u._id}-${c._id || idx}`,
+          type: 'challenge',
+          title: `⚔️ ${c.fromName || 'A member'} challenged ${u.name || 'a member'}`,
+          description: `${c.timeControl} at ${c.location} • Status: ${c.status}`,
+          badge: c.status === 'Accepted' ? 'Accepted' : 'Duel Invite',
+          timestamp: c.createdAt || new Date(),
+          icon: 'swords'
+        });
+      });
+    });
+
+    // 3. New registered club members
+    const recentUsers = await User.find({}, { name: 1, email: 1, chessTitle: 1, role: 1, createdAt: 1 })
+      .sort({ _id: -1 })
+      .limit(6);
+
+    recentUsers.forEach(u => {
+      activities.push({
+        id: `user-${u._id}`,
+        type: 'member_joined',
+        title: `♟️ ${u.name || u.email.split('@')[0]} joined the Club`,
+        description: u.chessTitle ? `Titled ${u.chessTitle}` : (u.role === 'admin' ? 'Officer & Administrator' : 'Active Member'),
+        badge: 'New Member',
+        timestamp: u.createdAt || new Date(),
+        icon: 'user'
+      });
+    });
+
+    // Sort by timestamp descending
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json(activities.slice(0, 15));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity feed', details: err.message });
+  }
+});
+
+
+// PUT: Admin management for player accounts
+app.put('/api/admin/manage-user', express.json(), async (req, res) => {
+  try {
+    const { 
+      adminEmail, 
+      targetEmail, 
+      name,
+      idNumber,
+      phone,
+      major,
+      batch,
+      fideRating,
+      fideId,
+      chessComRating,
+      chessComUsername,
+      lichessRating,
+      lichessUsername,
+      favOpening,
+      chessTitle, 
+      bio, 
+      playstyle,
+      role, 
+      clubRoles 
+    } = req.body;
+    if (!adminEmail || !targetEmail) {
+      return res.status(400).json({ error: 'adminEmail and targetEmail are required' });
+    }
+
+    const admin = await User.findOne({ email: new RegExp(`^${adminEmail.trim()}$`, 'i') });
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized. Administrator access required.' });
+    }
+
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (idNumber !== undefined) updateFields.idNumber = idNumber;
+    if (phone !== undefined) updateFields.phone = phone;
+    if (major !== undefined) updateFields.major = major;
+    if (batch !== undefined) updateFields.batch = batch;
+    if (fideRating !== undefined) updateFields.fideRating = Number(fideRating) || 0;
+    if (fideId !== undefined) updateFields.fideId = fideId;
+    if (chessComRating !== undefined) updateFields.chessComRating = Number(chessComRating) || 0;
+    if (chessComUsername !== undefined) updateFields.chessComUsername = chessComUsername;
+    if (lichessRating !== undefined) updateFields.lichessRating = Number(lichessRating) || 0;
+    if (lichessUsername !== undefined) updateFields.lichessUsername = lichessUsername;
+    if (favOpening !== undefined) updateFields.favOpening = favOpening;
+    if (chessTitle !== undefined) updateFields.chessTitle = chessTitle;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (playstyle !== undefined) updateFields.playstyle = playstyle;
+    if (linkedHistoricalName !== undefined) updateFields.linkedHistoricalName = linkedHistoricalName;
+    if (role !== undefined) updateFields.role = role;
+    if (clubRoles !== undefined) updateFields.clubRoles = Array.isArray(clubRoles) ? clubRoles : [];
+
+    const updatedUser = await User.findOneAndUpdate(
+      { email: new RegExp(`^${targetEmail.trim()}$`, 'i') },
+      { $set: updateFields },
+      { returnDocument: 'after' }
+    );
+
+    res.json({
+      success: true,
+      message: `Player ${updatedUser.name} updated successfully by Admin.`,
+      user: updatedUser
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to manage user', details: err.message });
+  }
+});
+
+// Helper function to update profile fields
+const updateProfileHandler = async (req, res) => {
+  try {
+    const {
+      email,
+      name,
+      phone,
+      idNumber,
+      major,
+      batch,
+      fideRating,
+      fideId,
+      chessComRating,
+      chessComUsername,
+      lichessRating,
+      lichessUsername,
+      chessTitle,
+      favOpening,
+      bio,
+      playstyle,
+      linkedHistoricalName,
+      password
+    } = req.body;
+
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const cleanEmail = email.trim();
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (phone !== undefined) updateFields.phone = phone;
+    if (idNumber !== undefined) updateFields.idNumber = idNumber;
+    if (major !== undefined) updateFields.major = major;
+    if (batch !== undefined) updateFields.batch = batch;
+    if (fideRating !== undefined) updateFields.fideRating = Number(fideRating) || 0;
+    if (fideId !== undefined) updateFields.fideId = fideId;
+    if (chessComRating !== undefined) updateFields.chessComRating = Number(chessComRating) || 0;
+    if (chessComUsername !== undefined) updateFields.chessComUsername = chessComUsername;
+    if (lichessRating !== undefined) updateFields.lichessRating = Number(lichessRating) || 0;
+    if (lichessUsername !== undefined) updateFields.lichessUsername = lichessUsername;
+    if (chessTitle !== undefined) updateFields.chessTitle = chessTitle;
+    if (favOpening !== undefined) updateFields.favOpening = favOpening;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (playstyle !== undefined) updateFields.playstyle = playstyle;
+    if (linkedHistoricalName !== undefined) updateFields.linkedHistoricalName = linkedHistoricalName;
+
+    if (password && password.trim().length > 0) {
+      updateFields.password = await bcrypt.hash(password.trim(), 10);
+    }
+
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+
+    const user = await User.findOneAndUpdate(
+      { email: emailRegex },
+      { $set: updateFields },
+      { returnDocument: 'after' }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found. Please register first.' });
+    }
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        name: user.name || "",
+        email: user.email,
+        idNumber: user.idNumber || "",
+        phone: user.phone || "",
+        major: user.major || "",
+        batch: user.batch || "",
+        role: user.role || "member",
+        profileImage: user.profileImage || "",
+        fideRating: user.fideRating || 0,
+        fideId: user.fideId || "",
+        chessComRating: user.chessComRating || 0,
+        chessComUsername: user.chessComUsername || "",
+        lichessRating: user.lichessRating || 0,
+        lichessUsername: user.lichessUsername || "",
+        chessTitle: user.chessTitle || "",
+        favOpening: user.favOpening || "",
+        bio: user.bio || "",
+        playstyle: user.playstyle || "",
+        linkedHistoricalName: user.linkedHistoricalName || ""
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update profile', details: error.message });
+  }
+};
+
+// PUT & POST profile updates
+app.put('/api/profile', express.json(), updateProfileHandler);
+app.post('/api/profile', express.json(), updateProfileHandler);
+app.post('/api/profile/update', express.json(), updateProfileHandler);
+
+// PUT & POST: Update user profile image (base64 or URL)
+const updateProfileImageHandler = async (req, res) => {
   try {
     const { email, profileImage } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     
+    const cleanEmail = email.trim();
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+
     const user = await User.findOneAndUpdate(
-      { email },
-      { profileImage },
-      { new: true }
+      { email: emailRegex },
+      { $set: { profileImage } },
+      { returnDocument: 'after' }
     );
-    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found' });
+    }
     
     res.json({ message: 'Profile image updated successfully', profileImage: user.profileImage });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update profile image', details: error.message });
   }
-});
+};
 
-// POST alias: Update user profile image (base64 or URL)
-app.post('/api/profile/image', express.json({limit: '15mb'}), async (req, res) => {
+app.put('/api/profile/image', express.json({limit: '15mb'}), updateProfileImageHandler);
+app.post('/api/profile/image', express.json({limit: '15mb'}), updateProfileImageHandler);
+
+// GET: List all emails of users who have actually registered on the website
+app.get('/api/users/registered-emails', async (req, res) => {
   try {
-    const { email, profileImage } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    
-    const user = await User.findOneAndUpdate(
-      { email },
-      { profileImage },
-      { new: true }
-    );
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    
-    res.json({ message: 'Profile image updated successfully', profileImage: user.profileImage });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update profile image', details: error.message });
+    const users = await User.find({}, { email: 1, _id: 0 });
+    const registeredEmails = users.map(u => (u.email || '').toLowerCase().trim());
+    res.json({ registeredEmails });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch registered emails', details: err.message });
   }
 });
 
@@ -595,11 +1211,72 @@ app.get('/api/users/:email/tournaments', async (req, res) => {
   }
 });
 
-// GET: fetch all users (for admin dashboard)
+// GET: fetch all users (for admin dashboard / public directory)
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.find().select('-password'); // Exclude password hash
-    res.json(users);
+    const authHeader = req.headers.authorization;
+    let isAdmin = false;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+        if (decoded && decoded.role === 'admin') isAdmin = true;
+      } catch (e) {}
+    }
+    const requester = (req.query.requesterEmail || '').trim().toLowerCase();
+    if (requester === 'admin@zcchessclub.com') {
+      isAdmin = true;
+    }
+
+    // Phone is private: only returned to authenticated admins
+    const projection = isAdmin ? '-password' : '-password -phone';
+    const users = await User.find().select(projection);
+    const completedTournaments = await Tournament.find({ status: 'Completed' });
+    
+    // Track winners from both live completed tournaments and historical input championships
+    const tournamentWinners = new Map();
+
+    const historicalWinners = [
+      { name: "abdelrahman mohamed", title: "Spring 2026 Swiss Championship" },
+      { name: "abdelrahman mohamed", title: "Fast Clock Blitz 2026" },
+      { name: "bosy ayman", title: "Inter-University Championship 2026 (Girls)" },
+      { name: "omar ezz", title: "Night Knockout 2026" },
+      { name: "omar ezz", title: "Squad Tournament 2025 (Knights)" },
+      { name: "ahmed elkodariy", title: "Squad Tournament 2025 (Knights)" },
+      { name: "omar hafez", title: "Squad Tournament 2025 (Knights)" }
+    ];
+    historicalWinners.forEach(hw => {
+      const arr = tournamentWinners.get(hw.name) || [];
+      arr.push(hw.title);
+      tournamentWinners.set(hw.name, arr);
+    });
+
+    completedTournaments.forEach(t => {
+      let winName = (t.winner || '').toLowerCase().trim();
+      if (!winName && t.playersList && t.playersList[0] && t.playersList[0].name) {
+        winName = t.playersList[0].name.toLowerCase().trim();
+      }
+      if (winName) {
+        const arr = tournamentWinners.get(winName) || [];
+        arr.push(t.title);
+        tournamentWinners.set(winName, arr);
+      }
+    });
+
+    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const usersWithOnlineStatus = users.map(u => {
+      const uObj = u.toObject();
+      uObj.isOnline = uObj.lastSeen ? (new Date(uObj.lastSeen) >= twoMinsAgo) : false;
+
+      const nameClean = (uObj.name || '').toLowerCase().trim();
+      const emailClean = (uObj.email || '').toLowerCase().trim();
+
+      const wonList = tournamentWinners.get(nameClean) || tournamentWinners.get(emailClean) || [];
+      uObj.isChampion = wonList.length > 0;
+      uObj.wonTournaments = wonList;
+
+      return uObj;
+    });
+    res.json(usersWithOnlineStatus);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch users', details: error.message });
   }
@@ -636,7 +1313,7 @@ app.get('/api/tournaments', async (req, res) => {
   }
 });
 
-// GET: fetch a single tournament by ID
+// GET: fetch a single tournament by ID (with dynamic player avatars and profiles)
 app.get('/api/tournaments/:id', async (req, res) => {
   try {
     const tournament = await Tournament.findById(req.params.id);
@@ -645,9 +1322,85 @@ app.get('/api/tournaments/:id', async (req, res) => {
     }
     const obj = tournament.toObject();
     obj.players = obj.playersList ? obj.playersList.length : 0;
+
+    // Collect all player names in this tournament
+    const playerNames = new Set();
+    if (obj.playersList) {
+      obj.playersList.forEach(p => { if (p.name) playerNames.add(p.name.trim()); });
+    }
+    if (obj.matches) {
+      obj.matches.forEach(m => {
+        if (m.white && m.white !== 'TBD' && m.white !== 'BYE') playerNames.add(m.white.trim());
+        if (m.black && m.black !== 'TBD' && m.black !== 'BYE') playerNames.add(m.black.trim());
+      });
+    }
+
+    const nameArray = Array.from(playerNames);
+    const users = await User.find({
+      $or: [
+        { name: { $in: nameArray } },
+        { email: { $in: nameArray } }
+      ]
+    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio');
+
+    const playerAvatars = {};
+    const playerProfiles = {};
+    users.forEach(u => {
+      if (u.profileImage) {
+        if (u.name) playerAvatars[u.name.trim()] = u.profileImage;
+        if (u.email) playerAvatars[u.email.trim()] = u.profileImage;
+      }
+      if (u.name) {
+        playerProfiles[u.name.trim()] = {
+          name: u.name,
+          email: u.email,
+          profileImage: u.profileImage || "",
+          major: u.major || "",
+          batch: u.batch || "",
+          fideRating: u.fideRating || 0,
+          fideId: u.fideId || "",
+          chessTitle: u.chessTitle || "",
+          favOpening: u.favOpening || "",
+          bio: u.bio || ""
+        };
+      }
+    });
+
+    obj.playerAvatars = playerAvatars;
+    obj.playerProfiles = playerProfiles;
+
     res.json(obj);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tournament details', details: error.message });
+  }
+});
+
+// GET: fetch all player avatars from registered profiles
+app.get('/api/players/avatars', async (req, res) => {
+  try {
+    const users = await User.find({ profileImage: { $exists: true, $ne: "" } })
+      .select('name email profileImage major batch fideRating chessTitle favOpening bio');
+    const avatarMap = {};
+    const profileMap = {};
+    users.forEach(u => {
+      if (u.name) {
+        avatarMap[u.name.trim()] = u.profileImage;
+        profileMap[u.name.trim()] = {
+          name: u.name,
+          profileImage: u.profileImage,
+          major: u.major || "",
+          batch: u.batch || "",
+          fideRating: u.fideRating || 0,
+          chessTitle: u.chessTitle || "",
+          favOpening: u.favOpening || "",
+          bio: u.bio || ""
+        };
+      }
+      if (u.email) avatarMap[u.email.trim()] = u.profileImage;
+    });
+    res.json({ avatars: avatarMap, profiles: profileMap });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch player avatars", details: err.message });
   }
 });
 
@@ -1318,18 +2071,37 @@ app.post('/api/tournaments/:id/register', async (req, res) => {
     tournament.registrations.push({ email, name, status: 'Approved' });
     
     // Check if user is already in playersList (just in case)
+    const joiningUser = await User.findOne({ email });
     if (!tournament.playersList.some(p => p.name === name)) {
-      // Find user major if possible
-      const user = await User.findOne({ email });
       tournament.playersList.push({ 
         name, 
         rating: 1500, // Default rating 
-        major: user?.major || 'N/A' 
+        major: joiningUser?.major || 'N/A' 
       });
       tournament.players = tournament.playersList.length;
     }
 
     const saved = await tournament.save();
+
+    // 🔔 Notify all followers of the person who just joined
+    if (joiningUser) {
+      const followerEmails = (joiningUser.followers || []).map(e => e.toLowerCase());
+      if (followerEmails.length > 0) {
+        const notifPromises = followerEmails.map(followerEmail =>
+          createNotification({
+            recipientEmail: followerEmail,
+            type: 'tournament_join',
+            actorName: joiningUser.name || name,
+            actorEmail: email.toLowerCase(),
+            actorAvatar: joiningUser.profileImage || '',
+            message: `${joiningUser.name || name} joined ${tournament.title}`,
+            link: `/tournamentdetails?id=${tournament._id}`
+          })
+        );
+        await Promise.all(notifPromises);
+      }
+    }
+
     res.json({ message: 'Successfully joined tournament!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Server error', details: error.message });
@@ -1363,6 +2135,49 @@ app.post('/api/tournaments/:id/leave', async (req, res) => {
     res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
+
+// ============================================================
+// NOTIFICATION ROUTES
+// ============================================================
+
+// GET: Fetch notifications for a user (last 30, newest first)
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) return res.status(400).json({ error: 'email query param required' });
+    const notifications = await Notification.find({ recipientEmail: email.toLowerCase() })
+      .sort({ createdAt: -1 })
+      .limit(30);
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notifications', details: err.message });
+  }
+});
+
+// POST: Mark all notifications as read for a user
+app.post('/api/notifications/mark-read', express.json(), async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await Notification.updateMany({ recipientEmail: email.toLowerCase(), read: false }, { $set: { read: true } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark notifications read', details: err.message });
+  }
+});
+
+// POST: Mark a single notification as read
+app.post('/api/notifications/mark-one-read', express.json(), async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    await Notification.findByIdAndUpdate(id, { read: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark notification read', details: err.message });
+  }
+});
+
 // --- Puzzle Tournament Routes ---
 
 // POST: create a new puzzle tournament

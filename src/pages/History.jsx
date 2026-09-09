@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { findRegisteredUserForHistoricalPlayer } from "../utils/tournamentWinners";
 import "./History.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -54,6 +55,7 @@ export default function EventHistory() {
   const [selectedEventModal, setSelectedEventModal] = useState(null);
   const [selectedPlayerModal, setSelectedPlayerModal] = useState(null);
   const [highboardYearFilter, setHighboardYearFilter] = useState("all");
+  const [registeredUsers, setRegisteredUsers] = useState([]);
 
   // Check URL query params for active tab (e.g. ?tab=halloffame)
   useEffect(() => {
@@ -788,6 +790,17 @@ export default function EventHistory() {
 
       combined.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
       setPastEvents(combined);
+
+      // Fetch registered users to link historical players with live profiles
+      try {
+        const uRes = await fetch(`${API_BASE}/api/users`);
+        if (uRes.ok) {
+          const uData = await uRes.json();
+          setRegisteredUsers(Array.isArray(uData) ? uData : []);
+        }
+      } catch (uErr) {
+        console.warn("Could not fetch registered users in history:", uErr);
+      }
     } catch (err) {
       console.error("Failed to fetch events for history:", err);
       setPastEvents(defaultHistoricalEvents);
@@ -1753,6 +1766,51 @@ export default function EventHistory() {
                       <p className="tc-no-titles">No major 1st place titles yet.</p>
                     )}
                   </div>
+
+                  {(() => {
+                    const matchedUser = findRegisteredUserForHistoricalPlayer(selectedPlayerModal.name, registeredUsers);
+                    if (matchedUser) {
+                      return (
+                        <div className="tc-registered-account-card" style={{ background: "rgba(243, 193, 68, 0.08)", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "12px", padding: "14px 16px", margin: "16px 0", textAlign: "left" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                            <span style={{ fontSize: "0.82rem", fontWeight: "800", color: "#f3c144" }}>
+                              ⚡ Verified Registered Account
+                            </span>
+                            <span style={{ fontSize: "0.78rem", color: "#94a3b8" }}>{matchedUser.email}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                            <span style={{ fontSize: "0.84rem", color: "#e2e8f0" }}>
+                              {matchedUser.role === "admin" ? "👑 Club Officer" : "♟️ Club Member"}
+                              {(matchedUser.fideRating || matchedUser.chessComRating || matchedUser.lichessRating) ? ` • ⭐ ${matchedUser.fideRating || matchedUser.chessComRating || matchedUser.lichessRating} Elo` : ""}
+                            </span>
+                            <a
+                              href={`/profile?email=${encodeURIComponent(matchedUser.email)}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                background: "linear-gradient(135deg, #f3c144, #d4a32a)",
+                                color: "#15120c",
+                                fontWeight: "800",
+                                fontSize: "0.82rem",
+                                padding: "7px 14px",
+                                borderRadius: "8px",
+                                textDecoration: "none",
+                                boxShadow: "0 2px 8px rgba(243, 193, 68, 0.25)"
+                              }}
+                            >
+                              <span>View Live Profile ({matchedUser.name?.split(' ')[0]}) ➔</span>
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "10px", padding: "10px 14px", margin: "14px 0", fontSize: "0.82rem", color: "#94a3b8", textAlign: "center" }}>
+                        📜 Historical Championship Archive • Organized via external app (Challonge) prior to website launch
+                      </div>
+                    );
+                  })()}
 
                   <div className="tc-modal-actions">
                     <button

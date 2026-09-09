@@ -4,7 +4,8 @@ import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { safeFetchJson } from "../utils/api";
+import { safeFetchJson, getPlayerAvatarUrl } from "../utils/api";
+import { chessAudio } from "../utils/chessAudio";
 import "./PuzzleChallenge.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -16,6 +17,23 @@ export default function PuzzleChallenge() {
   const [tournaments, setTournaments] = useState([]);
   const [activeTournament, setActiveTournament] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [customAvatars, setCustomAvatars] = useState({});
+  const [expandedTournaments, setExpandedTournaments] = useState({});
+
+  const toggleTournamentExpanded = (id) => {
+    setExpandedTournaments((prev) => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  const toggleAudio = () => {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    chessAudio.toggleSound(nextState);
+  };
 
   // Playing Game States
   const [isPlaying, setIsPlaying] = useState(false);
@@ -86,11 +104,34 @@ export default function PuzzleChallenge() {
   const isAdmin = userRole === "admin" || userRole === "oc" || userRole === "hr";
   const userName = userEmail ? userEmail.split("@")[0] : "Guest Player";
 
-  // Fetch puzzle tournaments on load
+  // Fetch puzzle tournaments and player avatars on load
   useEffect(() => {
     fetchTournaments();
+    fetchAvatars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchAvatars = async () => {
+    try {
+      const aData = await safeFetchJson(`${API_BASE}/api/players/avatars`);
+      if (aData && aData.avatars) {
+        setCustomAvatars((prev) => ({ ...prev, ...aData.avatars }));
+      }
+      const uList = await safeFetchJson(`${API_BASE}/api/users`);
+      if (Array.isArray(uList)) {
+        const map = {};
+        uList.forEach((u) => {
+          if (u.profileImage) {
+            if (u.name) map[u.name.trim()] = u.profileImage;
+            if (u.email) map[u.email.trim()] = u.profileImage;
+          }
+        });
+        setCustomAvatars((prev) => ({ ...prev, ...map }));
+      }
+    } catch (err) {
+      console.warn("Could not load player avatars:", err.message);
+    }
+  };
 
   const MOCK_TOURNAMENTS = [
     {
@@ -134,6 +175,7 @@ export default function PuzzleChallenge() {
   };
 
   const handlePuzzleTimeout = () => {
+    chessAudio.playError();
     setGameFeedback("Time ran out on this puzzle! ⏰");
     setFeedbackType("error");
     
@@ -338,6 +380,15 @@ export default function PuzzleChallenge() {
         cleanSan === cleanTarget ||
         cleanSanStripped === cleanTarget
       ) {
+        // Play appropriate sound effect
+        if (move.captured) {
+          chessAudio.playCapture();
+        } else if (newChess.inCheck()) {
+          chessAudio.playCheck();
+        } else {
+          chessAudio.playMove();
+        }
+
         // ✅ Correct move — update board state immutably
         setChessGame(newChess);
         setBoardFen(newChess.fen());
@@ -354,7 +405,14 @@ export default function PuzzleChallenge() {
             try {
               const opponentMove = correctMovesList[nextMoveIdx];
               const afterOpponent = new Chess(newChess.fen());
-              afterOpponent.move(opponentMove);
+              const opResult = afterOpponent.move(opponentMove);
+              if (opResult && opResult.captured) {
+                chessAudio.playCapture();
+              } else if (afterOpponent.inCheck()) {
+                chessAudio.playCheck();
+              } else {
+                chessAudio.playMove();
+              }
               setChessGame(afterOpponent);
               setBoardFen(afterOpponent.fen());
               setCurrentMoveIdx(nextMoveIdx + 1);
@@ -369,6 +427,7 @@ export default function PuzzleChallenge() {
         } else {
           // 🎉 Puzzle fully solved!
           boardLocked.current = true;
+          chessAudio.playVictory();
           setGameFeedback("Perfect! Puzzle Solved! 🎉");
           setFeedbackType("success");
 
@@ -389,11 +448,13 @@ export default function PuzzleChallenge() {
 
       } else {
         // ❌ Wrong move
+        chessAudio.playError();
         handleWrongMove();
         return false;
       }
     } catch (err) {
       console.error("onPieceDrop threw exception:", err);
+      chessAudio.playError();
       handleWrongMove();
       return false;
     }
@@ -513,9 +574,18 @@ export default function PuzzleChallenge() {
               {/* Left Column: Player Stats HUD */}
               <div className="profile-stats-panel">
                 <div className="profile-header-card">
-                  <div className="user-avatar-badge">
-                    {userName ? userName[0].toUpperCase() : "U"}
-                  </div>
+                  {customAvatars[userName] || customAvatars[userEmail] || getPlayerAvatarUrl(userName, customAvatars) !== "/Icons/unknown.png" ? (
+                    <img 
+                      src={customAvatars[userName] || customAvatars[userEmail] || getPlayerAvatarUrl(userName, customAvatars)} 
+                      alt={userName} 
+                      className="user-avatar-badge-img"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                  ) : (
+                    <div className="user-avatar-badge">
+                      {userName ? userName[0].toUpperCase() : "U"}
+                    </div>
+                  )}
                   <div className="user-meta">
                     <h3>{userName || "Club Member"}</h3>
                     <span className="role-tag">Tactician</span>
@@ -597,17 +667,55 @@ export default function PuzzleChallenge() {
                         
                         {/* Leaderboard Summary preview */}
                         <div className="card-leaderboard-preview">
-                          <h4>Leaderboard Standings</h4>
+                          <div className="preview-header-row">
+                            <h4>Leaderboard Standings</h4>
+                            {t.leaderboard && t.leaderboard.length > 0 && (
+                              <span className="player-count-badge">
+                                👥 {t.leaderboard.length} {t.leaderboard.length === 1 ? "Tactician" : "Tacticians"}
+                              </span>
+                            )}
+                          </div>
                           {t.leaderboard && t.leaderboard.length > 0 ? (
-                            t.leaderboard.slice(0, 3).map((entry, idx) => (
-                              <div key={idx} className="leaderboard-preview-row">
-                                <div className="preview-player-info">
-                                  <span className="preview-rank">{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`}</span>
-                                  <span className="preview-name">{entry.name}</span>
-                                </div>
-                                <strong className="preview-score">{entry.score} pts</strong>
+                            <>
+                              <div className="preview-list">
+                                {(expandedTournaments[t._id] ? t.leaderboard : t.leaderboard.slice(0, 3)).map((entry, idx) => {
+                                  const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
+                                  return (
+                                    <div key={idx} className={`leaderboard-preview-row ${entry.email === userEmail ? "highlight-user-row-preview" : ""}`}>
+                                      <div className="preview-player-info">
+                                        <span className="preview-rank">{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`}</span>
+                                        <img 
+                                          src={avatarUrl} 
+                                          alt={entry.name} 
+                                          className="preview-avatar"
+                                          onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                                        />
+                                        <span className="preview-name" title={entry.name}>{entry.name}</span>
+                                      </div>
+                                      <div className="preview-stats-col">
+                                        <span className="preview-solved">{entry.solvedCount || 0} 🧩</span>
+                                        <strong className="preview-score">{entry.score} pts</strong>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            ))
+
+                              {t.leaderboard.length > 3 && (
+                                <button 
+                                  type="button" 
+                                  className="view-all-players-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleTournamentExpanded(t._id);
+                                  }}
+                                >
+                                  {expandedTournaments[t._id] 
+                                    ? "Show Top 3 ▲" 
+                                    : `View all ${t.leaderboard.length} players ▼`}
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <p className="no-scores-text">Be the first to participate!</p>
                           )}
@@ -658,21 +766,32 @@ export default function PuzzleChallenge() {
                   </thead>
                   <tbody>
                     {activeTournament.leaderboard && activeTournament.leaderboard.length > 0 ? (
-                      activeTournament.leaderboard.map((entry, idx) => (
-                        <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
-                          <td className="col-rank">
-                            <span className={`rank-badge rank-${idx + 1}`}>
-                              {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
-                            </span>
-                          </td>
-                          <td className="col-player">
-                            <span className="player-name">{entry.name}</span>
-                            {entry.email === userEmail && <span className="you-pill">YOU</span>}
-                          </td>
-                          <td className="col-solved">{entry.solvedCount}</td>
-                          <td className="col-score">{entry.score} pts</td>
-                        </tr>
-                      ))
+                      activeTournament.leaderboard.map((entry, idx) => {
+                        const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
+                        return (
+                          <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
+                            <td className="col-rank">
+                              <span className={`rank-badge rank-${idx + 1}`}>
+                                {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
+                              </span>
+                            </td>
+                            <td className="col-player">
+                              <div className="table-player-cell">
+                                <img 
+                                  src={avatarUrl} 
+                                  alt={entry.name} 
+                                  className="table-player-avatar"
+                                  onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                                />
+                                <span className="player-name">{entry.name}</span>
+                                {entry.email === userEmail && <span className="you-pill">YOU</span>}
+                              </div>
+                            </td>
+                            <td className="col-solved">{entry.solvedCount}</td>
+                            <td className="col-score">{entry.score} pts</td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
                         <td colSpan="4" style={{ textAlign: "center", color: "#888", padding: "20px" }}>No scores submitted yet.</td>
@@ -697,8 +816,18 @@ export default function PuzzleChallenge() {
               <div className="puzzle-header-title">
                 {activeTournament.title}
               </div>
-              <div className={`timer-badge ${timeRemaining <= 10 ? 'timer-pulse' : timeRemaining <= 20 ? 'timer-warning' : ''}`}>
-                ⏱️ {timeRemaining}s
+              <div className="game-status-right-controls">
+                <button 
+                  type="button" 
+                  className="sound-toggle-btn"
+                  onClick={toggleAudio}
+                  title={soundEnabled ? "Mute Sounds" : "Unmute Sounds"}
+                >
+                  {soundEnabled ? "🔊" : "🔇"}
+                </button>
+                <div className={`timer-badge ${timeRemaining <= 10 ? 'timer-pulse' : timeRemaining <= 20 ? 'timer-warning' : ''}`}>
+                  ⏱️ {timeRemaining}s
+                </div>
               </div>
             </div>
 
@@ -775,18 +904,27 @@ export default function PuzzleChallenge() {
                   <h4>Live Leaderboard</h4>
                   <div className="mini-leaderboard">
                     {activeTournament.leaderboard && activeTournament.leaderboard.length > 0 ? (
-                      activeTournament.leaderboard.map((entry, idx) => (
-                        <div key={idx} className={`mini-leaderboard-row ${entry.email === userEmail ? 'highlight' : ''}`}>
-                          <div className="mini-player-info">
-                            <span className="mini-rank">{idx + 1}.</span>
-                            <span className="mini-name">{entry.name}</span>
+                      activeTournament.leaderboard.map((entry, idx) => {
+                        const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
+                        return (
+                          <div key={idx} className={`mini-leaderboard-row ${entry.email === userEmail ? 'highlight' : ''}`}>
+                            <div className="mini-player-info">
+                              <span className="mini-rank">{idx + 1}.</span>
+                              <img 
+                                src={avatarUrl} 
+                                alt={entry.name} 
+                                className="mini-avatar"
+                                onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                              />
+                              <span className="mini-name">{entry.name}</span>
+                            </div>
+                            <div className="mini-stats">
+                              <span className="mini-solved">{entry.solvedCount} 🧩</span>
+                              <strong className="mini-score">{entry.score} pts</strong>
+                            </div>
                           </div>
-                          <div className="mini-stats">
-                            <span className="mini-solved">{entry.solvedCount} 🧩</span>
-                            <strong className="mini-score">{entry.score} pts</strong>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <p className="no-scores-text">No scores yet.</p>
                     )}

@@ -15,6 +15,7 @@ const TopHeader = ({ sidebarOpen, toggleSidebar }) => {
 
         <nav className="nav-links">
           <Link to="/">Home</Link>
+          <Link to="/community">Community</Link>
           <Link to="/tournaments">Tournaments</Link>
           <Link to="/about">About Us</Link>
           <Link to="/contact">Contact</Link>
@@ -28,6 +29,7 @@ const TopHeader = ({ sidebarOpen, toggleSidebar }) => {
       {sidebarOpen && (
         <div className="mobile-sidebar">
           <Link to="/">Home</Link>
+          <Link to="/community">Community</Link>
           <Link to="/tournaments">Tournaments</Link>
           <Link to="/about">About Us</Link>
           <Link to="/contact">Contact</Link>

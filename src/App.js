@@ -23,6 +23,7 @@ import Admin from './pages/Admin';
 import History from './pages/History';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import Community from './pages/Community';
 
 // API Base URL - works for both local and production
 export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -32,6 +33,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/community" element={<Community />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/about" element={<AboutUs />} />

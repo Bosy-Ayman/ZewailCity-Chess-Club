@@ -395,3 +395,170 @@ tbody tr:hover {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ========================
+   Registered Players Panel
+======================== */
+
+/* Desktop: players count button */
+.reg-count-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(121, 184, 248, 0.1);
+  border: 1px solid rgba(121, 184, 248, 0.25);
+  color: #79b8f8;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.reg-count-btn:hover {
+  background: rgba(121, 184, 248, 0.18);
+  border-color: rgba(121, 184, 248, 0.5);
+  transform: translateY(-1px);
+}
+.reg-chevron {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+/* Desktop: expanded row */
+.reg-expanded-row td {
+  padding: 0;
+  background: rgba(15, 13, 10, 0.7);
+  border-top: none;
+}
+.reg-expanded-panel {
+  padding: 20px 24px;
+  border-top: 1px solid rgba(121, 184, 248, 0.15);
+  border-bottom: 1px solid rgba(57, 52, 40, 0.3);
+  animation: slideDown 0.22s ease;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.reg-expanded-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.reg-expanded-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+.reg-expanded-subtitle {
+  font-size: 0.78rem;
+  color: #bab19c;
+}
+
+/* Player chips grid */
+.reg-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.reg-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 27, 20, 0.9);
+  border: 1px solid rgba(57, 52, 40, 0.6);
+  border-radius: 40px;
+  padding: 6px 14px 6px 6px;
+  transition: all 0.18s ease;
+}
+.reg-chip:hover {
+  border-color: rgba(243, 193, 68, 0.4);
+  background: rgba(243, 193, 68, 0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.reg-chip-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #3a3220, #2a2416);
+  border: 2px solid rgba(243, 193, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reg-chip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.reg-chip-initials {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #f3c144;
+  letter-spacing: 0.3px;
+}
+.reg-chip-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e8e2d6;
+  white-space: nowrap;
+}
+
+/* Empty state */
+.reg-empty {
+  font-size: 0.85rem;
+  color: #bab19c;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* Mobile: registered section */
+.mobile-reg-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(121, 184, 248, 0.2);
+}
+.mobile-reg-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(121, 184, 248, 0.08);
+  color: #79b8f8;
+  border: none;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.18s ease;
+}
+.mobile-reg-toggle:hover {
+  background: rgba(121, 184, 248, 0.15);
+}
+.mobile-reg-panel {
+  background: rgba(15, 13, 10, 0.6);
+  padding: 14px;
+  animation: slideDown 0.2s ease;
+}
+.mobile-reg-panel .reg-chips-grid {
+  gap: 8px;
+}
+.mobile-reg-panel .reg-chip {
+  padding: 5px 12px 5px 5px;
+}
+.mobile-reg-panel .reg-chip-avatar {
+  width: 28px;
+  height: 28px;
+}

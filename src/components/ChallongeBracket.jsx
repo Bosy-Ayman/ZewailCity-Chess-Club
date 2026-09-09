@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Xarrow, { Xwrapper } from "react-xarrows";
+import { getPlayerAvatarUrl } from "../utils/api";
 import "./ChallongeBracket.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
@@ -103,9 +104,11 @@ export default function ChallongeBracket({
   tournamentType,
   matchesData, 
   playersData, 
+  playerAvatars = {},
   tournamentTitle = "Knockout Championship Bracket",
   isStaff = false,
-  onUpdateMatch
+  onUpdateMatch,
+  onSelectPlayer
 }) {
   const [activeTab, setActiveTab] = useState("upper"); // "upper" or "lower"
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -316,6 +319,12 @@ export default function ChallongeBracket({
                       {/* Player 1 Row */}
                       <div className={`match-player-row ${match.p1.isWinner ? "winner" : "loser"}`}>
                         <div className="player-meta">
+                          <img 
+                            src={getPlayerAvatarUrl(match.p1.name, playerAvatars)} 
+                            alt={match.p1.name} 
+                            className="bracket-player-avatar"
+                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                          />
                           <span className="player-seed">#{match.p1.seed}</span>
                           <span className="player-name">{match.p1.name}</span>
                         </div>
@@ -331,6 +340,12 @@ export default function ChallongeBracket({
                       {/* Player 2 Row */}
                       <div className={`match-player-row ${match.p2.isWinner ? "winner" : "loser"}`}>
                         <div className="player-meta">
+                          <img 
+                            src={getPlayerAvatarUrl(match.p2.name, playerAvatars)} 
+                            alt={match.p2.name} 
+                            className="bracket-player-avatar"
+                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                          />
                           <span className="player-seed">#{match.p2.seed}</span>
                           <span className="player-name">{match.p2.name}</span>
                         </div>
@@ -355,6 +370,12 @@ export default function ChallongeBracket({
 
                 <div id="champion-display-box" className="champion-display-box glass-panel-card gold-glow">
                   <div className="champion-trophy-icon">🏆</div>
+                  <img 
+                    src={getPlayerAvatarUrl(bracketData.champion.name, playerAvatars)} 
+                    alt={bracketData.champion.name} 
+                    className="bracket-champion-avatar"
+                    onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                  />
                   <h3 className="champion-name">{bracketData.champion.name}</h3>
                   <span className="champion-title-tag">{bracketData.champion.title}</span>
                   <span className="champion-seed-tag">Seed #{bracketData.champion.seed}</span>
@@ -382,6 +403,12 @@ export default function ChallongeBracket({
 
             <div className="match-modal-vs-box">
               <div className={`modal-player-card ${selectedMatchModal.p1.isWinner ? "winner" : ""}`}>
+                <img 
+                  src={getPlayerAvatarUrl(selectedMatchModal.p1.name, playerAvatars)} 
+                  alt={selectedMatchModal.p1.name} 
+                  className="modal-player-avatar"
+                  onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                />
                 <span className="modal-seed">Seed #{selectedMatchModal.p1.seed}</span>
                 {isStaff && (rawMatch ? (!rawMatch.result || rawMatch.result === "Pending") : true) ? (
                   <select
@@ -402,6 +429,12 @@ export default function ChallongeBracket({
               <div className="modal-vs-symbol">VS</div>
 
               <div className={`modal-player-card ${selectedMatchModal.p2.isWinner ? "winner" : ""}`}>
+                <img 
+                  src={getPlayerAvatarUrl(selectedMatchModal.p2.name, playerAvatars)} 
+                  alt={selectedMatchModal.p2.name} 
+                  className="modal-player-avatar"
+                  onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                />
                 <span className="modal-seed">Seed #{selectedMatchModal.p2.seed}</span>
                 {isStaff && (rawMatch ? (!rawMatch.result || rawMatch.result === "Pending") : true) ? (
                   <select

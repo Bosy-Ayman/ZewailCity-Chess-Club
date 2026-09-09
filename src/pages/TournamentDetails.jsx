@@ -4,6 +4,7 @@ import Footer from "../components/Footer";
 import ChallongeBracket from "../components/ChallongeBracket";
 import Confetti from "react-confetti";
 import { useWindowSize } from "react-use";
+import { getPlayerAvatarUrl } from "../utils/api";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -16,6 +17,13 @@ export default function TournamentDetails() {
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
   const { width, height } = useWindowSize();
+
+  // Interactive Player Preview Modal State
+  const [selectedPlayerModal, setSelectedPlayerModal] = useState(null);
+  const [cheerCount, setCheerCount] = useState(0);
+  const [cheered, setCheered] = useState(false);
+  const [challengeSent, setChallengeSent] = useState(false);
+  const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
 
   // Check role
   const userRole = localStorage.getItem("userRole") || "member";
@@ -249,10 +257,31 @@ export default function TournamentDetails() {
 
   const handleUpdateTournamentStatus = async (newStatus) => {
     try {
+      const payload = { status: newStatus };
+      if (newStatus === "Completed") {
+        if (isSwissFormat && swissStandings && swissStandings.length > 0) {
+          payload.winner = swissStandings[0].name;
+          payload.podium = swissStandings.slice(0, 3).map((p, idx) => ({
+            place: idx + 1,
+            name: p.name,
+            points: p.points
+          }));
+        } else {
+          const matches = tournament?.matches || [];
+          if (matches.length > 0) {
+            const maxRound = Math.max(...matches.map(m => m.round || 1));
+            const finalMatch = matches.find(m => m.round === maxRound);
+            if (finalMatch && finalMatch.result) {
+              if (finalMatch.result === "1-0") payload.winner = finalMatch.white;
+              else if (finalMatch.result === "0-1") payload.winner = finalMatch.black;
+            }
+          }
+        }
+      }
       const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update tournament status");
@@ -261,6 +290,78 @@ export default function TournamentDetails() {
     } catch (err) {
       alert("Error updating status: " + err.message);
     }
+  };
+
+  // Export Tournament Pairings & Match Results as PGN
+  const handleExportPGN = () => {
+    if (!tournament) return;
+    const matches = tournament.matches || [];
+    if (matches.length === 0) {
+      alert("No matches recorded to export yet!");
+      return;
+    }
+
+    const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
+    let pgnContent = `[Event "${cleanTitle}"]\n[Site "Zewail City of Science and Technology"]\n[Date "${tournament.startDate || new Date().toISOString().split("T")[0]}"]\n[TournamentType "${tournament.type || "Swiss"}"]\n\n`;
+
+    matches.forEach((m, idx) => {
+      const white = m.white || "White";
+      const black = m.black || "Black";
+      const round = m.round || 1;
+      let result = m.result || "*";
+      if (result === "1 - 0") result = "1-0";
+      if (result === "0 - 1") result = "0-1";
+      if (result === "1/2 - 1/2" || result === "½ - ½" || result === "Draw") result = "1/2-1/2";
+      if (result === "Pending") result = "*";
+
+      pgnContent += `[Event "${cleanTitle}"]\n`;
+      pgnContent += `[Site "Zewail City"]\n`;
+      pgnContent += `[Date "${tournament.startDate || "2026.09.09"}"]\n`;
+      pgnContent += `[Round "${round}.${idx + 1}"]\n`;
+      pgnContent += `[White "${white}"]\n`;
+      pgnContent += `[Black "${black}"]\n`;
+      pgnContent += `[Result "${result}"]\n\n`;
+      pgnContent += `${result}\n\n`;
+    });
+
+    const blob = new Blob([pgnContent], { type: "application/x-chess-pgn;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${cleanTitle.replace(/\s+/g, "_")}_Matches.pgn`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export Standings and Results as CSV
+  const handleExportCSV = () => {
+    if (!tournament) return;
+    const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
+    let csvContent = "";
+
+    if (isSwissFormat) {
+      csvContent = "Rank,Player Name,Points,Wins,Draws,Losses,Played,Byes,Rating,Major\n";
+      swissStandings.forEach((p, idx) => {
+        csvContent += `${idx + 1},"${p.name}",${p.points},${p.wins},${p.draws},${p.losses},${p.played},${p.byes},${p.rating},"${p.major}"\n`;
+      });
+    } else {
+      csvContent = "Round,White,Black,Result\n";
+      (tournament.matches || []).forEach((m) => {
+        csvContent += `${m.round},"${m.white}","${m.black}","${m.result || "Pending"}"\n`;
+      });
+    }
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${cleanTitle.replace(/\s+/g, "_")}_Standings.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Calculate Swiss Standings from live database matches (FIDE rules)
@@ -337,6 +438,46 @@ export default function TournamentDetails() {
   const maxCurrentRound = sortedRounds.length > 0 ? Math.max(...sortedRounds) : 0;
   const nextRoundNum = maxCurrentRound + 1;
 
+  const openPlayerPreview = (playerName, extra = {}) => {
+    if (!playerName || playerName === "BYE" || playerName === "— BYE —" || playerName === "TBD") return;
+    const clean = playerName.trim();
+    const profileFromDb = tournament?.playerProfiles?.[clean] || {};
+    const avatarUrl = getPlayerAvatarUrl(clean, tournament?.playerAvatars);
+    
+    // Find swiss standing if exists
+    const standing = swissStandings.find(s => s.name.toLowerCase() === clean.toLowerCase());
+    
+    const savedCheers = Number(localStorage.getItem(`cheer_${clean}`)) || Math.floor(Math.random() * 8) + 3;
+
+    setSelectedPlayerModal({
+      name: clean,
+      avatar: avatarUrl,
+      major: profileFromDb.major || extra.major || standing?.major || "Zewail City Tactician",
+      batch: profileFromDb.batch || "ZC '25",
+      rating: profileFromDb.fideRating || extra.rating || standing?.rating || 1500,
+      chessTitle: profileFromDb.chessTitle || (standing && standing.wins >= 2 ? "Candidate Master" : "Active Competitor"),
+      favOpening: profileFromDb.favOpening || "Sicilian Defense / Queen's Gambit",
+      bio: profileFromDb.bio || "Active tournament tactician competing for Zewail City honors.",
+      standing: standing || null
+    });
+    setCheerCount(savedCheers);
+    setCheered(false);
+    setChallengeSent(false);
+  };
+
+  const handleSendCheer = () => {
+    if (!selectedPlayerModal) return;
+    const newCount = cheerCount + 1;
+    setCheerCount(newCount);
+    setCheered(true);
+    localStorage.setItem(`cheer_${selectedPlayerModal.name}`, newCount);
+  };
+
+  const handleSendChallenge = (e) => {
+    e.preventDefault();
+    setChallengeSent(true);
+  };
+
   return (
     <div className="tournament-wrapper">
       <Header sidebarOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
@@ -365,6 +506,52 @@ export default function TournamentDetails() {
                     {tournament.description}
                   </p>
                 )}
+                <div className="tournament-export-actions" style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
+                  <button 
+                    type="button"
+                    onClick={handleExportPGN}
+                    className="export-tournament-btn"
+                    title="Export All Match Pairings as PGN file"
+                    style={{
+                      background: "rgba(243, 193, 68, 0.12)",
+                      border: "1px solid rgba(243, 193, 68, 0.35)",
+                      color: "#f3c144",
+                      padding: "8px 16px",
+                      borderRadius: "10px",
+                      fontSize: "0.85rem",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    ♟️ Download PGN
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="export-tournament-btn"
+                    title="Export Standings Report as CSV"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      color: "#eee",
+                      padding: "8px 16px",
+                      borderRadius: "10px",
+                      fontSize: "0.85rem",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    📊 Export CSV Report
+                  </button>
+                </div>
               </div>
 
               {/* Tournament Progress Box */}
@@ -549,7 +736,23 @@ export default function TournamentDetails() {
                             <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
                               {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
                             </td>
-                            <td style={{ fontWeight: "600", color: "#fff" }}>{p.name}</td>
+                            <td style={{ fontWeight: "600", color: "#fff" }}>
+                              <div 
+                                className="tournament-player-cell"
+                                onClick={() => openPlayerPreview(p.name, p)}
+                                title={`Click to view ${p.name}'s Profile Card`}
+                              >
+                                <div className="player-avatar-ring">
+                                  <img
+                                    src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                    alt={p.name}
+                                    className="player-avatar-mini"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                  />
+                                </div>
+                                <span className="player-name-text">{p.name}</span>
+                              </div>
+                            </td>
                             <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
                             <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
                             <td>{p.played}</td>
@@ -593,7 +796,19 @@ export default function TournamentDetails() {
                           <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
                         </div>
 
-                        <h3 className="mobile-card-title">{p.name}</h3>
+                        <div 
+                          className="mobile-player-cell"
+                          onClick={() => openPlayerPreview(p.name, p)}
+                          title={`Click to view ${p.name}'s Profile Card`}
+                        >
+                          <img
+                            src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                            alt={p.name}
+                            className="player-avatar-mini"
+                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                          />
+                          <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
+                        </div>
 
                         <div className="mobile-card-details">
                           <div className="detail-item">
@@ -723,7 +938,19 @@ export default function TournamentDetails() {
                                   <tr key={m._id || idx} style={{ background: isByeRow ? "rgba(243,193,68,0.05)" : "transparent", opacity: isByeRow ? 0.8 : 1 }}>
                                     <td style={{ color: "#888" }}>Board {idx + 1}</td>
                                     <td style={{ fontWeight: (m.result === "1-0" || m.result === "1 - 0") ? "bold" : "normal", color: (m.result === "1-0" || m.result === "1 - 0") ? "#f3c144" : "#fff" }}>
-                                      {m.white} {!isByeRow && (m.result === "1-0" || m.result === "1 - 0") ? "✓" : ""}
+                                      <div 
+                                        className="pairing-player-cell"
+                                        onClick={() => openPlayerPreview(m.white)}
+                                        title={`Click to view ${m.white}'s Profile Card`}
+                                      >
+                                        <img
+                                          src={getPlayerAvatarUrl(m.white, tournament?.playerAvatars)}
+                                          alt={m.white}
+                                          className="player-avatar-tiny"
+                                          onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                        />
+                                        <span>{m.white} {!isByeRow && (m.result === "1-0" || m.result === "1 - 0") ? "✓" : ""}</span>
+                                      </div>
                                     </td>
                                     <td>
                                       {isByeRow ? (
@@ -746,7 +973,21 @@ export default function TournamentDetails() {
                                       )}
                                     </td>
                                     <td style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : isByeRow ? "#888" : "#fff" }}>
-                                      {isByeRow ? <em>— BYE —</em> : `${m.black} ${(m.result === "0-1" || m.result === "0 - 1") ? "✓" : ""}`}
+                                      {isByeRow ? <em>— BYE —</em> : (
+                                        <div 
+                                          className="pairing-player-cell"
+                                          onClick={() => openPlayerPreview(m.black)}
+                                          title={`Click to view ${m.black}'s Profile Card`}
+                                        >
+                                          <img
+                                            src={getPlayerAvatarUrl(m.black, tournament?.playerAvatars)}
+                                            alt={m.black}
+                                            className="player-avatar-tiny"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                          />
+                                          <span>{m.black} {(m.result === "0-1" || m.result === "0 - 1") ? "✓" : ""}</span>
+                                        </div>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -772,14 +1013,40 @@ export default function TournamentDetails() {
                                   )}
                                 </div>
 
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", margin: "6px 0" }}>
-                                  <span style={{ fontWeight: (m.result === "1-0" || m.result === "1 - 0") ? "bold" : "normal", color: (m.result === "1-0" || m.result === "1 - 0") ? "#f3c144" : "#fff", fontSize: "0.95rem" }}>
-                                    ⚪ {m.white}
-                                  </span>
+                                <div className="mobile-match-pairing-row">
+                                  <div 
+                                    className="mobile-match-player" 
+                                    onClick={() => openPlayerPreview(m.white)}
+                                    title={`Click to view ${m.white}'s Profile Card`}
+                                  >
+                                    <img
+                                      src={getPlayerAvatarUrl(m.white, tournament?.playerAvatars)}
+                                      alt={m.white}
+                                      className="player-avatar-tiny"
+                                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                    />
+                                    <span style={{ fontWeight: (m.result === "1-0" || m.result === "1 - 0") ? "bold" : "normal", color: (m.result === "1-0" || m.result === "1 - 0") ? "#f3c144" : "#fff", fontSize: "0.92rem" }}>
+                                      ⚪ {m.white}
+                                    </span>
+                                  </div>
                                   <span style={{ color: "#888", fontSize: "0.75rem", fontWeight: "bold" }}>VS</span>
-                                  <span style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : isByeRow ? "#888" : "#fff", fontSize: "0.95rem" }}>
-                                    ⚫ {isByeRow ? "BYE" : m.black}
-                                  </span>
+                                  <div 
+                                    className="mobile-match-player" 
+                                    onClick={() => !isByeRow && openPlayerPreview(m.black)}
+                                    title={!isByeRow ? `Click to view ${m.black}'s Profile Card` : ""}
+                                  >
+                                    {!isByeRow && (
+                                      <img
+                                        src={getPlayerAvatarUrl(m.black, tournament?.playerAvatars)}
+                                        alt={m.black}
+                                        className="player-avatar-tiny"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                      />
+                                    )}
+                                    <span style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : isByeRow ? "#888" : "#fff", fontSize: "0.92rem" }}>
+                                      ⚫ {isByeRow ? "BYE" : m.black}
+                                    </span>
+                                  </div>
                                 </div>
 
                                 {isStaff && !isByeRow && m._id && (
@@ -854,9 +1121,11 @@ export default function TournamentDetails() {
                         tournamentType={tournament.type}
                         matchesData={tournament.matches} 
                         playersData={tournament.playersList}
+                        playerAvatars={tournament?.playerAvatars}
                         tournamentTitle={`${tournament.title} (${tournament.type || "Knockout Bracket"})`} 
                         isStaff={isStaff}
                         onUpdateMatch={handleUpdateMatch}
+                        onSelectPlayer={(pName) => openPlayerPreview(pName)}
                       />
                       
                       {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
@@ -1229,6 +1498,106 @@ export default function TournamentDetails() {
             >
               Mark Tournament as Completed
             </button>
+          </div>
+        </div>
+      )}
+      {/* Interactive Player Profile Modal */}
+      {selectedPlayerModal && (
+        <div className="player-modal-overlay" onClick={() => setSelectedPlayerModal(null)}>
+          <div className="player-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
+            <button className="player-modal-close" onClick={() => setSelectedPlayerModal(null)}>✕</button>
+            
+            <div className="player-modal-header">
+              <div className="player-modal-avatar-box">
+                <img 
+                  src={selectedPlayerModal.avatar} 
+                  alt={selectedPlayerModal.name}
+                  className="player-modal-avatar"
+                  onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                />
+                <span className="player-modal-status-dot" title="Active Competitor"></span>
+              </div>
+              <div className="player-modal-identity">
+                <h3 className="player-modal-name">{selectedPlayerModal.name}</h3>
+                <span className="player-modal-tag">{selectedPlayerModal.chessTitle}</span>
+                <p className="player-modal-major">{selectedPlayerModal.major} • {selectedPlayerModal.batch}</p>
+              </div>
+            </div>
+
+            <div className="player-modal-stats-grid">
+              <div className="player-stat-card">
+                <span className="stat-label">Rating</span>
+                <span className="stat-val">{selectedPlayerModal.rating}</span>
+              </div>
+              {selectedPlayerModal.standing ? (
+                <>
+                  <div className="player-stat-card">
+                    <span className="stat-label">Tournament Pts</span>
+                    <span className="stat-val gold">{selectedPlayerModal.standing.points} pts</span>
+                  </div>
+                  <div className="player-stat-card">
+                    <span className="stat-label">Record</span>
+                    <span className="stat-val">{selectedPlayerModal.standing.wins}W - {selectedPlayerModal.standing.draws}D - {selectedPlayerModal.standing.losses}L</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="player-stat-card">
+                    <span className="stat-label">Status</span>
+                    <span className="stat-val gold">In Tournament</span>
+                  </div>
+                  <div className="player-stat-card">
+                    <span className="stat-label">Style</span>
+                    <span className="stat-val">Tactical</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {selectedPlayerModal.favOpening && (
+              <div className="player-modal-opening">
+                <span className="opening-label">Favorite Opening:</span>
+                <span className="opening-val">{selectedPlayerModal.favOpening}</span>
+              </div>
+            )}
+
+            {/* Interactive Social Actions */}
+            <div className="player-modal-actions">
+              <button 
+                className={`player-cheer-btn ${cheered ? "cheered" : ""}`}
+                onClick={handleSendCheer}
+              >
+                <span>👏 Send Cheer</span>
+                <span className="cheer-badge">{cheerCount}</span>
+              </button>
+            </div>
+
+            {/* Interactive Campus Challenge Mini-Form */}
+            <div className="player-challenge-box">
+              {challengeSent ? (
+                <div className="challenge-success-alert">
+                  <span>🎉 Challenge Invitation Sent to {selectedPlayerModal.name}! ({challengeTimeControl})</span>
+                </div>
+              ) : (
+                <form onSubmit={handleSendChallenge} className="challenge-form">
+                  <div className="challenge-form-row">
+                    <label>Challenge Game:</label>
+                    <select 
+                      value={challengeTimeControl} 
+                      onChange={(e) => setChallengeTimeControl(e.target.value)}
+                    >
+                      <option value="3+2 Blitz">⚡ 3+2 Blitz</option>
+                      <option value="5+3 Blitz">⚡ 5+3 Blitz</option>
+                      <option value="10 min Rapid">⏱️ 10 min Rapid</option>
+                      <option value="Campus Board Showdown">🏛️ Campus Palm Tree Board</option>
+                    </select>
+                    <button type="submit" className="challenge-submit-btn">
+                      Send Challenge ⚔️
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
