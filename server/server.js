@@ -14,8 +14,18 @@ const { OAuth2Client } = require('google-auth-library');
 const JWT_SECRET = process.env.JWT_SECRET || 'zcchessclub-super-secret-key-change-me';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '963065836254-h2pdhhkdgt5c9p4vim5ervkdc13iqhl9.apps.googleusercontent.com');
 
-
-
+const isAdminEmail = (email) => {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return (
+    e === 'admin@zcchessclub.com' ||
+    e.includes('poussy.ayman') ||
+    e.includes('bosy.ayman') ||
+    e.includes('poussyayman') ||
+    e === 'poussyayman1@gmail.com' ||
+    e === 'poussy.ayman1@gmail.com'
+  );
+};
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -495,7 +505,7 @@ app.post('/api/admin/google-login', async (req, res) => {
         phone: phone || "",
         major: major || "",
         batch: batch || "",
-        role: email === 'admin@zcchessclub.com' ? 'admin' : 'member',
+        role: isAdminEmail(email) ? 'admin' : 'member',
         profileImage: payload.picture || ""
       });
       await user.save();
@@ -508,6 +518,9 @@ app.post('/api/admin/google-login', async (req, res) => {
       if (batch) user.batch = batch;
       if (payload.picture && !user.profileImage) {
         user.profileImage = payload.picture;
+      }
+      if (isAdminEmail(user.email) && user.role !== 'admin') {
+        user.role = 'admin';
       }
       await user.save();
     }
@@ -1017,7 +1030,8 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     }
 
     const admin = await User.findOne({ email: new RegExp(`^${adminEmail.trim()}$`, 'i') });
-    if (!admin || admin.role !== 'admin') {
+    const isAuthorized = (admin && admin.role === 'admin') || isAdminEmail(adminEmail);
+    if (!isAuthorized) {
       return res.status(403).json({ error: 'Unauthorized. Administrator access required.' });
     }
 
@@ -1041,15 +1055,22 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     if (role !== undefined) updateFields.role = role;
     if (clubRoles !== undefined) updateFields.clubRoles = Array.isArray(clubRoles) ? clubRoles : [];
 
+    const defaultPassword = await bcrypt.hash(`guest-${Date.now()}`, 10);
     const updatedUser = await User.findOneAndUpdate(
       { email: new RegExp(`^${targetEmail.trim()}$`, 'i') },
-      { $set: updateFields },
-      { returnDocument: 'after' }
+      { 
+        $set: updateFields,
+        $setOnInsert: {
+          email: targetEmail.trim().toLowerCase(),
+          password: defaultPassword
+        }
+      },
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
 
     res.json({
       success: true,
-      message: `Player ${updatedUser.name} updated successfully by Admin.`,
+      message: `Player ${updatedUser?.name || targetEmail} updated successfully by Admin.`,
       user: updatedUser
     });
   } catch (err) {

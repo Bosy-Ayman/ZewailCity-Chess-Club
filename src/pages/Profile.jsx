@@ -51,9 +51,14 @@ export default function Profile() {
   const queryEmail = queryParams.get("email");
   const queryName = queryParams.get("name");
   
-  const loggedInEmail = localStorage.getItem("adminEmail") || "";
+  const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
   const loggedInRole = localStorage.getItem("userRole") || "member";
-  const isAdmin = loggedInRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "admin@zcchessclub.com");
+  const isAdmin = loggedInRole === "admin" || (loggedInEmail && (
+    loggedInEmail.toLowerCase() === "admin@zcchessclub.com" ||
+    loggedInEmail.toLowerCase().includes("poussy.ayman") ||
+    loggedInEmail.toLowerCase().includes("bosy.ayman") ||
+    loggedInEmail.toLowerCase().includes("poussyayman")
+  ));
   
   const targetEmail = queryEmail || (queryName ? null : loggedInEmail);
   const isOwnProfile = (!queryEmail && !queryName) || (queryEmail && loggedInEmail && queryEmail.toLowerCase() === loggedInEmail.toLowerCase());
@@ -513,13 +518,25 @@ export default function Profile() {
     e.preventDefault();
     setAdminSaveSuccess("");
     setAdminSaveError("");
+
+    if (!loggedInEmail) {
+      setAdminSaveError("Please log in with your administrator account before managing user dossiers.");
+      return;
+    }
+
+    const effectiveTargetEmail = profile?.email || targetEmail;
+    if (!effectiveTargetEmail) {
+      setAdminSaveError("Target player email is missing. Make sure this tactician has an email assigned.");
+      return;
+    }
+
     try {
       const res = await safeFetchJson(`${API_BASE}/api/admin/manage-user`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           adminEmail: loggedInEmail,
-          targetEmail: profile.email,
+          targetEmail: effectiveTargetEmail,
           ...adminRoleForm
         })
       });

@@ -12,7 +12,14 @@ export const safeFetchJson = async (url, options = {}) => {
   }
 
   if (!res.ok) {
-    const errorMsg = (data && (data.error || data.details || data.message)) || `Server returned status ${res.status}`;
+    let errorMsg = `Server returned status ${res.status}`;
+    if (data) {
+      if (data.error && data.details) {
+        errorMsg = `${data.error}: ${data.details}`;
+      } else {
+        errorMsg = data.error || data.details || data.message || errorMsg;
+      }
+    }
     throw new Error(errorMsg);
   }
 
