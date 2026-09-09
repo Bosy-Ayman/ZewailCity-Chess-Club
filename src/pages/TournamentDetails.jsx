@@ -495,61 +495,80 @@ export default function TournamentDetails() {
             </div>
           ) : (
             <>
-              {/* Intro Banner */}
-              <div className="intro-text">
-                <h1>{tournament.title}</h1>
-                <p>
-                  {tournament.startDate} {tournament.endDate && tournament.endDate !== 'Unknown' ? `to ${tournament.endDate}` : ""} — {tournament.location} ({tournament.type})
-                </p>
+              {/* Premium Hero Banner */}
+              <div className="tournament-hero-card">
+                <div className="tournament-hero-top">
+                  <div className="tournament-breadcrumb">
+                    <a href="/tournaments" className="back-link">← All Tournaments</a>
+                    <span className="breadcrumb-sep">/</span>
+                    <span className="breadcrumb-curr">{tournament.type || "Tournament"}</span>
+                  </div>
+                  <div className="tournament-type-pill">
+                    <span className="pill-dot"></span>
+                    <span>{tournament.type || "Swiss Format"}</span>
+                  </div>
+                </div>
+
+                <h1 className="tournament-hero-title">{tournament.title}</h1>
+                
+                <div className="tournament-hero-meta-grid">
+                  <div className="hero-meta-item">
+                    <span className="meta-icon">📅</span>
+                    <div className="meta-texts">
+                      <span className="meta-label">Dates</span>
+                      <span className="meta-val">{tournament.startDate} {tournament.endDate && tournament.endDate !== 'Unknown' ? `to ${tournament.endDate}` : ""}</span>
+                    </div>
+                  </div>
+
+                  <div className="hero-meta-item">
+                    <span className="meta-icon">📍</span>
+                    <div className="meta-texts">
+                      <span className="meta-label">Location</span>
+                      <span className="meta-val">{tournament.location || "Zewail City Campus"}</span>
+                    </div>
+                  </div>
+
+                  <div className="hero-meta-item">
+                    <span className="meta-icon">⏱️</span>
+                    <div className="meta-texts">
+                      <span className="meta-label">Time &amp; Clock</span>
+                      <span className="meta-val">{tournament.time || "TBD"}</span>
+                    </div>
+                  </div>
+
+                  <div className="hero-meta-item">
+                    <span className="meta-icon">👥</span>
+                    <div className="meta-texts">
+                      <span className="meta-label">Competitors</span>
+                      <span className="meta-val">{tournament.playersList?.length || tournament.players || 0} Registered</span>
+                    </div>
+                  </div>
+                </div>
+
                 {tournament.description && (
-                  <p style={{ marginTop: "12px", color: "#bab19c", fontStyle: "italic", fontSize: "15px", maxWidth: "800px", lineHeight: "1.5" }}>
+                  <p className="tournament-hero-desc">
                     {tournament.description}
                   </p>
                 )}
-                <div className="tournament-export-actions" style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
+
+                <div className="tournament-export-actions">
                   <button 
                     type="button"
                     onClick={handleExportPGN}
-                    className="export-tournament-btn"
+                    className="export-tournament-btn pgn-btn"
                     title="Export All Match Pairings as PGN file"
-                    style={{
-                      background: "rgba(243, 193, 68, 0.12)",
-                      border: "1px solid rgba(243, 193, 68, 0.35)",
-                      color: "#f3c144",
-                      padding: "8px 16px",
-                      borderRadius: "10px",
-                      fontSize: "0.85rem",
-                      fontWeight: "700",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      transition: "all 0.2s ease"
-                    }}
                   >
-                    ♟️ Download PGN
+                    <span>♟️</span>
+                    <span>Download PGN</span>
                   </button>
                   <button 
                     type="button"
                     onClick={handleExportCSV}
-                    className="export-tournament-btn"
+                    className="export-tournament-btn csv-btn"
                     title="Export Standings Report as CSV"
-                    style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      color: "#eee",
-                      padding: "8px 16px",
-                      borderRadius: "10px",
-                      fontSize: "0.85rem",
-                      fontWeight: "700",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      transition: "all 0.2s ease"
-                    }}
                   >
-                    📊 Export CSV Report
+                    <span>📊</span>
+                    <span>Export CSV Report</span>
                   </button>
                 </div>
               </div>
