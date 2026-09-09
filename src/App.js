@@ -26,7 +26,7 @@ import TermsOfService from './pages/TermsOfService';
 import Community from './pages/Community';
 
 // API Base URL - works for both local and production
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+export const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
 
 function App() {
   return (

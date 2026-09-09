@@ -4,7 +4,7 @@ import "./Header.css";
 import LoginModal from "./LoginModal";
 import { safeFetchJson, safeSetLocalStorage, compressBase64Image } from "../utils/api";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: "♟", end: true },

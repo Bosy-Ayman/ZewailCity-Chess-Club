@@ -4,7 +4,7 @@ import Footer from "../components/Footer";
 import { findRegisteredUserForHistoricalPlayer } from "../utils/tournamentWinners";
 import "./History.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
 // A helper component for scroll-reveal animations using Intersection Observer
 const ScrollReveal = ({ children, className = "" }) => {

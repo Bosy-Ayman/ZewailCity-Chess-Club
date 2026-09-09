@@ -21,10 +21,8 @@ const PORT = process.env.PORT || 5000;
 
 // --- Middlewares ---
 app.use(cors({
-  origin: [
-    "http://localhost:3000", // local frontend
-    "https://zc-chess-club-web-euimxokx7-bosy-aymans-projects.vercel.app" // your deployed frontend
-  ]
+  origin: true,
+  credentials: true
 }));
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ limit: '15mb', extended: true }));
@@ -74,10 +72,7 @@ const connectDB = async (req, res, next) => {
   // 0 = disconnected. Connect explicitly.
   try {
     console.log('Database disconnected. Reconnecting...');
-    const MONGO_URI = process.env.MONGO_URI;
-    if (!MONGO_URI) {
-      throw new Error('MONGO_URI is not defined in environment variables');
-    }
+    const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
     await mongoose.connect(MONGO_URI, { 
       serverSelectionTimeoutMS: 5000,
       family: 4 // Force IPv4 resolution to prevent TLS Alert 80 errors on Node 18+ on Vercel
@@ -255,10 +250,9 @@ const PuzzleTournamentSchema = new mongoose.Schema({
 const PuzzleTournament = mongoose.model('PuzzleTournament', PuzzleTournamentSchema, 'puzzle_tournaments');
 
 // --- MongoDB Connection ---
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
 if (!MONGO_URI) {
   console.error("Error: MONGO_URI not defined in environment variables.");
-  process.exit(1);
 }
 
 // Removed bufferCommands: false to allow Mongoose to wait for DB connection in serverless

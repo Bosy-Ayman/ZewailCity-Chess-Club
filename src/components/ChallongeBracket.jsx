@@ -3,7 +3,7 @@ import Xarrow, { Xwrapper } from "react-xarrows";
 import { getPlayerAvatarUrl } from "../utils/api";
 import "./ChallongeBracket.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
 /**
  * Helper function to transform raw MongoDB matches into Challonge-style Round Columns

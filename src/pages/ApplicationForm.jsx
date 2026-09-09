@@ -33,7 +33,7 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
       return;
     }
 
-    const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
     fetch(`${API_BASE}/api/profile?email=${email}`)
       .then(res => res.json())
       .then(data => {
@@ -102,7 +102,7 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
 
     // --- 2. Send Data to API ---
     try {
-      const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+      const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
       const response = await fetch(`${API_BASE}/api/applications`, {
         method: 'POST',
         headers: {

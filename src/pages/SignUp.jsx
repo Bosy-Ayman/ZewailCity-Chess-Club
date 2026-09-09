@@ -4,7 +4,7 @@ import "./SignUp.css";
 import { Link, useNavigate } from "react-router-dom";
 import { Trophy, GraduationCap, FolderKanban, UserPlus } from "lucide-react";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || "963065836254-h2pdhhkdgt5c9p4vim5ervkdc13iqhl9.apps.googleusercontent.com";
 
 export default function SignUp() {
