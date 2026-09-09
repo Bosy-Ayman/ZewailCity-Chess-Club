@@ -135,7 +135,9 @@ const TournamentSchema = new mongoose.Schema({
     white: { type: String, default: 'TBD' },
     black: { type: String, default: 'TBD' },
     result: { type: String, default: 'pending' },
-    bracket: { type: String, default: 'upper' }
+    bracket: { type: String, default: 'upper' },
+    matchTime: { type: String, default: '' },
+    location: { type: String, default: '' }
   }],
   rounds: { type: Number, default: 0 }, // Total planned rounds
   winner: { type: String, default: '' },
@@ -1431,7 +1433,7 @@ app.put('/api/tournaments/:id/players', async (req, res) => {
 // PUT: add a match result to a tournament
 app.put('/api/tournaments/:id/matches', async (req, res) => {
   try {
-    const { round, white, black, result } = req.body;
+    const { round, white, black, result, matchTime, location } = req.body;
     if (!round || !white || !black || !result) {
       return res.status(400).json({ error: "Round, white, black, and result are required" });
     }
@@ -1441,7 +1443,14 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
     
-    tournament.matches.push({ round: Number(round), white, black, result });
+    tournament.matches.push({ 
+      round: Number(round), 
+      white, 
+      black, 
+      result,
+      matchTime: matchTime || "",
+      location: location || ""
+    });
     await tournament.save();
     res.json({ message: "Match result added successfully!", data: tournament });
   } catch (error) {
@@ -1452,9 +1461,9 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
 // PUT: update an existing match result or pairing details
 app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
   try {
-    const { result, white, black } = req.body;
-    if (result === undefined && white === undefined && black === undefined) {
-      return res.status(400).json({ error: "At least one update field (result, white, or black) is required" });
+    const { result, white, black, matchTime, location } = req.body;
+    if (result === undefined && white === undefined && black === undefined && matchTime === undefined && location === undefined) {
+      return res.status(400).json({ error: "At least one update field (result, white, black, matchTime, or location) is required" });
     }
 
     const tournament = await Tournament.findById(req.params.id);
@@ -1466,6 +1475,8 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
     if (result !== undefined) match.result = result;
     if (white !== undefined) match.white = white;
     if (black !== undefined) match.black = black;
+    if (matchTime !== undefined) match.matchTime = matchTime;
+    if (location !== undefined) match.location = location;
 
     await tournament.save();
     res.json({ message: "Match updated successfully!", data: tournament });

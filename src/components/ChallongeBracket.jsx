@@ -31,7 +31,9 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
         matchCode: `R${m.round}-M${mIdx + 1}`,
         p1: { seed: playerSeedMap[m.white] || "-", name: m.white || "TBD", score: p1Winner ? "1" : isDraw ? "½" : "0", isWinner: p1Winner },
         p2: { seed: playerSeedMap[m.black] || "-", name: m.black || "TBD", score: p2Winner ? "1" : isDraw ? "½" : "0", isWinner: p2Winner },
-        status: (!m.result || m.result === "Pending") ? "Pending" : "Completed"
+        status: (!m.result || m.result === "Pending") ? "Pending" : "Completed",
+        matchTime: m.matchTime || "",
+        location: m.location || ""
       };
     });
   };
@@ -115,6 +117,7 @@ export default function ChallongeBracket({
   const [selectedMatchModal, setSelectedMatchModal] = useState(null);
   const [tempWhite, setTempWhite] = useState("");
   const [tempBlack, setTempBlack] = useState("");
+  const [tempMatchTime, setTempMatchTime] = useState("");
 
   const [dbMatches, setDbMatches] = useState(matchesData || []);
   const [dbPlayers, setDbPlayers] = useState(playersData || []);
@@ -307,10 +310,17 @@ export default function ChallongeBracket({
                         setSelectedMatchModal(match);
                         setTempWhite(match.p1.name);
                         setTempBlack(match.p2.name);
+                        const foundMatch = dbMatches.find(m => m._id === match.id);
+                        setTempMatchTime(foundMatch?.matchTime || match.matchTime || "");
                       }}
                     >
                       <div className="match-card-header">
                         <span className="match-code">{match.matchCode}</span>
+                        {match.matchTime && (
+                          <span className="match-scheduled-time" title={`Scheduled: ${match.matchTime}`}>
+                            🕒 {match.matchTime}
+                          </span>
+                        )}
                         <span className={`match-status-badge ${match.status.toLowerCase()}`}>
                           {match.status}
                         </span>
@@ -480,9 +490,47 @@ export default function ChallongeBracket({
               </button>
             )}
 
-            <div className="match-modal-info">
-              <p>Status: <strong>{selectedMatchModal.status}</strong></p>
+            <div className="match-modal-info" style={{ marginTop: "14px" }}>
+              <p style={{ margin: "4px 0" }}>Status: <strong>{selectedMatchModal.status}</strong></p>
+              <p style={{ margin: "4px 0", color: "#b5afa1" }}>
+                Scheduled Time:{" "}
+                <strong style={{ color: (rawMatch?.matchTime || selectedMatchModal.matchTime) ? "#f3c144" : "#888" }}>
+                  {rawMatch?.matchTime || selectedMatchModal.matchTime || "TBD (Not scheduled yet)"}
+                </strong>
+              </p>
             </div>
+
+            {isStaff && onUpdateMatch && (
+              <div style={{ marginTop: "14px", background: "rgba(243, 193, 68, 0.06)", border: "1px solid rgba(243, 193, 68, 0.25)", borderRadius: "8px", padding: "12px" }}>
+                <label style={{ color: "#f3c144", fontSize: "0.82rem", fontWeight: "700", display: "block", marginBottom: "6px" }}>
+                  🕒 Set Match Schedule (Date &amp; Time):
+                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. Tomorrow 8:00 PM, or Oct 12 at 18:00"
+                    value={tempMatchTime}
+                    onChange={(e) => setTempMatchTime(e.target.value)}
+                    style={{ flex: 1, minWidth: "180px", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "7px 10px", borderRadius: "6px", fontSize: "0.85rem", outline: "none" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await onUpdateMatch(selectedMatchModal.id, { matchTime: tempMatchTime });
+                        alert("Match scheduled time updated!");
+                        setSelectedMatchModal(null);
+                      } catch (err) {
+                        alert("Error updating schedule: " + err.message);
+                      }
+                    }}
+                    style={{ background: "#f3c144", color: "#15120c", border: "none", padding: "7px 14px", borderRadius: "6px", fontWeight: "800", cursor: "pointer", fontSize: "0.82rem" }}
+                  >
+                    Save Time
+                  </button>
+                </div>
+              </div>
+            )}
 
             {isStaff && onUpdateMatch && (
               <div className="match-modal-actions" style={{ marginTop: "20px", borderTop: "1px solid #36332b", paddingTop: "15px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

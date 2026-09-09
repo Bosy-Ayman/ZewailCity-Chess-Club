@@ -220,6 +220,90 @@
   transform: translateY(-2px);
 }
 
+.export-tournament-btn.edit-btn {
+  background: rgba(52, 152, 219, 0.15);
+  border: 1px solid rgba(52, 152, 219, 0.4);
+  color: #5dade2;
+}
+
+.export-tournament-btn.edit-btn:hover {
+  background: rgba(52, 152, 219, 0.25);
+  border-color: #5dade2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(52, 152, 219, 0.25);
+}
+
+/* Hero Progress Tracker (Integrated & Sleek) */
+.hero-progress-wrapper {
+  margin: 20px 0 6px;
+  background: rgba(20, 18, 14, 0.7);
+  border: 1px solid rgba(243, 193, 68, 0.22);
+  border-radius: 12px;
+  padding: 12px 18px;
+}
+
+.hero-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.hero-progress-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-progress-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.hero-progress-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.hero-progress-percent {
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.hero-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hero-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .modal-grid-2 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+
 /* Reuse section title style */
 .section-title {
   font-size: 22px;

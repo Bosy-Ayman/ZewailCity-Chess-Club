@@ -71,7 +71,64 @@ export default function TournamentDetails() {
   const [playerForm, setPlayerForm] = useState({ name: "", rating: "", major: "" });
 
   const [matchModalOpen, setMatchModalOpen] = useState(false);
-  const [matchForm, setMatchForm] = useState({ round: 1, white: "", black: "", result: "1-0" });
+  const [matchForm, setMatchForm] = useState({ round: 1, white: "", black: "", result: "1-0", matchTime: "" });
+
+  // Edit Tournament Modal State
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    type: "Swiss",
+    status: "Upcoming",
+    startDate: "",
+    endDate: "",
+    time: "",
+    location: "",
+    rounds: 5,
+    description: ""
+  });
+
+  const handleOpenEditModal = () => {
+    if (!tournament) return;
+    setEditForm({
+      title: tournament.title || "",
+      type: tournament.type || "Swiss",
+      status: tournament.status || "Upcoming",
+      startDate: tournament.startDate || "",
+      endDate: tournament.endDate && tournament.endDate !== "Unknown" ? tournament.endDate : "",
+      time: tournament.time || "",
+      location: tournament.location || "Zewail Chess Club",
+      rounds: tournament.rounds || 5,
+      description: tournament.description || ""
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditTournamentSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm)
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch (err) { throw new Error("Invalid server response"); }
+      if (!res.ok) throw new Error(data.error || "Failed to update tournament");
+      alert("Tournament information updated successfully!");
+      setEditModalOpen(false);
+      fetchTournamentDetails();
+    } catch (err) {
+      alert("Error updating tournament: " + err.message);
+    }
+  };
+
+  const handleSetMatchSchedule = async (matchId, currentTime) => {
+    const newTime = window.prompt("Set scheduled date & time for this match (e.g. Tomorrow 8:00 PM, or Sept 15, 18:30):", currentTime || "");
+    if (newTime !== null) {
+      await handleUpdateMatch(matchId, { matchTime: newTime.trim() });
+    }
+  };
 
   const handleAddPlayerSubmit = async (e) => {
     e.preventDefault();
@@ -117,7 +174,7 @@ export default function TournamentDetails() {
       if (!res.ok) {
         throw new Error(result.error || "Failed to add match result.");
       }
-      setMatchForm({ round: matchForm.round, white: "", black: "", result: "1-0" });
+      setMatchForm({ round: matchForm.round, white: "", black: "", result: "1-0", matchTime: "" });
       setMatchModalOpen(false);
       fetchTournamentDetails();
     } catch (err) {
@@ -551,7 +608,71 @@ export default function TournamentDetails() {
                   </p>
                 )}
 
+                {/* Sleek Integrated Tournament Progress Tracker */}
+                {(() => {
+                  const currentStatus = tournament.status || "Upcoming";
+                  let progressPct = 0;
+                  let progressMsg = "";
+                  let badgeColor = "#3498db";
+
+                  if (currentStatus === "Completed") {
+                    progressPct = 100;
+                    progressMsg = "Tournament Finished (100% Completed)";
+                    badgeColor = "#2ecc71";
+                  } else if (currentStatus === "Ongoing") {
+                    const totalRounds = tournament.rounds || 5;
+                    const matches = tournament.matches || [];
+                    const maxRound = matches.reduce((max, m) => Math.max(max, m.round || 1), 1);
+                    const completedMatches = matches.filter(m => m.result && m.result !== "Pending");
+
+                    if (isSwissFormat) {
+                      progressPct = Math.min(Math.round((maxRound / totalRounds) * 100), 90);
+                      progressMsg = `Round ${maxRound} of ${totalRounds} in Progress`;
+                    } else {
+                      progressPct = matches.length > 0 ? Math.min(Math.round((completedMatches.length / matches.length) * 100), 90) : 30;
+                      progressMsg = `Knockout Bracket Ongoing`;
+                    }
+                    badgeColor = "#f3c144";
+                  } else {
+                    progressPct = 0;
+                    progressMsg = `Registration Open — Starts ${tournament.startDate || "Soon"}`;
+                    badgeColor = "#3498db";
+                  }
+
+                  return (
+                    <div className="hero-progress-wrapper">
+                      <div className="hero-progress-meta">
+                        <div className="hero-progress-status">
+                          <span className="hero-progress-indicator" style={{ background: badgeColor, boxShadow: `0 0 10px ${badgeColor}` }}></span>
+                          <span className="hero-progress-label">{progressMsg}</span>
+                        </div>
+                        <span className="hero-progress-percent" style={{ color: badgeColor }}>{progressPct}% Completed</span>
+                      </div>
+                      <div className="hero-progress-track">
+                        <div 
+                          className="hero-progress-fill" 
+                          style={{ 
+                            width: `${progressPct}%`,
+                            background: badgeColor === "#2ecc71" ? "#2ecc71" : badgeColor === "#f3c144" ? "linear-gradient(90deg, #f3c144, #e2b033)" : "#3498db"
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="tournament-export-actions">
+                  {isStaff && (
+                    <button 
+                      type="button"
+                      onClick={handleOpenEditModal}
+                      className="export-tournament-btn edit-btn"
+                      title="Manage tournament timings, dates, format, and campus venue"
+                    >
+                      <span>⚙️</span>
+                      <span>Manage / Edit Info</span>
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={handleExportPGN}
@@ -573,80 +694,19 @@ export default function TournamentDetails() {
                 </div>
               </div>
 
-              {/* Tournament Progress Box */}
-              {(() => {
-                const currentStatus = tournament.status || "Upcoming";
-                let progressPct = 0;
-                let progressMsg = "";
-                let badgeColor = "#3498db";
-
-                if (currentStatus === "Completed") {
-                  progressPct = 100;
-                  progressMsg = "Tournament Finished (100% Completed)";
-                  badgeColor = "#2ecc71";
-                } else if (currentStatus === "Ongoing") {
-                  const totalRounds = tournament.rounds || 5;
-                  const matches = tournament.matches || [];
-                  const maxRound = matches.reduce((max, m) => Math.max(max, m.round || 1), 1);
-                  const completedMatches = matches.filter(m => m.result && m.result !== "Pending");
-
-                  if (isSwissFormat) {
-                    progressPct = Math.min(Math.round((maxRound / totalRounds) * 100), 90);
-                    progressMsg = `Round ${maxRound} of ${totalRounds} in Progress (${progressPct}% Completed)`;
-                  } else {
-                    progressPct = matches.length > 0 ? Math.min(Math.round((completedMatches.length / matches.length) * 100), 90) : 30;
-                    progressMsg = `Knockout Bracket Ongoing (${progressPct}% Completed)`;
-                  }
-                  badgeColor = "#f3c144";
-                } else {
-                  // Upcoming
-                  progressPct = 0;
-                  progressMsg = `Registration Open — Starts ${tournament.startDate || "Soon"} (0% Completed)`;
-                  badgeColor = "#3498db";
-                }
-
-                return (
-                  <>
-                    <h2 className="section-title">Tournament Progress</h2>
-                    <div className="role-card" style={{ padding: "20px 24px", background: "#1f1d18", border: `1px solid ${badgeColor}` }}>
-                      <div className="role-info" style={{ width: "100%" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "8px" }}>
-                          <span style={{ fontSize: "1.1rem", fontWeight: "800", color: "#fff" }}>
-                            Status: <span style={{ color: badgeColor, textTransform: "uppercase", letterSpacing: "0.5px" }}>{currentStatus}</span>
-                          </span>
-                          <span style={{ fontSize: "0.85rem", color: "#caba91", fontWeight: "600" }}>
-                            {progressMsg}
-                          </span>
-                        </div>
-
-                        <div className="progress-bar-bg" style={{ height: "10px", background: "rgba(255,255,255,0.08)", borderRadius: "6px", overflow: "hidden", marginTop: "8px" }}>
-                          <div 
-                            className="progress-bar-fill" 
-                            style={{ 
-                              width: `${progressPct}%`,
-                              background: badgeColor === "#2ecc71" ? "#2ecc71" : badgeColor === "#f3c144" ? "linear-gradient(90deg, #f3c144, #e2b033)" : "#3498db",
-                              height: "100%",
-                              transition: "width 0.5s ease"
-                            }}
-                          ></div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: "20px", marginTop: "12px", fontSize: "0.88rem", color: "#b5afa1", flexWrap: "wrap" }}>
-                          <span>⏰ <strong>Time:</strong> {tournament.time || "TBD"}</span>
-                          <span>👥 <strong>Participants:</strong> {tournament.playersList?.length || tournament.players || 0} Registered</span>
-                          {isSwissFormat && <span>📋 <strong>Rounds:</strong> {tournament.rounds || 5} Total Rounds</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-
               {/* Staff controls for OC and Admins */}
               {isStaff && (
                 <div style={{ marginTop: "30px" }}>
                   <h2 className="section-title">Staff Actions (Organizing Committee)</h2>
                   <div className="staff-actions" style={{ gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+                    <button 
+                      type="button"
+                      className="add-btn" 
+                      onClick={handleOpenEditModal}
+                      style={{ background: "linear-gradient(135deg, #3498db, #2980b9)", color: "#fff", fontWeight: "800" }}
+                    >
+                      ⚙️ Edit Tournament Details
+                    </button>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#15120c", padding: "8px 14px", borderRadius: "8px", border: "1px solid #f3c144" }}>
                       <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>Update Status:</span>
                       <select
@@ -948,6 +1008,7 @@ export default function TournamentDetails() {
                                 <th>White Player</th>
                                 <th>Result / Toggle (Staff)</th>
                                 <th>Black Player</th>
+                                <th>Schedule</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1008,6 +1069,31 @@ export default function TournamentDetails() {
                                         </div>
                                       )}
                                     </td>
+                                    <td>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <span style={{ color: m.matchTime ? "#f3c144" : "#777", fontSize: "0.85rem", fontWeight: m.matchTime ? "600" : "normal" }}>
+                                          {m.matchTime ? `🕒 ${m.matchTime}` : isByeRow ? "—" : "TBD"}
+                                        </span>
+                                        {isStaff && !isByeRow && m._id && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                            title="Schedule date and time for this match"
+                                            style={{
+                                              background: "rgba(243, 193, 68, 0.12)",
+                                              border: "1px solid rgba(243, 193, 68, 0.3)",
+                                              color: "#f3c144",
+                                              borderRadius: "4px",
+                                              padding: "2px 6px",
+                                              fontSize: "0.72rem",
+                                              cursor: "pointer"
+                                            }}
+                                          >
+                                            ✏️ Time
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1023,13 +1109,20 @@ export default function TournamentDetails() {
                               <div key={m._id || idx} className="mobile-tournament-card" style={{ padding: "14px" }}>
                                 <div className="mobile-card-header">
                                   <span style={{ fontSize: "0.78rem", color: "#888", fontWeight: "bold" }}>Board {idx + 1}</span>
-                                  {isByeRow ? (
-                                    <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.78rem", background: "rgba(243,193,68,0.12)", padding: "2px 8px", borderRadius: "4px" }}>
-                                      BYE (+1 pt)
-                                    </span>
-                                  ) : (
-                                    <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{m.result}</span>
-                                  )}
+                                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    {m.matchTime && (
+                                      <span style={{ fontSize: "0.72rem", color: "#f3c144", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                                        🕒 {m.matchTime}
+                                      </span>
+                                    )}
+                                    {isByeRow ? (
+                                      <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.78rem", background: "rgba(243,193,68,0.12)", padding: "2px 8px", borderRadius: "4px" }}>
+                                        BYE (+1 pt)
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{m.result}</span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 <div className="mobile-match-pairing-row">
@@ -1069,17 +1162,37 @@ export default function TournamentDetails() {
                                 </div>
 
                                 {isStaff && !isByeRow && m._id && (
-                                  <div style={{ marginTop: "6px" }}>
-                                    <select
-                                      value={m.result}
-                                      onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
-                                      style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                                    <div style={{ flex: 1 }}>
+                                      <select
+                                        value={m.result}
+                                        onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
+                                        style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                                      >
+                                        <option value="1-0">1 - 0 (White Wins)</option>
+                                        <option value="0-1">0 - 1 (Black Wins)</option>
+                                        <option value="1/2-1/2">½ - ½ (Draw)</option>
+                                        <option value="Pending">Pending</option>
+                                      </select>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                      style={{
+                                        background: "rgba(243, 193, 68, 0.12)",
+                                        border: "1px solid rgba(243, 193, 68, 0.35)",
+                                        color: "#f3c144",
+                                        padding: "8px 12px",
+                                        borderRadius: "8px",
+                                        fontWeight: "bold",
+                                        fontSize: "0.82rem",
+                                        cursor: "pointer",
+                                        whiteSpace: "nowrap"
+                                      }}
+                                      title="Set or update scheduled match time"
                                     >
-                                      <option value="1-0">1 - 0 (White Wins)</option>
-                                      <option value="0-1">0 - 1 (Black Wins)</option>
-                                      <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                      <option value="Pending">Pending</option>
-                                    </select>
+                                      ⏰ {m.matchTime ? "Time" : "Set Time"}
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -1243,6 +1356,7 @@ export default function TournamentDetails() {
                               <th>Round</th>
                               <th>White Player</th>
                               <th>Black Player</th>
+                              <th>Schedule</th>
                               <th>Result</th>
                             </tr>
                           </thead>
@@ -1255,6 +1369,31 @@ export default function TournamentDetails() {
                                 </td>
                                 <td style={{ fontWeight: m.result === "0-1" || m.result === "0 - 1" ? "bold" : "normal", color: m.result === "0-1" || m.result === "0 - 1" ? "#f3c144" : "#fff" }}>
                                   {m.black} {m.result === "0-1" || m.result === "0 - 1" ? "✓" : ""}
+                                </td>
+                                <td>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <span style={{ color: m.matchTime ? "#f3c144" : "#777", fontSize: "0.85rem", fontWeight: m.matchTime ? "600" : "normal" }}>
+                                      {m.matchTime ? `🕒 ${m.matchTime}` : "TBD"}
+                                    </span>
+                                    {isStaff && m._id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                        title="Schedule date and time for this match"
+                                        style={{
+                                          background: "rgba(243, 193, 68, 0.12)",
+                                          border: "1px solid rgba(243, 193, 68, 0.3)",
+                                          color: "#f3c144",
+                                          borderRadius: "4px",
+                                          padding: "2px 6px",
+                                          fontSize: "0.72rem",
+                                          cursor: "pointer"
+                                        }}
+                                      >
+                                        ✏️ Time
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                                 <td>
                                   {isStaff && m._id ? (
@@ -1293,7 +1432,14 @@ export default function TournamentDetails() {
                           <div key={index} className="mobile-tournament-card" style={{ padding: "14px" }}>
                             <div className="mobile-card-header">
                               <span style={{ fontSize: "0.78rem", color: "#888", fontWeight: "bold" }}>Round {m.round}</span>
-                              <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{m.result}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                {m.matchTime && (
+                                  <span style={{ fontSize: "0.72rem", color: "#f3c144", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                                    🕒 {m.matchTime}
+                                  </span>
+                                )}
+                                <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{m.result}</span>
+                              </div>
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", margin: "6px 0" }}>
@@ -1307,17 +1453,37 @@ export default function TournamentDetails() {
                             </div>
 
                             {isStaff && m._id && (
-                              <div style={{ marginTop: "6px" }}>
-                                <select
-                                  value={m.result}
-                                  onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
-                                  style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                              <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                                <div style={{ flex: 1 }}>
+                                  <select
+                                    value={m.result}
+                                    onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
+                                    style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                                  >
+                                    <option value="1-0">1 - 0 (White Wins)</option>
+                                    <option value="0-1">0 - 1 (Black Wins)</option>
+                                    <option value="1/2-1/2">½ - ½ (Draw)</option>
+                                    <option value="Pending">Pending</option>
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                  style={{
+                                    background: "rgba(243, 193, 68, 0.12)",
+                                    border: "1px solid rgba(243, 193, 68, 0.35)",
+                                    color: "#f3c144",
+                                    padding: "8px 12px",
+                                    borderRadius: "8px",
+                                    fontWeight: "bold",
+                                    fontSize: "0.82rem",
+                                    cursor: "pointer",
+                                    whiteSpace: "nowrap"
+                                  }}
+                                  title="Set or update scheduled match time"
                                 >
-                                  <option value="1-0">1 - 0 (White Wins)</option>
-                                  <option value="0-1">0 - 1 (Black Wins)</option>
-                                  <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                  <option value="Pending">Pending</option>
-                                </select>
+                                  ⏰ {m.matchTime ? "Time" : "Set Time"}
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1446,12 +1612,156 @@ export default function TournamentDetails() {
                   <option value="1/2-1/2">½ - ½ (Draw)</option>
                 </select>
               </div>
+              <div>
+                <label>Scheduled Match Time (Optional)</label>
+                <input
+                  type="text"
+                  value={matchForm.matchTime || ""}
+                  onChange={(e) => setMatchForm({ ...matchForm, matchTime: e.target.value })}
+                  placeholder="e.g. Tomorrow 8:00 PM, or Sept 15, 18:30"
+                  style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
+                />
+              </div>
               <div className="modal-btn-row">
                 <button type="button" className="btn-secondary" onClick={() => setMatchModalOpen(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
                   Save Result
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- EDIT TOURNAMENT DETAILS MODAL --- */}
+      {editModalOpen && (
+        <div className="modal-overlay" onClick={() => setEditModalOpen(false)}>
+          <div className="modal-card edit-tournament-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
+            <button className="close-btn" onClick={() => setEditModalOpen(false)}>
+              &times;
+            </button>
+            <h3 className="modal-title" style={{ color: "#f3c144" }}>⚙️ Manage Tournament Information</h3>
+            <p style={{ color: "#b5afa1", fontSize: "0.84rem", marginTop: "-8px", marginBottom: "18px" }}>
+              Configure tournament schedule, match timings, format, status, and campus location.
+            </p>
+
+            <form onSubmit={handleEditTournamentSubmit} className="modal-form">
+              <div>
+                <label>Tournament Title *</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  placeholder="e.g. ZC Annual Rapid Championship 2026"
+                  required
+                />
+              </div>
+
+              <div className="modal-grid-2">
+                <div>
+                  <label>Tournament Type / Format *</label>
+                  <select
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
+                  >
+                    <option value="Swiss">Swiss System</option>
+                    <option value="Single Elimination">Single Elimination (Knockout)</option>
+                    <option value="Double Elimination">Double Elimination</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Tournament Status *</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
+                  >
+                    <option value="Upcoming">Upcoming (Registration Open)</option>
+                    <option value="Ongoing">Ongoing (Tournament Live)</option>
+                    <option value="Completed">Completed (Finished)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-grid-2">
+                <div>
+                  <label>Start Date *</label>
+                  <input
+                    type="text"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                    placeholder="e.g. 2026-09-20"
+                    required
+                  />
+                </div>
+                <div>
+                  <label>End Date</label>
+                  <input
+                    type="text"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                    placeholder="e.g. 2026-09-25 or Ongoing"
+                  />
+                </div>
+              </div>
+
+              <div className="modal-grid-2">
+                <div>
+                  <label>Time &amp; Clock (e.g. 11:00 PM) *</label>
+                  <input
+                    type="text"
+                    value={editForm.time}
+                    onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                    placeholder="e.g. 11:00 PM or 5:00 PM - 8:00 PM"
+                    required
+                  />
+                </div>
+                <div>
+                  <label>Location / Venue *</label>
+                  <input
+                    type="text"
+                    value={editForm.location}
+                    onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                    placeholder="e.g. Academic Building Lounge 2"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="modal-grid-2">
+                <div>
+                  <label>Total Planned Rounds</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={editForm.rounds}
+                    onChange={(e) => setEditForm({ ...editForm, rounds: Number(e.target.value) })}
+                    placeholder="5"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label>Description &amp; Rules</label>
+                <textarea
+                  rows="3"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Tournament guidelines, time controls, and eligibility details..."
+                  style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "10px", borderRadius: "8px", width: "100%", fontFamily: "inherit" }}
+                ></textarea>
+              </div>
+
+              <div className="modal-btn-row">
+                <button type="button" className="btn-secondary" onClick={() => setEditModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" style={{ background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800" }}>
+                  💾 Save Changes
                 </button>
               </div>
             </form>
