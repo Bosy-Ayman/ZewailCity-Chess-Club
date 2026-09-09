@@ -1022,8 +1022,11 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
       chessTitle, 
       bio, 
       playstyle,
+      linkedHistoricalName,
       role, 
-      clubRoles 
+      clubRoles,
+      verified,
+      profileImage
     } = req.body;
     if (!adminEmail || !targetEmail) {
       return res.status(400).json({ error: 'adminEmail and targetEmail are required' });
@@ -1054,6 +1057,8 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     if (linkedHistoricalName !== undefined) updateFields.linkedHistoricalName = linkedHistoricalName;
     if (role !== undefined) updateFields.role = role;
     if (clubRoles !== undefined) updateFields.clubRoles = Array.isArray(clubRoles) ? clubRoles : [];
+    if (verified !== undefined) updateFields.verified = !!verified;
+    if (profileImage !== undefined) updateFields.profileImage = profileImage;
 
     const defaultPassword = await bcrypt.hash(`guest-${Date.now()}`, 10);
     const updatedUser = await User.findOneAndUpdate(
