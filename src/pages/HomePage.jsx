@@ -3,8 +3,8 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { 
   Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, 
-  Calendar, MapPin, Users, Swords, Heart, Zap, 
-  CheckCircle2, XCircle, RotateCcw, Send,
+  Calendar, MapPin, Users, Swords, Heart, 
+  CheckCircle2, Send,
   Mail, Copy, Check, Crown, UserPlus, UserCheck, User
 } from "lucide-react";
 import Confetti from "react-confetti";
@@ -240,10 +240,6 @@ const HomePage = () => {
   const [copiedEmail, setCopiedEmail] = useState(null);
   const [clubActivity, setClubActivity] = useState([]);
 
-  // Daily Tactics Puzzle State
-  const [selectedPuzzleOption, setSelectedPuzzleOption] = useState(null);
-  const [puzzleSolved, setPuzzleSolved] = useState(null);
-  const [puzzleSolvers, setPuzzleSolvers] = useState(154);
 
   const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
@@ -438,20 +434,6 @@ const HomePage = () => {
     }
   };
 
-  const handlePuzzleSelect = (opt) => {
-    setSelectedPuzzleOption(opt.id);
-    if (opt.isCorrect) {
-      setPuzzleSolved(true);
-      setPuzzleSolvers((prev) => prev + 1);
-    } else {
-      setPuzzleSolved(false);
-    }
-  };
-
-  const handleResetPuzzle = () => {
-    setSelectedPuzzleOption(null);
-    setPuzzleSolved(null);
-  };
 
   const campusTacticians = registeredUsers.map((u) => {
     const emailKey = (u.email || "").toLowerCase().trim();
@@ -503,48 +485,6 @@ const HomePage = () => {
     return true;
   });
 
-  const dailyTacticsPuzzle = {
-    title: "King's Quest IV Championship Decisive Tactic",
-    level: "Intermediate - Advanced (1950 Elo)",
-    toPlay: "White to Move & Win",
-    event: "Live Tournament Round 3 Spotlight",
-    theme: "Queen Sacrifice & Smothered Mate Pattern",
-    prompt: "White has built heavy kingside pressure against Black's castled king. Find the devastating move that forces immediate capitulation!",
-    options: [
-      {
-        id: "qxg7",
-        move: "1. Qxg7+!!",
-        badge: "Brilliant Sacrifice",
-        isCorrect: true,
-        summary: "Forced Checkmate Sequence",
-        explanation: "💥 BRILLIANT QUEEN SACRIFICE! 1. Qxg7+!! forces 1... Kxg7 (forced). Then 2. Nf5+ (double check / discovered check) Kh8 3. Nh6# delivers an unforgettable smothered checkmate! You have grandmaster tactical vision."
-      },
-      {
-        id: "re1",
-        move: "1. Re1",
-        badge: "Centralization",
-        isCorrect: false,
-        summary: "Too Slow",
-        explanation: "❌ Too slow! 1. Re1 gives Black time to consolidate defense with 1... Qe7 or 1... f6, locking down the kingside diagonal. Look for a forcing check!"
-      },
-      {
-        id: "qh4",
-        move: "1. Qh4",
-        badge: "Retreat",
-        isCorrect: false,
-        summary: "Misses the Tactic",
-        explanation: "❌ Inaccurate! 1. Qh4 retreats from the critical striking square. Black responds with 1... f5! shutting down the attack completely. Look for dynamic checks!"
-      },
-      {
-        id: "nf3",
-        move: "1. Nf3",
-        badge: "Slow Development",
-        isCorrect: false,
-        summary: "Passive Continuation",
-        explanation: "❌ In sharp attacking positions, tempo is everything. 1. Nf3 lets Black reorganize with 1... Re8. Search for a forcing sacrifice that rips open Black's king!"
-      }
-    ]
-  };
 
   const recentTournaments = [
     {
