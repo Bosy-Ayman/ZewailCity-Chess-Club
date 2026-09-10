@@ -10,7 +10,7 @@ const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "pro
  * @param {Array} dbMatches - Array of matches from MongoDB [{ round, white, black, result }]
  * @param {Array} dbPlayers - Optional Array of players from MongoDB [{ name, rating }]
  */
-function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
+function convertDBMatchesToBracket(dbMatches = [], dbPlayers = [], tournamentWinner = null, tournamentStatus = "") {
   if (!dbMatches || dbMatches.length === 0) {
     return { upper: [], lower: [], champion: null };
   }
@@ -38,6 +38,8 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
     });
   };
 
+  const isDoubleElimMatches = dbMatches.some(m => m.bracket === 'lower' || m.bracket === 'grand_finals');
+
   const groupRounds = (matchesArr, namePrefix) => {
     const map = {};
     matchesArr.forEach(m => {
@@ -46,11 +48,33 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
       map[r].push(m);
     });
     const sorted = Object.keys(map).map(Number).sort((a, b) => a - b);
-    return sorted.map(rNum => ({
-      roundName: `${namePrefix} ${rNum}`,
-      roundNumber: rNum,
-      matches: parseMatches(map[rNum])
-    }));
+    return sorted.map(rNum => {
+      const parsedMatches = parseMatches(map[rNum]);
+      const mCount = parsedMatches.length;
+      let roundName = `${namePrefix} ${rNum}`;
+
+      if (namePrefix === "Lower") {
+        roundName = `Lower Round ${rNum}`;
+      } else if (isDoubleElimMatches) {
+        if (mCount === 1) roundName = "Upper Finals";
+        else if (mCount === 2) roundName = "Upper Semifinals";
+        else if (mCount === 4) roundName = "Upper Quarterfinals";
+        else roundName = `Upper Round ${rNum}`;
+      } else {
+        if (mCount === 1) roundName = "Finals";
+        else if (mCount === 2) roundName = "Semifinals";
+        else if (mCount === 4) roundName = "Quarterfinals";
+        else if (mCount === 8) roundName = "Round of 16";
+        else if (mCount === 16) roundName = "Round of 32";
+        else roundName = `Round ${rNum}`;
+      }
+
+      return {
+        roundName,
+        roundNumber: rNum,
+        matches: parsedMatches
+      };
+    });
   };
 
   const upperMatches = dbMatches.filter(m => !m.bracket || m.bracket === 'upper');
@@ -75,26 +99,39 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
         matches: parseMatches([{ ...gfrMatch, round: maxU + 2 }])
       });
     }
-  } else {
-    // Rename last rounds for Single Elim / Upper
-    if (upperRounds.length > 0) {
-      const totalRounds = upperRounds.length;
-      if (totalRounds > 1) upperRounds[totalRounds - 1].roundName = "Upper Finals";
-      if (totalRounds > 2) upperRounds[totalRounds - 2].roundName = "Semifinals";
-      if (totalRounds > 3) upperRounds[totalRounds - 3].roundName = "Quarterfinals";
-    }
   }
 
   let champion = null;
-  if (upperRounds.length > 0) {
+  const anyPending = dbMatches.some(m => !m.result || m.result === "Pending");
+  const isDoubleElim = isDoubleElimMatches;
+
+  // A champion can ONLY be crowned if NO match in the tournament is currently pending
+  if (!anyPending && upperRounds.length > 0) {
     const finalRound = upperRounds[upperRounds.length - 1];
-    const finalMatch = finalRound.matches[finalRound.matches.length - 1];
-    if (finalMatch && finalMatch.status === "Completed") {
-      const winnerName = finalMatch.p1.isWinner ? finalMatch.p1.name : (finalMatch.p2.isWinner ? finalMatch.p2.name : null);
-      const winnerSeed = finalMatch.p1.isWinner ? finalMatch.p1.seed : (finalMatch.p2.isWinner ? finalMatch.p2.seed : "-");
-      if (winnerName) {
-        champion = { name: winnerName, title: "Tournament Winner", seed: winnerSeed, trophy: "🥇 Grand Champion" };
+
+    // In single elimination, the final round must have exactly 1 match,
+    // and cannot be Round 1 unless total players was only 2.
+    const isSingleElimFinal = !isDoubleElim && finalRound.matches.length === 1 && (upperRounds.length > 1 || (dbPlayers && dbPlayers.length <= 2));
+    const isDoubleElimFinal = isDoubleElim && (finalRound.roundName === "Grand Finals" || finalRound.roundName === "Bracket Reset") && finalRound.matches.length === 1;
+
+    if (isSingleElimFinal || isDoubleElimFinal) {
+      const finalMatch = finalRound.matches[0];
+      if (finalMatch && finalMatch.status === "Completed") {
+        const winnerName = finalMatch.p1.isWinner ? finalMatch.p1.name : (finalMatch.p2.isWinner ? finalMatch.p2.name : null);
+        const winnerSeed = finalMatch.p1.isWinner ? finalMatch.p1.seed : (finalMatch.p2.isWinner ? finalMatch.p2.seed : "-");
+        if (winnerName && winnerName !== "BYE") {
+          champion = { name: winnerName, title: "Tournament Winner", seed: winnerSeed, trophy: "🥇 Grand Champion" };
+        }
       }
+    }
+  }
+
+  // Fallback: If tournament was explicitly marked Completed with a winner in DB
+  if (!champion && (tournamentStatus === "Completed" || tournamentWinner)) {
+    const winner = tournamentWinner;
+    if (winner && winner !== "BYE") {
+      const pSeed = playerSeedMap[winner] || "-";
+      champion = { name: winner, title: "Tournament Winner", seed: pSeed, trophy: "🥇 Grand Champion" };
     }
   }
 
@@ -104,6 +141,8 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = []) {
 export default function ChallongeBracket({ 
   tournamentId, 
   tournamentType,
+  tournamentWinner,
+  tournamentStatus,
   matchesData, 
   playersData, 
   playerAvatars = {},
@@ -123,6 +162,8 @@ export default function ChallongeBracket({
   const [dbPlayers, setDbPlayers] = useState(playersData || []);
   const [dbTitle, setDbTitle] = useState(tournamentTitle);
   const [dbType, setDbType] = useState(tournamentType || "");
+  const [dbWinner, setDbWinner] = useState(tournamentWinner || null);
+  const [dbStatus, setDbStatus] = useState(tournamentStatus || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -149,6 +190,8 @@ export default function ChallongeBracket({
       setDbPlayers(data.playersList || []);
       if (data.type) setDbType(data.type);
       if (data.title) setDbTitle(data.title);
+      if (data.winner) setDbWinner(data.winner);
+      if (data.status) setDbStatus(data.status);
     } catch (err) {
       console.error("Database fetch error for Challonge bracket:", err);
       setError(err.message);
@@ -158,7 +201,7 @@ export default function ChallongeBracket({
   };
 
   // Convert raw DB matches into Challonge tree structure
-  const bracketData = convertDBMatchesToBracket(dbMatches, dbPlayers);
+  const bracketData = convertDBMatchesToBracket(dbMatches, dbPlayers, dbWinner || tournamentWinner, dbStatus || tournamentStatus);
   const currentRounds = activeTab === "upper" ? bracketData.upper : bracketData.lower;
   const typeStr = (dbType || tournamentType || "").toLowerCase();
   const isSingleElimination = typeStr.includes("single") || (!typeStr.includes("double") && !typeStr.includes("lower"));

@@ -274,6 +274,23 @@ export default function TournamentDetails() {
     }
   };
 
+  const handleResetBracket = async () => {
+    if (!window.confirm("⚠️ Are you sure you want to reset the entire tournament bracket? This will remove all generated matches so you can generate a fresh bracket.")) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/matches`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset bracket");
+      alert("Bracket reset successfully! You can now generate a fresh bracket.");
+      fetchTournamentDetails();
+    } catch (err) {
+      alert("Error resetting bracket: " + err.message);
+    }
+  };
+
   const handleRollbackLastRound = async () => {
     if (!window.confirm("⚠️ Are you sure you want to rollback the last round? This will permanently delete all pairings and scores for the latest round!")) {
       return;
@@ -602,14 +619,20 @@ export default function TournamentDetails() {
       podiumP1 = { name: tournament.winner, points: "Champion" };
     }
     const matches = tournament.matches || [];
-    if (matches.length > 0) {
+    const allMatchesCompleted = matches.length > 0 && matches.every(m => m.result && m.result !== "Pending");
+    if (allMatchesCompleted) {
       const maxRound = Math.max(...matches.map(m => m.round || 1));
-      const finalMatch = matches.find(m => m.round === maxRound && m.result && m.result !== "Pending");
-      if (finalMatch) {
-        const champ = finalMatch.result === "1-0" ? finalMatch.white : (finalMatch.result === "0-1" ? finalMatch.black : null);
-        const runnerUp = finalMatch.result === "1-0" ? finalMatch.black : (finalMatch.result === "0-1" ? finalMatch.white : null);
-        if (champ && !podiumP1) podiumP1 = { name: champ, points: "1st Place" };
-        if (runnerUp && !podiumP2) podiumP2 = { name: runnerUp, points: "Finalist" };
+      const roundMatches = matches.filter(m => (m.round || 1) === maxRound);
+      const isKnockout = (tournament.type || "").toLowerCase().includes("knockout") || 
+                         (tournament.type || "").toLowerCase().includes("elimination");
+      if (isKnockout && roundMatches.length === 1 && (maxRound > 1 || (tournament.playersList && tournament.playersList.length <= 2))) {
+        const finalMatch = roundMatches[0];
+        if (finalMatch && finalMatch.result && finalMatch.result !== "Pending") {
+          const champ = finalMatch.result === "1-0" ? finalMatch.white : (finalMatch.result === "0-1" ? finalMatch.black : null);
+          const runnerUp = finalMatch.result === "1-0" ? finalMatch.black : (finalMatch.result === "0-1" ? finalMatch.white : null);
+          if (champ && champ !== "BYE" && !podiumP1) podiumP1 = { name: champ, points: "1st Place" };
+          if (runnerUp && runnerUp !== "BYE" && !podiumP2) podiumP2 = { name: runnerUp, points: "Finalist" };
+        }
       }
     }
     if (tournament.podium && Array.isArray(tournament.podium)) {
@@ -865,6 +888,18 @@ export default function TournamentDetails() {
                         style={{ background: "linear-gradient(135deg, #d9534f, #c9302c)", color: "#fff", fontWeight: "800" }}
                       >
                         ↩ Rollback Last Round
+                      </button>
+                    )}
+
+                    {/* Reset Tournament Bracket (Knockout only) */}
+                    {!isSwissFormat && tournament.matches && tournament.matches.length > 0 && (
+                      <button 
+                        className="add-btn" 
+                        onClick={handleResetBracket}
+                        style={{ background: "linear-gradient(135deg, #e67e22, #d35400)", color: "#fff", fontWeight: "800" }}
+                        title="Reset bracket and clear all matches to re-seed"
+                      >
+                        🔄 Reset Bracket
                       </button>
                     )}
                   </div>
@@ -1335,6 +1370,8 @@ export default function TournamentDetails() {
                       <ChallongeBracket 
                         tournamentId={tournamentId}
                         tournamentType={tournament.type}
+                        tournamentWinner={tournament.winner}
+                        tournamentStatus={tournament.status}
                         matchesData={tournament.matches} 
                         playersData={tournament.playersList}
                         playerAvatars={tournament?.playerAvatars}

@@ -1287,12 +1287,10 @@ app.get('/api/users', async (req, res) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-        if (decoded && decoded.role === 'admin') isAdmin = true;
+        if (decoded && (decoded.role === 'admin' || isAdminEmail(decoded.email))) {
+          isAdmin = true;
+        }
       } catch (e) {}
-    }
-    const requester = (req.query.requesterEmail || '').trim().toLowerCase();
-    if (requester === 'admin@zcchessclub.com') {
-      isAdmin = true;
     }
 
     // Phone is private: only returned to authenticated admins
@@ -1549,10 +1547,57 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
     if (matchTime !== undefined) match.matchTime = matchTime;
     if (location !== undefined) match.location = location;
 
+    // Check if this match finishes the tournament
+    const allMatches = tournament.matches || [];
+    const isDoubleElim = tournament.type === "Double Elimination";
+    const uMax = allMatches.reduce((max, m) => Math.max(max, m.round || 1), 0);
+    const uLast = allMatches.filter(m => (!m.bracket || m.bracket === "upper") && m.round === uMax);
+    const gfMatch = allMatches.find(m => m.bracket === "grand_finals");
+    const gfrMatch = allMatches.find(m => m.bracket === "grand_finals_reset");
+    const allCompleted = allMatches.every(m => m.result && m.result !== "Pending");
+
+    if (allCompleted) {
+      if (!isDoubleElim && uLast.length === 1 && (uMax > 1 || (tournament.playersList && tournament.playersList.length <= 2))) {
+        const finalM = uLast[0];
+        const winner = (finalM.result === "1-0" || finalM.result === "1 - 0") ? finalM.white : ((finalM.result === "0-1" || finalM.result === "0 - 1") ? finalM.black : null);
+        if (winner && winner !== "BYE") {
+          tournament.winner = winner;
+          tournament.status = "Completed";
+        }
+      } else if (isDoubleElim) {
+        if (gfrMatch && gfrMatch.result && gfrMatch.result !== "Pending") {
+          const winner = (gfrMatch.result === "1-0" || gfrMatch.result === "1 - 0") ? gfrMatch.white : gfrMatch.black;
+          if (winner && winner !== "BYE") {
+            tournament.winner = winner;
+            tournament.status = "Completed";
+          }
+        } else if (gfMatch && gfMatch.result && (gfMatch.result === "1-0" || gfMatch.result === "1 - 0")) {
+          tournament.winner = gfMatch.white;
+          tournament.status = "Completed";
+        }
+      }
+    }
+
     await tournament.save();
     res.json({ message: "Match updated successfully!", data: tournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error updating match', details: error.message });
+  }
+});
+
+// DELETE: clear/reset all matches for a tournament (allows restarting bracket)
+app.delete('/api/tournaments/:id/matches', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    tournament.matches = [];
+    tournament.winner = null;
+    tournament.status = "Upcoming";
+    await tournament.save();
+    res.json({ message: "Tournament matches reset successfully!", data: tournament });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error resetting tournament matches', details: error.message });
   }
 });
 
@@ -1773,6 +1818,22 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
   }
 });
 
+// Helper to generate standard tournament bracket seed pairings (1 vs 8, 4 vs 5, 2 vs 7, 3 vs 6)
+const getKnockoutSeedOrder = (size) => {
+  let roundsCount = Math.log2(size) - 1;
+  let order = [1, 2];
+  for (let r = 0; r < roundsCount; r++) {
+    const nextOrder = [];
+    const sum = (order.length * 2) + 1;
+    for (let j = 0; j < order.length; j++) {
+      nextOrder.push(order[j]);
+      nextOrder.push(sum - order[j]);
+    }
+    order = nextOrder;
+  }
+  return order;
+};
+
 // POST: generate initial or subsequent Knockout round pairings automatically
 app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
   try {
@@ -1801,25 +1862,37 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
         list.sort((a, b) => (b.rating || 1500) - (a.rating || 1500));
       }
 
-      const newMatches = [];
+      // Bracket size is next power of 2 >= n (minimum 2)
       const n = list.length;
-      const half = Math.floor(n / 2);
-      for (let i = 0; i < half; i++) {
-        newMatches.push({
-          round: 1,
-          white: list[i].name,
-          black: list[n - 1 - i].name,
-          result: "Pending"
-        });
+      let bracketSize = 2;
+      while (bracketSize < n) {
+        bracketSize *= 2;
       }
 
-      // Odd player gets a bye
-      if (n % 2 !== 0) {
+      const bracketOrder = getKnockoutSeedOrder(bracketSize);
+      const isDoubleElim = tournament.type === "Double Elimination";
+      const newMatches = [];
+      const matchCount = bracketSize / 2;
+
+      for (let i = 0; i < matchCount; i++) {
+        const seedA = bracketOrder[i * 2];
+        const seedB = bracketOrder[i * 2 + 1];
+        const playerA = seedA <= n ? list[seedA - 1].name : "BYE";
+        const playerB = seedB <= n ? list[seedB - 1].name : "BYE";
+
+        let result = "Pending";
+        if (playerA === "BYE" && playerB !== "BYE") {
+          result = "0-1"; // Automatic bye win for Black
+        } else if (playerB === "BYE" && playerA !== "BYE") {
+          result = "1-0"; // Automatic bye win for White
+        }
+
         newMatches.push({
           round: 1,
-          white: list[half].name,
-          black: "BYE",
-          result: "1-0" // Automatic win for White
+          white: playerA,
+          black: playerB,
+          bracket: isDoubleElim ? "upper" : undefined,
+          result: result
         });
       }
 
@@ -1872,7 +1945,13 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
     }
 
     if (!isDoubleElim && uLast.length === 1) {
-       return res.status(400).json({ error: "The tournament is already completed! The Grand Finals match is finished." });
+       const finalWinner = getWinners(uLast)[0];
+       if (finalWinner && tournament.winner !== finalWinner) {
+         tournament.winner = finalWinner;
+         tournament.status = "Completed";
+         await tournament.save();
+       }
+       return res.status(400).json({ error: "The tournament is already completed! The Grand Finals match is finished.", winner: finalWinner });
     }
 
     // Double Elim: Are we ready for Grand Finals?
@@ -1897,10 +1976,22 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
       const wCount = uWinners.length;
       const halfW = Math.floor(wCount / 2);
       for (let i = 0; i < halfW; i++) {
-        newMatches.push({ round: nextU, white: uWinners[i * 2], black: uWinners[i * 2 + 1], bracket: "upper", result: "Pending" });
+        newMatches.push({ 
+          round: nextU, 
+          white: uWinners[i * 2], 
+          black: uWinners[i * 2 + 1], 
+          bracket: isDoubleElim ? "upper" : undefined, 
+          result: "Pending" 
+        });
       }
       if (wCount % 2 !== 0) {
-        newMatches.push({ round: nextU, white: uWinners[wCount - 1], black: "BYE", bracket: "upper", result: "1-0" });
+        newMatches.push({ 
+          round: nextU, 
+          white: uWinners[wCount - 1], 
+          black: "BYE", 
+          bracket: isDoubleElim ? "upper" : undefined, 
+          result: "1-0" 
+        });
       }
       generatedSomething = true;
     }
