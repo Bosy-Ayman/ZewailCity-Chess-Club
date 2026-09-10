@@ -812,7 +812,7 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
         followersCount: newTargetFollowers.length,
         message: `Now following ${targetUser.name || cleanTarget}`
       });
-    }  }
+    }
   } catch (err) {
     res.status(500).json({ error: 'Failed to update follow status', details: err.message });
   }
