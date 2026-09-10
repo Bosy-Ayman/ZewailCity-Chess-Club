@@ -102,7 +102,7 @@ export default function Profile() {
   const [challengeMessage, setChallengeMessage] = useState("");
   const [challengeSuccess, setChallengeSuccess] = useState("");
   const [cheered, setCheered] = useState(false);
-  const [cheerCount, setCheerCount] = useState(38);
+  const [cheerCount, setCheerCount] = useState(0);
 
   // Admin Management State
   const [adminRoleForm, setAdminRoleForm] = useState({
@@ -170,6 +170,7 @@ export default function Profile() {
 
       const profData = await safeFetchJson(fetchUrl);
       setProfile(profData);
+      setCheerCount(profData.cheers || 0);
       setIsFollowing(!!profData.isFollowing);
       setFollowersCount(profData.followersCount || 0);
       setFollowingCount(profData.followingCount || 0);
@@ -239,6 +240,32 @@ export default function Profile() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSendCheer = async () => {
+    setCheered(true);
+    setCheerCount(prev => prev + 1);
+    try {
+      const res = await fetch(`${API_BASE}/api/users/cheer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetEmail: profile?.email || targetEmail || "",
+          targetName: profile?.name || queryName || "",
+          cheererEmail: loggedInEmail || "",
+          cheererName: localStorage.getItem("userName") || ""
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.cheers === "number") {
+          setCheerCount(data.cheers);
+        }
+      }
+    } catch (e) {
+      console.warn("Cheer failed:", e.message);
+    }
+    setTimeout(() => setCheered(false), 2000);
   };
 
   const handleCopy = (text, fieldName) => {
@@ -883,16 +910,14 @@ export default function Profile() {
                       <span>Challenge ⚔️</span>
                     </button>
 
-                    {/* Respect / Cheer Button */}
+                    {/* Cheer Button */}
                     <button 
                       className={`btn-hero-action cheer-btn ${cheered ? 'cheered' : ''}`}
-                      onClick={() => {
-                        setCheered(true);
-                        setCheerCount(prev => prev + 1);
-                      }}
+                      onClick={handleSendCheer}
+                      title="Send Cheers"
                     >
                       <Heart size={16} fill={cheered ? "#ef4444" : "none"} color={cheered ? "#ef4444" : "currentColor"} />
-                      <span>{cheerCount} Respect</span>
+                      <span>{cheerCount} Cheers</span>
                     </button>
 
                     {/* Admin Switch Tab */}

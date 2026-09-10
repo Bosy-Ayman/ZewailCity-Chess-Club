@@ -679,6 +679,7 @@ app.get('/api/profile', async (req, res) => {
       playstyle: user.playstyle || "",
       linkedHistoricalName: user.linkedHistoricalName || "",
       verified: user.verified || false,
+      cheers: user.cheers || 0,
       followersCount: followersList.length,
       followingCount: followingList.length,
       followers: followersList.map(u => u.email),
@@ -794,22 +795,41 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
 // POST: Cheer for a player (increment their cheer count + optional notification)
 app.post('/api/users/cheer', express.json(), async (req, res) => {
   try {
-    const { targetEmail, cheererEmail, cheererName } = req.body;
-    if (!targetEmail) return res.status(400).json({ error: 'targetEmail required' });
+    const { targetEmail, targetName, cheererEmail, cheererName } = req.body;
+    if (!targetEmail && !targetName) return res.status(400).json({ error: 'targetEmail or targetName required' });
 
-    const cleanTarget = targetEmail.trim().toLowerCase();
-    const updatedUser = await User.findOneAndUpdate(
-      { email: new RegExp(`^${cleanTarget}$`, 'i') },
+    let query = null;
+    if (targetEmail) {
+      const cleanTarget = targetEmail.trim().toLowerCase();
+      query = { email: new RegExp(`^${cleanTarget.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') };
+    } else if (targetName) {
+      const cleanName = targetName.trim();
+      query = { name: new RegExp(`^${cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') };
+    }
+
+    let updatedUser = await User.findOneAndUpdate(
+      query,
       { $inc: { cheers: 1 } },
       { new: true }
     );
 
+    // If query by email failed but targetName was also provided, try targetName
+    if (!updatedUser && targetEmail && targetName) {
+      const cleanName = targetName.trim();
+      updatedUser = await User.findOneAndUpdate(
+        { name: new RegExp(`^${cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') },
+        { $inc: { cheers: 1 } },
+        { new: true }
+      );
+    }
+
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
     // Optional: notify the person being cheered
-    if (cheererEmail && cheererEmail.toLowerCase() !== cleanTarget) {
+    const cleanTargetEmail = updatedUser.email ? updatedUser.email.toLowerCase() : '';
+    if (cheererEmail && cleanTargetEmail && cheererEmail.toLowerCase() !== cleanTargetEmail) {
       await createNotification({
-        recipientEmail: cleanTarget,
+        recipientEmail: cleanTargetEmail,
         type: 'system',
         actorName: cheererName || cheererEmail,
         actorEmail: cheererEmail.toLowerCase(),
@@ -819,7 +839,7 @@ app.post('/api/users/cheer', express.json(), async (req, res) => {
       });
     }
 
-    res.json({ success: true, cheers: updatedUser.cheers });
+    res.json({ success: true, cheers: updatedUser.cheers || 0 });
   } catch (err) {
     res.status(500).json({ error: 'Failed to cheer', details: err.message });
   }
@@ -1363,7 +1383,7 @@ app.get('/api/tournaments/:id', async (req, res) => {
         { name: { $in: nameArray } },
         { email: { $in: nameArray } }
       ]
-    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio');
+    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio cheers');
 
     const playerAvatars = {};
     const playerProfiles = {};
@@ -1372,19 +1392,24 @@ app.get('/api/tournaments/:id', async (req, res) => {
         if (u.name) playerAvatars[u.name.trim()] = u.profileImage;
         if (u.email) playerAvatars[u.email.trim()] = u.profileImage;
       }
+      const profileData = {
+        name: u.name,
+        email: u.email,
+        profileImage: u.profileImage || "",
+        major: u.major || "",
+        batch: u.batch || "",
+        fideRating: u.fideRating || 0,
+        fideId: u.fideId || "",
+        chessTitle: u.chessTitle || "",
+        favOpening: u.favOpening || "",
+        bio: u.bio || "",
+        cheers: u.cheers || 0
+      };
       if (u.name) {
-        playerProfiles[u.name.trim()] = {
-          name: u.name,
-          email: u.email,
-          profileImage: u.profileImage || "",
-          major: u.major || "",
-          batch: u.batch || "",
-          fideRating: u.fideRating || 0,
-          fideId: u.fideId || "",
-          chessTitle: u.chessTitle || "",
-          favOpening: u.favOpening || "",
-          bio: u.bio || ""
-        };
+        playerProfiles[u.name.trim()] = profileData;
+      }
+      if (u.email) {
+        playerProfiles[u.email.trim().toLowerCase()] = profileData;
       }
     });
 

@@ -500,13 +500,13 @@ export default function TournamentDetails() {
   const openPlayerPreview = (playerName, extra = {}) => {
     if (!playerName || playerName === "BYE" || playerName === "— BYE —" || playerName === "TBD") return;
     const clean = playerName.trim();
-    const profileFromDb = tournament?.playerProfiles?.[clean] || {};
+    const profileFromDb = tournament?.playerProfiles?.[clean] || tournament?.playerProfiles?.[clean.toLowerCase()] || {};
     const avatarUrl = getPlayerAvatarUrl(clean, tournament?.playerAvatars);
     
     // Find swiss standing if exists
     const standing = swissStandings.find(s => s.name.toLowerCase() === clean.toLowerCase());
     
-    const savedCheers = Number(localStorage.getItem(`cheer_${clean}`)) || Math.floor(Math.random() * 8) + 3;
+    const dbCheers = typeof profileFromDb.cheers === "number" ? profileFromDb.cheers : 0;
 
     setSelectedPlayerModal({
       name: clean,
@@ -520,17 +520,71 @@ export default function TournamentDetails() {
       bio: profileFromDb.bio || "Active tournament tactician competing for Zewail City honors.",
       standing: standing || null
     });
-    setCheerCount(savedCheers);
+    setCheerCount(dbCheers);
     setCheered(false);
     setChallengeSent(false);
+
+    // Fetch fresh profile from database to ensure up-to-date cheer count and email
+    const fetchFreshProfile = async () => {
+      try {
+        const queryUrl = profileFromDb.email 
+          ? `${API_BASE}/api/profile?email=${encodeURIComponent(profileFromDb.email)}`
+          : `${API_BASE}/api/profile?name=${encodeURIComponent(clean)}`;
+        const res = await fetch(queryUrl);
+        if (res.ok) {
+          const prof = await res.json();
+          if (typeof prof.cheers === "number") {
+            setCheerCount(prof.cheers);
+            if (tournament?.playerProfiles) {
+              if (!tournament.playerProfiles[clean]) tournament.playerProfiles[clean] = {};
+              tournament.playerProfiles[clean].cheers = prof.cheers;
+              if (prof.email) tournament.playerProfiles[clean].email = prof.email;
+            }
+          }
+          if (prof.email) {
+            setSelectedPlayerModal(prev => (prev && prev.name === clean ? { ...prev, email: prof.email } : prev));
+          }
+        }
+      } catch (e) {}
+    };
+    fetchFreshProfile();
   };
 
-  const handleSendCheer = () => {
+  const handleSendCheer = async () => {
     if (!selectedPlayerModal) return;
     const newCount = cheerCount + 1;
     setCheerCount(newCount);
     setCheered(true);
-    localStorage.setItem(`cheer_${selectedPlayerModal.name}`, newCount);
+    
+    const playerName = selectedPlayerModal.name;
+    const playerEmail = selectedPlayerModal.email;
+    const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
+    const loggedInName = localStorage.getItem("userName") || "";
+
+    try {
+      const res = await fetch(`${API_BASE}/api/users/cheer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetEmail: playerEmail || "",
+          targetName: playerName || "",
+          cheererEmail: loggedInEmail,
+          cheererName: loggedInName
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.cheers === "number") {
+          setCheerCount(data.cheers);
+          if (tournament?.playerProfiles) {
+            if (tournament.playerProfiles[playerName]) tournament.playerProfiles[playerName].cheers = data.cheers;
+            if (playerEmail && tournament.playerProfiles[playerEmail]) tournament.playerProfiles[playerEmail].cheers = data.cheers;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Cheer failed:", err.message);
+    }
   };
 
   const handleSendChallenge = (e) => {

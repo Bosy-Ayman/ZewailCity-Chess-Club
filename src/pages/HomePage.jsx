@@ -282,7 +282,12 @@ const HomePage = () => {
               // Initialize cheer counts from real DB values
               const cheerMap = {};
               valid.forEach(u => {
-                if (u.name) cheerMap[u.name] = u.cheers || 0;
+                const c = u.cheers || 0;
+                if (u.name) {
+                  cheerMap[u.name] = c;
+                  cheerMap[u.name.trim()] = c;
+                }
+                if (u.email) cheerMap[u.email.toLowerCase()] = c;
               });
               setTacticianCheers(prev => ({ ...prev, ...cheerMap }));
             }
@@ -333,24 +338,29 @@ const HomePage = () => {
 
   const handleQuickCheer = async (name, email, e) => {
     e.stopPropagation();
+    const cleanEmail = email ? email.toLowerCase() : "";
     // Optimistic update
     setTacticianCheers((prev) => ({
       ...prev,
-      [name]: (prev[name] || 0) + 1,
+      ...(name ? { [name]: (prev[name] || 0) + 1 } : {}),
+      ...(cleanEmail ? { [cleanEmail]: (prev[cleanEmail] || 0) + 1 } : {})
     }));
-    setCheerBursts((prev) => ({ ...prev, [name]: true }));
-    setTimeout(() => {
-      setCheerBursts((prev) => ({ ...prev, [name]: false }));
-    }, 1200);
+    if (name) {
+      setCheerBursts((prev) => ({ ...prev, [name]: true }));
+      setTimeout(() => {
+        setCheerBursts((prev) => ({ ...prev, [name]: false }));
+      }, 1200);
+    }
 
     // Persist to server
-    if (email) {
+    if (email || name) {
       try {
         const res = await fetch(`${API_BASE}/api/users/cheer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            targetEmail: email,
+            targetEmail: email || '',
+            targetName: name || '',
             cheererEmail: loggedInEmail || '',
             cheererName: localStorage.getItem('userName') || ''
           })
@@ -359,7 +369,11 @@ const HomePage = () => {
           const data = await res.json();
           // Update with confirmed server count
           if (typeof data.cheers === 'number') {
-            setTacticianCheers(prev => ({ ...prev, [name]: data.cheers }));
+            setTacticianCheers(prev => ({
+              ...prev,
+              ...(name ? { [name]: data.cheers } : {}),
+              ...(cleanEmail ? { [cleanEmail]: data.cheers } : {})
+            }));
           }
         }
       } catch (err) {
@@ -379,22 +393,25 @@ const HomePage = () => {
     if (!selectedTactician) return;
     const name = selectedTactician.name;
     const email = selectedTactician.email;
+    const cleanEmail = email ? email.toLowerCase() : "";
     // Optimistic update
     setTacticianCheers((prev) => ({
       ...prev,
-      [name]: (prev[name] || 0) + 1,
+      ...(name ? { [name]: (prev[name] || 0) + 1 } : {}),
+      ...(cleanEmail ? { [cleanEmail]: (prev[cleanEmail] || 0) + 1 } : {})
     }));
     setModalCheered(true);
     setTimeout(() => setModalCheered(false), 2000);
 
     // Persist to server
-    if (email) {
+    if (email || name) {
       try {
         const res = await fetch(`${API_BASE}/api/users/cheer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            targetEmail: email,
+            targetEmail: email || '',
+            targetName: name || '',
             cheererEmail: loggedInEmail || '',
             cheererName: localStorage.getItem('userName') || ''
           })
@@ -402,7 +419,11 @@ const HomePage = () => {
         if (res.ok) {
           const data = await res.json();
           if (typeof data.cheers === 'number') {
-            setTacticianCheers(prev => ({ ...prev, [name]: data.cheers }));
+            setTacticianCheers(prev => ({
+              ...prev,
+              ...(name ? { [name]: data.cheers } : {}),
+              ...(cleanEmail ? { [cleanEmail]: data.cheers } : {})
+            }));
           }
         }
       } catch (err) {
@@ -470,7 +491,7 @@ const HomePage = () => {
       opening: u.favOpening || "",
       favOpening: u.favOpening || "",
       bio: u.bio || "",
-      cheers: tacticianCheers[u.name] ?? u.cheers ?? 0,
+      cheers: (u.email && tacticianCheers[u.email.toLowerCase()] !== undefined) ? tacticianCheers[u.email.toLowerCase()] : (tacticianCheers[u.name] ?? u.cheers ?? 0),
       followers: u.followers || [],
       following: u.following || [],
       verified: u.verified !== undefined ? u.verified : true,
@@ -1326,7 +1347,7 @@ const HomePage = () => {
                           title="Send a cheer to this player"
                         >
                           <Heart size={14} className={cheerBursts[player.name] ? "fill-heart" : ""} />
-                          <span>{tacticianCheers[player.name] ?? 0}</span>
+                          <span>{(player.email && tacticianCheers[player.email.toLowerCase()] !== undefined) ? tacticianCheers[player.email.toLowerCase()] : (tacticianCheers[player.name] ?? player.cheers ?? 0)}</span>
                         </button>
 
                         <button 
@@ -1511,7 +1532,7 @@ const HomePage = () => {
                   onClick={handleModalCheer}
                 >
                   <Heart size={16} className={modalCheered ? "fill-heart" : ""} />
-                  <span>Cheer for {selectedTactician.name.split(' ')[0]} ({tacticianCheers[selectedTactician.name] || 0})</span>
+                  <span>Cheer for {selectedTactician.name.split(' ')[0]} ({(selectedTactician.email && tacticianCheers[selectedTactician.email.toLowerCase()] !== undefined) ? tacticianCheers[selectedTactician.email.toLowerCase()] : (tacticianCheers[selectedTactician.name] || selectedTactician.cheers || 0)})</span>
                 </button>
                 <span className="cheer-hint">Cheer on your campus friends!</span>
               </div>

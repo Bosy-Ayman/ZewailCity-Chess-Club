@@ -73,7 +73,14 @@ const Community = () => {
           setUsers(validUsers);
           // Seed cheer counts from real DB values
           const cMap = {};
-          validUsers.forEach(u => { if (u.name) cMap[u.name] = u.cheers || 0; });
+          validUsers.forEach(u => {
+            const count = u.cheers || 0;
+            if (u.name) {
+              cMap[u.name] = count;
+              cMap[u.name.trim()] = count;
+            }
+            if (u.email) cMap[u.email.toLowerCase()] = count;
+          });
           setCheersMap(cMap);
         }
 
@@ -194,18 +201,26 @@ const Community = () => {
     if (e) e.stopPropagation();
     const name = member.name;
     const email = member.email;
+    const cleanEmail = email ? email.toLowerCase() : "";
     // Optimistic update
-    setCheersMap(prev => ({ ...prev, [name]: (prev[name] || 0) + 1 }));
-    setCheerBursts(prev => ({ ...prev, [name]: true }));
-    setTimeout(() => { setCheerBursts(prev => ({ ...prev, [name]: false })); }, 1200);
+    setCheersMap(prev => ({
+      ...prev,
+      ...(name ? { [name]: (prev[name] || 0) + 1, [name.trim()]: (prev[name.trim()] || 0) + 1 } : {}),
+      ...(cleanEmail ? { [cleanEmail]: (prev[cleanEmail] || 0) + 1 } : {})
+    }));
+    if (name) {
+      setCheerBursts(prev => ({ ...prev, [name]: true }));
+      setTimeout(() => { setCheerBursts(prev => ({ ...prev, [name]: false })); }, 1200);
+    }
     // Persist to server
-    if (email) {
+    if (email || name) {
       try {
         const res = await fetch(`${API_BASE}/api/users/cheer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            targetEmail: email,
+            targetEmail: email || '',
+            targetName: name || '',
             cheererEmail: loggedInEmail || '',
             cheererName: localStorage.getItem('userName') || ''
           })
@@ -213,7 +228,11 @@ const Community = () => {
         if (res.ok) {
           const data = await res.json();
           if (typeof data.cheers === 'number') {
-            setCheersMap(prev => ({ ...prev, [name]: data.cheers }));
+            setCheersMap(prev => ({
+              ...prev,
+              ...(name ? { [name]: data.cheers, [name.trim()]: data.cheers } : {}),
+              ...(cleanEmail ? { [cleanEmail]: data.cheers } : {})
+            }));
           }
         }
       } catch (err) {
@@ -604,10 +623,10 @@ const Community = () => {
                           <button 
                             className={`btn-member-cheer ${cheerBursts[member.name] ? "bursting" : ""}`}
                             onClick={(e) => handleQuickCheer(member, e)}
-                            title="Send respect / cheer"
+                            title="Send cheer"
                           >
                             <Heart size={14} />
-                            <span>{cheersMap[member.name] || 0}</span>
+                            <span>{(member.email && cheersMap[member.email.toLowerCase()] !== undefined) ? cheersMap[member.email.toLowerCase()] : (cheersMap[member.name] ?? member.cheers ?? 0)}</span>
                           </button>
 
                           <button 
@@ -775,7 +794,7 @@ const Community = () => {
           );
           const isMutual = isFollowing && memberFollowsMe;
           const avatar = m.profileImage || getPlayerAvatarUrl(m.name, customAvatars);
-          const cheerCount = cheersMap[m.name] ?? 0;
+          const cheerCount = (m.email && cheersMap[m.email.toLowerCase()] !== undefined) ? cheersMap[m.email.toLowerCase()] : (cheersMap[m.name] ?? m.cheers ?? 0);
 
           return (
             <div className="tactician-modal-overlay" onClick={handleCloseProfileModal}>
