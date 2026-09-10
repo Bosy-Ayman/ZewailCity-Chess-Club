@@ -233,7 +233,7 @@ const HomePage = () => {
   const [modalCheered, setModalCheered] = useState(false);
 
   // Social & Admin State
-  const loggedInEmail = localStorage.getItem("adminEmail") || "";
+  const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
   const userRole = localStorage.getItem("userRole") || "member";
   const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "admin@zcchessclub.com");
   const [followingState, setFollowingState] = useState({});
@@ -290,6 +290,38 @@ const HomePage = () => {
                 if (u.email) cheerMap[u.email.toLowerCase()] = c;
               });
               setTacticianCheers(prev => ({ ...prev, ...cheerMap }));
+
+              // Initialize follow state for logged-in user
+              const cleanLoggedIn = (loggedInEmail || "").trim().toLowerCase();
+              if (cleanLoggedIn) {
+                const followMap = {};
+                valid.forEach(u => {
+                  const isFollowed = (u.followers || []).some(
+                    f => (f || "").trim().toLowerCase() === cleanLoggedIn
+                  );
+                  if (u.email) {
+                    followMap[u.email.trim().toLowerCase()] = isFollowed;
+                  }
+                });
+
+                // Authoritative sync from my own profile's following list
+                fetch(`${API_BASE}/api/profile?email=${encodeURIComponent(cleanLoggedIn)}`)
+                  .then(r => r.ok ? r.json() : null)
+                  .then(myProf => {
+                    if (myProf && Array.isArray(myProf.following)) {
+                      setFollowingState(prev => {
+                        const updated = { ...prev };
+                        myProf.following.forEach(fEmail => {
+                          if (fEmail) updated[fEmail.trim().toLowerCase()] = true;
+                        });
+                        return updated;
+                      });
+                    }
+                  })
+                  .catch(() => {});
+
+                setFollowingState(followMap);
+              }
             }
           }
         }
@@ -306,7 +338,7 @@ const HomePage = () => {
       }
     };
     fetchLiveAndAvatars();
-  }, [API_BASE]);
+  }, [API_BASE, loggedInEmail]);
 
   const handleCopyEmail = (email, e) => {
     if (e) e.stopPropagation();
@@ -322,17 +354,37 @@ const HomePage = () => {
       window.location.href = "/?login=true";
       return;
     }
-    const current = !!followingState[targetEmail];
-    setFollowingState(prev => ({ ...prev, [targetEmail]: !current }));
+    const cleanTarget = (targetEmail || "").trim().toLowerCase();
+    if (!cleanTarget) return;
+
+    const current = !!followingState[cleanTarget];
+    setFollowingState(prev => ({ ...prev, [cleanTarget]: !current }));
 
     try {
-      await fetch(`${API_BASE}/api/users/follow`, {
+      const res = await fetch(`${API_BASE}/api/users/follow`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ followerEmail: loggedInEmail, targetEmail })
+        body: JSON.stringify({ followerEmail: loggedInEmail, targetEmail: cleanTarget })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (typeof data.isFollowing === "boolean") {
+          setFollowingState(prev => ({ ...prev, [cleanTarget]: data.isFollowing }));
+          setRegisteredUsers(prev => prev.map(u => {
+            if ((u.email || '').trim().toLowerCase() === cleanTarget) {
+              const prevFollowers = (u.followers || []).map(f => (f || '').trim().toLowerCase());
+              const newFollowers = data.isFollowing
+                ? Array.from(new Set([...prevFollowers, loggedInEmail.trim().toLowerCase()]))
+                : prevFollowers.filter(f => f !== loggedInEmail.trim().toLowerCase());
+              return { ...u, followers: newFollowers };
+            }
+            return u;
+          }));
+        }
+      }
     } catch (err) {
       console.warn("Follow toggle warning:", err.message);
+      setFollowingState(prev => ({ ...prev, [cleanTarget]: current }));
     }
   };
 
@@ -1351,11 +1403,11 @@ const HomePage = () => {
                         </button>
 
                         <button 
-                          className={`tactician-follow-btn ${followingState[player.email] ? "active" : ""}`}
+                          className={`tactician-follow-btn ${followingState[(player.email || '').trim().toLowerCase()] ? "active" : ""}`}
                           onClick={(e) => handleToggleFollow(player.email, player.name, e)}
-                          title={followingState[player.email] ? "Following" : "Follow"}
+                          title={followingState[(player.email || '').trim().toLowerCase()] ? "Following" : "Follow"}
                         >
-                          {followingState[player.email] ? (
+                          {followingState[(player.email || '').trim().toLowerCase()] ? (
                             <>
                               <UserCheck size={13} />
                               <span>Following</span>
@@ -1534,7 +1586,26 @@ const HomePage = () => {
                   <Heart size={16} className={modalCheered ? "fill-heart" : ""} />
                   <span>Cheer for {selectedTactician.name.split(' ')[0]} ({(selectedTactician.email && tacticianCheers[selectedTactician.email.toLowerCase()] !== undefined) ? tacticianCheers[selectedTactician.email.toLowerCase()] : (tacticianCheers[selectedTactician.name] || selectedTactician.cheers || 0)})</span>
                 </button>
-                <span className="cheer-hint">Cheer on your campus friends!</span>
+                {loggedInEmail && selectedTactician.email && selectedTactician.email.trim().toLowerCase() !== loggedInEmail.trim().toLowerCase() && (
+                  <button
+                    className={`tactician-follow-btn ${followingState[(selectedTactician.email || '').trim().toLowerCase()] ? "active" : ""}`}
+                    style={{ padding: "8px 16px", borderRadius: "10px", fontSize: "0.85rem", fontWeight: 700 }}
+                    onClick={(e) => handleToggleFollow(selectedTactician.email, selectedTactician.name, e)}
+                  >
+                    {followingState[(selectedTactician.email || '').trim().toLowerCase()] ? (
+                      <>
+                        <UserCheck size={14} />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={14} />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <span className="cheer-hint">Cheer & connect with your campus friends!</span>
               </div>
 
               {/* Challenge Form */}

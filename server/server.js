@@ -637,12 +637,33 @@ app.get('/api/profile', async (req, res) => {
     }
     const canViewPrivatePhone = isOwner || viewerIsAdmin;
 
-    const isFollowing = cleanViewer ? (user.followers || []).some(f => f.toLowerCase() === cleanViewer) : false;
-    const followsViewer = cleanViewer ? (user.following || []).some(f => f.toLowerCase() === cleanViewer) : false;
+    let isFollowing = false;
+    let followsViewer = false;
+    if (cleanViewer) {
+      const cleanUserEmail = (user.email || '').trim().toLowerCase();
+      isFollowing = (user.followers || []).some(f => (f || '').trim().toLowerCase() === cleanViewer);
+      followsViewer = (user.following || []).some(f => (f || '').trim().toLowerCase() === cleanViewer);
+
+      // Bi-directional check: if targetUser.followers didn't have viewer, check if viewerDoc.following has target
+      if (!isFollowing) {
+        const viewerDoc = await User.findOne({ email: new RegExp(`^${cleanViewer.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') });
+        if (viewerDoc) {
+          if ((viewerDoc.following || []).some(f => (f || '').trim().toLowerCase() === cleanUserEmail)) {
+            isFollowing = true;
+            // Self-heal: ensure user has cleanViewer in followers
+            await User.updateOne({ _id: user._id }, { $addToSet: { followers: cleanViewer } });
+          }
+          if (!followsViewer && (viewerDoc.followers || []).some(f => (f || '').trim().toLowerCase() === cleanUserEmail)) {
+            followsViewer = true;
+            await User.updateOne({ _id: user._id }, { $addToSet: { following: cleanViewer } });
+          }
+        }
+      }
+    }
 
     // Populate user details for followers and following lists
-    const followerEmails = (user.followers || []).map(e => e.toLowerCase());
-    const followingEmails = (user.following || []).map(e => e.toLowerCase());
+    const followerEmails = (user.followers || []).map(e => (e || '').trim().toLowerCase()).filter(Boolean);
+    const followingEmails = (user.following || []).map(e => (e || '').trim().toLowerCase()).filter(Boolean);
 
     const followersList = followerEmails.length > 0
       ? await User.find(
@@ -680,10 +701,11 @@ app.get('/api/profile', async (req, res) => {
       linkedHistoricalName: user.linkedHistoricalName || "",
       verified: user.verified || false,
       cheers: user.cheers || 0,
-      followersCount: followersList.length,
-      followingCount: followingList.length,
-      followers: followersList.map(u => u.email),
-      following: followingList.map(u => u.email),
+      createdAt: user.createdAt || null,
+      followersCount: Math.max(followersList.length, (user.followers || []).length),
+      followingCount: Math.max(followingList.length, (user.following || []).length),
+      followers: user.followers || [],
+      following: user.following || [],
       followersList,
       followingList,
       challenges: user.challenges || [],
@@ -743,33 +765,37 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
       return res.status(400).json({ error: 'Cannot follow yourself' });
     }
 
-    const targetUser = await User.findOne({ email: new RegExp(`^${cleanTarget}$`, 'i') });
-    const followerUser = await User.findOne({ email: new RegExp(`^${cleanFollower}$`, 'i') });
+    const targetUser = await User.findOne({ email: new RegExp(`^${cleanTarget.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') });
+    const followerUser = await User.findOne({ email: new RegExp(`^${cleanFollower.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') });
 
     if (!targetUser || !followerUser) {
       return res.status(404).json({ error: 'One or both users not found in club directory' });
     }
 
-    const isFollowing = (targetUser.followers || []).some(f => f.toLowerCase() === cleanFollower);
+    const isFollowing = (targetUser.followers || []).some(f => (f || '').trim().toLowerCase() === cleanFollower) ||
+                        (followerUser.following || []).some(f => (f || '').trim().toLowerCase() === cleanTarget);
 
     if (isFollowing) {
-      // Unfollow
-      await User.updateOne({ _id: targetUser._id }, { $pull: { followers: cleanFollower } });
-      await User.updateOne({ _id: followerUser._id }, { $pull: { following: cleanTarget } });
-      const updatedTarget = await User.findById(targetUser._id);
+      // Unfollow: sanitize both arrays cleanly
+      const newTargetFollowers = (targetUser.followers || []).filter(f => (f || '').trim().toLowerCase() !== cleanFollower);
+      const newFollowerFollowing = (followerUser.following || []).filter(f => (f || '').trim().toLowerCase() !== cleanTarget);
+      await User.updateOne({ _id: targetUser._id }, { $set: { followers: newTargetFollowers } });
+      await User.updateOne({ _id: followerUser._id }, { $set: { following: newFollowerFollowing } });
+
       return res.json({
         success: true,
         isFollowing: false,
-        followersCount: (updatedTarget.followers || []).length,
+        followersCount: newTargetFollowers.length,
         message: `Unfollowed ${targetUser.name || cleanTarget}`
       });
     } else {
-      // Follow
-      await User.updateOne({ _id: targetUser._id }, { $addToSet: { followers: cleanFollower } });
-      await User.updateOne({ _id: followerUser._id }, { $addToSet: { following: cleanTarget } });
-      const updatedTarget = await User.findById(targetUser._id);
+      // Follow: ensure unique lowercased emails in both arrays
+      const newTargetFollowers = Array.from(new Set([...(targetUser.followers || []).map(f => (f || '').trim().toLowerCase()).filter(Boolean), cleanFollower]));
+      const newFollowerFollowing = Array.from(new Set([...(followerUser.following || []).map(f => (f || '').trim().toLowerCase()).filter(Boolean), cleanTarget]));
+      await User.updateOne({ _id: targetUser._id }, { $set: { followers: newTargetFollowers } });
+      await User.updateOne({ _id: followerUser._id }, { $set: { following: newFollowerFollowing } });
 
-      // 🔔 Notify the target that someone followed them
+      // Notify the target that someone followed them
       await createNotification({
         recipientEmail: cleanTarget,
         type: 'follow',
@@ -783,10 +809,10 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
       return res.json({
         success: true,
         isFollowing: true,
-        followersCount: (updatedTarget.followers || []).length,
-        message: `Now following ${targetUser.name || cleanTarget}!`
+        followersCount: newTargetFollowers.length,
+        message: `Now following ${targetUser.name || cleanTarget}`
       });
-    }
+    }  }
   } catch (err) {
     res.status(500).json({ error: 'Failed to update follow status', details: err.message });
   }

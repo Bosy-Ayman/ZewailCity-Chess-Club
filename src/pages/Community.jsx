@@ -177,7 +177,7 @@ const Community = () => {
       const res = await safeFetchJson(`${API_BASE}/api/users/follow`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ followerEmail: loggedInEmail, targetEmail })
+        body: JSON.stringify({ followerEmail: loggedInEmail, targetEmail: cleanTarget })
       });
 
       if (res.success) {

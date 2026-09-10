@@ -418,7 +418,9 @@ export default function Profile() {
         })
       });
       setIsFollowing(res.isFollowing);
-      setFollowersCount(res.followersCount);
+      if (typeof res.followersCount === "number") {
+        setFollowersCount(res.followersCount);
+      }
     } catch (err) {
       setIsFollowing(current);
       alert(err.message);
@@ -768,8 +770,8 @@ export default function Profile() {
                   )}
 
                   {!isOwnProfile && profile.followsViewer && (
-                    <span className="badge-follows-you" title="This tactician follows your profile">
-                      Follows You
+                    <span className={`badge-follows-you ${isFollowing ? 'mutual' : ''}`} title={isFollowing ? "You follow each other" : "This tactician follows your profile"}>
+                      {isFollowing ? "✨ Mutual Tacticians" : "Follows You"}
                     </span>
                   )}
 
@@ -823,6 +825,10 @@ export default function Profile() {
                   <span className="social-stat-item highlight">
                     ⚔️ {tournaments.length} Championships
                   </span>
+                  <span className="social-stat-dot">•</span>
+                  <span className="social-stat-item highlight-cheers">
+                    👏 <strong>{cheerCount}</strong> Cheers
+                  </span>
                 </div>
 
                 <p className="hero-bio">
@@ -856,6 +862,27 @@ export default function Profile() {
                     <div className="hero-meta-item">
                       <Calendar size={14} className="meta-icon" />
                       <span>Batch {profile.batch}</span>
+                    </div>
+                  )}
+
+                  {profile.playstyle && (
+                    <div className="hero-meta-item" title="Chess Playstyle">
+                      <Flame size={14} className="meta-icon" />
+                      <span>{profile.playstyle}</span>
+                    </div>
+                  )}
+
+                  {profile.createdAt && (
+                    <div className="hero-meta-item" title="Club Join Date">
+                      <Clock size={14} className="meta-icon" />
+                      <span>Joined {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                    </div>
+                  )}
+
+                  {profile.verified && (
+                    <div className="hero-meta-item verified-tag" title="Verified Zewail City Student Tactician">
+                      <CheckCircle2 size={14} className="meta-icon verified-icon" />
+                      <span>Verified Tactician</span>
                     </div>
                   )}
                 </div>
@@ -1193,6 +1220,20 @@ export default function Profile() {
                     <span className="detail-label"><Calendar size={14} /> Batch / Year</span>
                     <span className="detail-val">{profile?.batch ? `Batch ${profile.batch}` : "N/A"}</span>
                   </div>
+                  <div className="detail-item">
+                    <span className="detail-label"><Clock size={14} /> Member Since</span>
+                    <span className="detail-val">
+                      {profile?.createdAt 
+                        ? new Date(profile.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" }) 
+                        : "Active ZC Tactician"}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label"><Shield size={14} /> Campus Standing</span>
+                    <span className="detail-val">
+                      {profile?.role === 'admin' ? "👑 Club Administrator" : (profile?.verified ? "⚡ Verified Student Member" : "Club Tactician")}
+                    </span>
+                  </div>
                   {(isOwnProfile || isAdmin) && (
                     <div className="detail-item">
                       <span className="detail-label"><Phone size={14} /> Contact Phone</span>
@@ -1248,6 +1289,26 @@ export default function Profile() {
                       ♟️ {profile?.favOpening || "Universal / Sicilian Defense"}
                     </span>
                   </div>
+                  <div className="detail-item">
+                    <span className="detail-label"><Flame size={14} /> Preferred Playing Style</span>
+                    <span className="detail-val playstyle-badge">
+                      ⚡ {profile?.playstyle || "Dynamic & Tactical / Universal"}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label"><Heart size={14} /> Campus Cheers Received</span>
+                    <span className="detail-val cheer-count-badge">
+                      👏 {cheerCount} Community Cheers
+                    </span>
+                  </div>
+                  {profile?.linkedHistoricalName && (
+                    <div className="detail-item">
+                      <span className="detail-label"><Trophy size={14} /> Historical Champion Profile</span>
+                      <span className="detail-val highlight-gold">
+                        🏅 Linked to: {profile.linkedHistoricalName}
+                      </span>
+                    </div>
+                  )}
                   <div className="detail-item full-width">
                     <span className="detail-label"><Star size={14} /> Personal Chess Motto & Bio</span>
                     <blockquote className="bio-quote-box">

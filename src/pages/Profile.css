@@ -1511,35 +1511,47 @@
 
   .hero-actions-area {
     width: 100%;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
 
   .btn-hero-action {
     width: 100%;
     justify-content: center;
-    padding: 13px 18px;
-    font-size: 0.9rem;
+    padding: 10px 14px;
+    font-size: 0.84rem;
   }
 
   .hero-stats-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    padding: 14px 10px;
+    padding: 14px 12px;
     border-radius: 16px;
+  }
+
+  .hero-stat-box {
+    min-width: 0;
   }
 
   .hero-stat-divider {
     display: none;
   }
 
-  .hero-stat-num {
-    font-size: 1.35rem;
+  .stat-value {
+    font-size: 1.15rem;
   }
 
-  .hero-stat-label {
-    font-size: 0.72rem;
+  .stat-label {
+    font-size: 0.68rem;
+  }
+
+  .stat-hint {
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Dashboard Tabs Horizontal Carousel */
@@ -1715,16 +1727,22 @@
     padding: 12px 8px;
   }
 
-  .hero-stat-item {
-    padding: 4px;
+  .stat-value {
+    font-size: 1.05rem;
   }
 
-  .hero-stat-num {
-    font-size: 1.2rem;
+  .stat-label {
+    font-size: 0.65rem;
   }
 
-  .hero-stat-label {
+  .stat-hint {
     font-size: 0.68rem;
+  }
+
+  .btn-hero-action {
+    padding: 9px 8px;
+    font-size: 0.78rem;
+    gap: 5px;
   }
 }
 
@@ -2657,6 +2675,37 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.badge-follows-you.mutual {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.social-stat-item.highlight-cheers {
+  color: #fb7185;
+  font-weight: 700;
+}
+
+.hero-meta-item.verified-tag {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.meta-icon.verified-icon {
+  color: #10b981;
+}
+
+.detail-val.playstyle-badge {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.detail-val.cheer-count-badge {
+  color: #f43f5e;
+  font-weight: 700;
 }
 
 .privacy-pill-badge {
