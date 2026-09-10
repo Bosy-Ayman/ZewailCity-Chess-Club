@@ -82,8 +82,68 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = [], tournamentWin
   const gfMatch = dbMatches.find(m => m.bracket === 'grand_finals');
   const gfrMatch = dbMatches.find(m => m.bracket === 'grand_finals_reset');
 
-  const upperRounds = groupRounds(upperMatches, "Upper");
+  let upperRounds = groupRounds(upperMatches, "Upper");
   const lowerRounds = groupRounds(lowerMatches, "Lower");
+
+  // For Single Elimination, if the database only has earlier rounds generated,
+  // dynamically project the remaining rounds (Semifinals, Finals) so the full Challonge tree is immediately visible!
+  if (!isDoubleElimMatches && upperRounds.length > 0) {
+    let lastRound = upperRounds[upperRounds.length - 1];
+    while (lastRound.matches.length > 1) {
+      const nextRNum = lastRound.roundNumber + 1;
+      const count = Math.ceil(lastRound.matches.length / 2);
+      const projectedMatches = [];
+
+      for (let i = 0; i < count; i++) {
+        const feeder1 = lastRound.matches[i * 2];
+        const feeder2 = lastRound.matches[i * 2 + 1];
+
+        const f1Winner = feeder1 ? (feeder1.p1.isWinner ? feeder1.p1.name : (feeder1.p2.isWinner ? feeder1.p2.name : null)) : null;
+        const f2Winner = feeder2 ? (feeder2.p1.isWinner ? feeder2.p1.name : (feeder2.p2.isWinner ? feeder2.p2.name : null)) : null;
+
+        const p1Name = (f1Winner && f1Winner !== "BYE") ? f1Winner : `Winner of ${feeder1 ? feeder1.matchCode : `M${i * 2 + 1}`}`;
+        const p2Name = (f2Winner && f2Winner !== "BYE") ? f2Winner : `Winner of ${feeder2 ? feeder2.matchCode : `M${i * 2 + 2}`}`;
+
+        const isRealP1 = f1Winner && f1Winner !== "BYE";
+        const isRealP2 = f2Winner && f2Winner !== "BYE";
+
+        projectedMatches.push({
+          id: `projected-${nextRNum}-${i}`,
+          matchCode: `R${nextRNum}-M${i + 1}`,
+          p1: {
+            seed: isRealP1 ? (playerSeedMap[p1Name] || "-") : "—",
+            name: p1Name,
+            score: "-",
+            isWinner: false
+          },
+          p2: {
+            seed: isRealP2 ? (playerSeedMap[p2Name] || "-") : "—",
+            name: p2Name,
+            score: "-",
+            isWinner: false
+          },
+          status: (isRealP1 && isRealP2) ? "Pending" : "Awaiting",
+          isFeeder: true,
+          matchTime: "",
+          location: ""
+        });
+      }
+
+      let roundName = "Round " + nextRNum;
+      if (count === 1) roundName = "Championship Finals";
+      else if (count === 2) roundName = "Semifinals";
+      else if (count === 4) roundName = "Quarterfinals";
+      else if (count === 8) roundName = "Round of 16";
+
+      const newRoundObj = {
+        roundName,
+        roundNumber: nextRNum,
+        matches: projectedMatches
+      };
+      upperRounds.push(newRoundObj);
+      lastRound = newRoundObj;
+    }
+  }
 
   if (gfMatch) {
     const maxU = upperRounds.length > 0 ? Math.max(...upperRounds.map(r => r.roundNumber)) : 0;
@@ -344,71 +404,103 @@ export default function ChallongeBracket({
 
                 {/* Round Matchup Cards */}
                 <div className="round-matches-list">
-                  {round.matches.map((match, mIdx) => (
-                    <div
-                      key={match.id}
-                      id={`match-${activeTab}-${round.roundNumber}-${mIdx}`}
-                      className="match-card glass-panel-card clickable-match"
-                      onClick={() => {
-                        setSelectedMatchModal(match);
-                        setTempWhite(match.p1.name);
-                        setTempBlack(match.p2.name);
-                        const foundMatch = dbMatches.find(m => m._id === match.id);
-                        setTempMatchTime(foundMatch?.matchTime || match.matchTime || "");
-                      }}
-                    >
-                      <div className="match-card-header">
-                        <span className="match-code">{match.matchCode}</span>
-                        {match.matchTime && (
-                          <span className="match-scheduled-time" title={`Scheduled: ${match.matchTime}`}>
-                            🕒 {match.matchTime}
+                  {round.matches.map((match, mIdx) => {
+                    const isByeMatch = match.p1.name === "BYE" || match.p2.name === "BYE";
+                    const isFeederP1 = match.p1.name && match.p1.name.startsWith("Winner of");
+                    const isFeederP2 = match.p2.name && match.p2.name.startsWith("Winner of");
+
+                    return (
+                      <div
+                        key={match.id}
+                        id={`match-${activeTab}-${round.roundNumber}-${mIdx}`}
+                        className={`match-card glass-panel-card clickable-match ${isByeMatch ? "match-bye-card" : ""}`}
+                        onClick={() => {
+                          if (isByeMatch) {
+                            alert("⚡ This matchup was won automatically by BYE advance.");
+                            return;
+                          }
+                          if (match.id && String(match.id).startsWith("projected-")) {
+                            if (isFeederP1 || isFeederP2) {
+                              alert(`⏳ Match ${match.matchCode} is awaiting earlier round matches to complete.`);
+                              return;
+                            }
+                          }
+                          setSelectedMatchModal(match);
+                          setTempWhite(match.p1.name);
+                          setTempBlack(match.p2.name);
+                          const foundMatch = dbMatches.find(m => m._id === match.id);
+                          setTempMatchTime(foundMatch?.matchTime || match.matchTime || "");
+                        }}
+                      >
+                        <div className="match-card-header">
+                          <span className="match-code">{match.matchCode}</span>
+                          {match.matchTime && (
+                            <span className="match-scheduled-time" title={`Scheduled: ${match.matchTime}`}>
+                              🕒 {match.matchTime}
+                            </span>
+                          )}
+                          <span className={`match-status-badge ${isByeMatch ? "bye-advance" : (match.status ? match.status.toLowerCase() : "pending")}`}>
+                            {isByeMatch ? "BYE" : match.status}
                           </span>
-                        )}
-                        <span className={`match-status-badge ${match.status.toLowerCase()}`}>
-                          {match.status}
-                        </span>
-                      </div>
+                        </div>
 
-                      {/* Player 1 Row */}
-                      <div className={`match-player-row ${match.p1.isWinner ? "winner" : "loser"}`}>
-                        <div className="player-meta">
-                          <img 
-                            src={getPlayerAvatarUrl(match.p1.name, playerAvatars)} 
-                            alt={match.p1.name} 
-                            className="bracket-player-avatar"
-                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                          />
-                          <span className="player-seed">#{match.p1.seed}</span>
-                          <span className="player-name">{match.p1.name}</span>
+                        {/* Player 1 Row */}
+                        <div className={`match-player-row ${match.p1.isWinner ? "winner" : (match.p1.name === "BYE" ? "bye-row" : "loser")}`}>
+                          <div className="player-meta">
+                            {match.p1.name !== "BYE" && !isFeederP1 ? (
+                              <img 
+                                src={getPlayerAvatarUrl(match.p1.name, playerAvatars)} 
+                                alt={match.p1.name} 
+                                className="bracket-player-avatar"
+                                onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                              />
+                            ) : (
+                              <span className="bracket-placeholder-icon">{match.p1.name === "BYE" ? "🚫" : "⏳"}</span>
+                            )}
+                            <span className={`player-seed ${match.p1.name === "BYE" ? "seed-bye" : ""}`}>
+                              {match.p1.name === "BYE" ? "—" : (match.p1.seed !== "-" && match.p1.seed !== "—" ? `#${match.p1.seed}` : "—")}
+                            </span>
+                            <span className={`player-name ${match.p1.name === "BYE" ? "name-bye" : (isFeederP1 ? "name-feeder" : "")}`}>
+                              {match.p1.name === "BYE" ? "— BYE —" : match.p1.name}
+                            </span>
+                          </div>
+                          <div className="player-score">
+                            {match.p1.score}
+                            {match.p1.isWinner && <span className="winner-check">✓</span>}
+                          </div>
                         </div>
-                        <div className="player-score">
-                          {match.p1.score}
-                          {match.p1.isWinner && <span className="winner-check">✓</span>}
+
+                        {/* Divider */}
+                        <div className="match-vs-divider"></div>
+
+                        {/* Player 2 Row */}
+                        <div className={`match-player-row ${match.p2.isWinner ? "winner" : (match.p2.name === "BYE" ? "bye-row" : "loser")}`}>
+                          <div className="player-meta">
+                            {match.p2.name !== "BYE" && !isFeederP2 ? (
+                              <img 
+                                src={getPlayerAvatarUrl(match.p2.name, playerAvatars)} 
+                                alt={match.p2.name} 
+                                className="bracket-player-avatar"
+                                onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                              />
+                            ) : (
+                              <span className="bracket-placeholder-icon">{match.p2.name === "BYE" ? "🚫" : "⏳"}</span>
+                            )}
+                            <span className={`player-seed ${match.p2.name === "BYE" ? "seed-bye" : ""}`}>
+                              {match.p2.name === "BYE" ? "—" : (match.p2.seed !== "-" && match.p2.seed !== "—" ? `#${match.p2.seed}` : "—")}
+                            </span>
+                            <span className={`player-name ${match.p2.name === "BYE" ? "name-bye" : (isFeederP2 ? "name-feeder" : "")}`}>
+                              {match.p2.name === "BYE" ? "— BYE —" : match.p2.name}
+                            </span>
+                          </div>
+                          <div className="player-score">
+                            {match.p2.score}
+                            {match.p2.isWinner && <span className="winner-check">✓</span>}
+                          </div>
                         </div>
                       </div>
-
-                      {/* Divider */}
-                      <div className="match-vs-divider"></div>
-
-                      {/* Player 2 Row */}
-                      <div className={`match-player-row ${match.p2.isWinner ? "winner" : "loser"}`}>
-                        <div className="player-meta">
-                          <img 
-                            src={getPlayerAvatarUrl(match.p2.name, playerAvatars)} 
-                            alt={match.p2.name} 
-                            className="bracket-player-avatar"
-                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                          />
-                          <span className="player-seed">#{match.p2.seed}</span>
-                          <span className="player-name">{match.p2.name}</span>
-                        </div>
-                        <div className="player-score">
-                          {match.p2.score}
-                          {match.p2.isWinner && <span className="winner-check">✓</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

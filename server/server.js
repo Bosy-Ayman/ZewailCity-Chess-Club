@@ -1547,9 +1547,40 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
     if (matchTime !== undefined) match.matchTime = matchTime;
     if (location !== undefined) match.location = location;
 
+    // Automatically advance the winner to the next round in the knockout bracket tree
+    const isDoubleElim = tournament.type === "Double Elimination";
+    if (!isDoubleElim && match.round) {
+      const currentRound = match.round;
+      const nextRound = currentRound + 1;
+      const roundMatches = tournament.matches.filter(m => (!m.bracket || m.bracket === "upper") && m.round === currentRound);
+      const mIdx = roundMatches.findIndex(m => m._id.toString() === match._id.toString());
+
+      if (mIdx !== -1) {
+        const nextRoundMatches = tournament.matches.filter(m => (!m.bracket || m.bracket === "upper") && m.round === nextRound);
+        const targetIdx = Math.floor(mIdx / 2);
+        const targetMatch = nextRoundMatches[targetIdx];
+
+        if (targetMatch) {
+          const winner = (match.result === "1-0" || match.result === "1 - 0") 
+            ? match.white 
+            : ((match.result === "0-1" || match.result === "0 - 1") ? match.black : null);
+          
+          const isWhiteSlot = (mIdx % 2 === 0);
+          if (winner && winner !== "BYE") {
+            if (isWhiteSlot) targetMatch.white = winner;
+            else targetMatch.black = winner;
+          } else if (!match.result || match.result === "Pending") {
+            const placeholder = `Winner of R${currentRound}-M${mIdx + 1}`;
+            if (isWhiteSlot) targetMatch.white = placeholder;
+            else targetMatch.black = placeholder;
+            targetMatch.result = "Pending";
+          }
+        }
+      }
+    }
+
     // Check if this match finishes the tournament
     const allMatches = tournament.matches || [];
-    const isDoubleElim = tournament.type === "Double Elimination";
     const uMax = allMatches.reduce((max, m) => Math.max(max, m.round || 1), 0);
     const uLast = allMatches.filter(m => (!m.bracket || m.bracket === "upper") && m.round === uMax);
     const gfMatch = allMatches.find(m => m.bracket === "grand_finals");
@@ -1869,11 +1900,14 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
         bracketSize *= 2;
       }
 
-      const bracketOrder = getKnockoutSeedOrder(bracketSize);
       const isDoubleElim = tournament.type === "Double Elimination";
+      const totalRounds = Math.log2(bracketSize);
+      const bracketOrder = getKnockoutSeedOrder(bracketSize);
       const newMatches = [];
       const matchCount = bracketSize / 2;
 
+      // 1. Generate Round 1 matches
+      const round1Matches = [];
       for (let i = 0; i < matchCount; i++) {
         const seedA = bracketOrder[i * 2];
         const seedB = bracketOrder[i * 2 + 1];
@@ -1887,21 +1921,117 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
           result = "1-0"; // Automatic bye win for White
         }
 
-        newMatches.push({
+        const mObj = {
           round: 1,
           white: playerA,
           black: playerB,
           bracket: isDoubleElim ? "upper" : undefined,
           result: result
-        });
+        };
+        round1Matches.push(mObj);
+      }
+      newMatches.push(...round1Matches);
+
+      // 2. Pre-generate all subsequent rounds (Round 2 through Finals) for Single Elimination
+      // so the complete Challonge elimination tree is immediately visible from the start!
+      if (!isDoubleElim && totalRounds > 1) {
+        let prevMatches = round1Matches;
+        for (let r = 2; r <= totalRounds; r++) {
+          const currCount = prevMatches.length / 2;
+          const currMatches = [];
+          for (let i = 0; i < currCount; i++) {
+            const feeder1 = prevMatches[i * 2];
+            const feeder2 = prevMatches[i * 2 + 1];
+
+            const feeder1Winner = (feeder1.result === "1-0" || feeder1.result === "1 - 0") 
+              ? feeder1.white 
+              : ((feeder1.result === "0-1" || feeder1.result === "0 - 1") ? feeder1.black : null);
+            
+            const feeder2Winner = (feeder2.result === "1-0" || feeder2.result === "1 - 0") 
+              ? feeder2.white 
+              : ((feeder2.result === "0-1" || feeder2.result === "0 - 1") ? feeder2.black : null);
+
+            const whiteName = (feeder1Winner && feeder1Winner !== "BYE") 
+              ? feeder1Winner 
+              : `Winner of R${r - 1}-M${i * 2 + 1}`;
+            
+            const blackName = (feeder2Winner && feeder2Winner !== "BYE") 
+              ? feeder2Winner 
+              : `Winner of R${r - 1}-M${i * 2 + 2}`;
+
+            currMatches.push({
+              round: r,
+              white: whiteName,
+              black: blackName,
+              bracket: "upper",
+              result: "Pending"
+            });
+          }
+          newMatches.push(...currMatches);
+          prevMatches = currMatches;
+        }
       }
 
       tournament.matches.push(...newMatches);
       await tournament.save();
-      return res.json({ message: "Knockout Round 1 bracket generated successfully!", data: tournament });
+      return res.json({ message: "Knockout tournament tree generated successfully!", data: tournament });
     }
 
     // CASE 2: Advance to Next Round (Round 2, 3, etc.)
+    // For single elimination, if the tree was already pre-generated, verify feeder progression
+    if (tournament.type !== "Double Elimination") {
+      const allM = tournament.matches || [];
+      const uMax = allM.reduce((max, m) => Math.max(max, m.round || 1), 0);
+      const uLast = allM.filter(m => (!m.bracket || m.bracket === "upper") && m.round === uMax);
+      
+      if (uLast.length === 1 && uLast[0].result && uLast[0].result !== "Pending") {
+        const finalWinner = (uLast[0].result === "1-0" || uLast[0].result === "1 - 0") ? uLast[0].white : uLast[0].black;
+        if (finalWinner && tournament.winner !== finalWinner) {
+          tournament.winner = finalWinner;
+          tournament.status = "Completed";
+          await tournament.save();
+        }
+        return res.status(400).json({ error: "The tournament is already completed! The Grand Finals match is finished.", winner: finalWinner });
+      }
+
+      // If matches exist across multiple rounds, check if all pending feeder slots can be refreshed
+      let updatedCount = 0;
+      for (let r = 1; r < uMax; r++) {
+        const currRMatches = allM.filter(m => (!m.bracket || m.bracket === "upper") && m.round === r);
+        const nextRMatches = allM.filter(m => (!m.bracket || m.bracket === "upper") && m.round === r + 1);
+
+        currRMatches.forEach((m, mIdx) => {
+          if (m.result && m.result !== "Pending") {
+            const winner = (m.result === "1-0" || m.result === "1 - 0") ? m.white : m.black;
+            const targetIdx = Math.floor(mIdx / 2);
+            const targetMatch = nextRMatches[targetIdx];
+            if (targetMatch && winner && winner !== "BYE") {
+              if (mIdx % 2 === 0 && targetMatch.white !== winner) {
+                targetMatch.white = winner;
+                updatedCount++;
+              } else if (mIdx % 2 === 1 && targetMatch.black !== winner) {
+                targetMatch.black = winner;
+                updatedCount++;
+              }
+            }
+          }
+        });
+      }
+
+      if (updatedCount > 0) {
+        await tournament.save();
+        return res.json({ message: "Tournament bracket matchups updated successfully!", data: tournament });
+      }
+
+      const pendingMatches = existingMatches.filter(m => !m.result || m.result === "Pending");
+      if (pendingMatches.length > 0) {
+        return res.status(400).json({ 
+          error: `Cannot advance further. There are still ${pendingMatches.length} pending match(es) waiting to be scored.` 
+        });
+      }
+      return res.json({ message: "Tournament bracket tree is fully generated and up to date!", data: tournament });
+    }
+
     // Check if any existing matches are still Pending
     const pendingMatches = existingMatches.filter(m => !m.result || m.result === "Pending");
     if (pendingMatches.length > 0) {
