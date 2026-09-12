@@ -5,9 +5,9 @@ The official web platform for the **Zewail City Chess Club** — a full member h
 🔗 **Live site:** [zc-chess-club.vercel.app](https://zc-chess-club.vercel.app)
 
 <div align="center">
-  <video src="https://github.com/Bosy-Ayman/ZewailCity-Chess-Club/issues/1#issue-5435591686" controls width="720">
-    Your browser does not support the video tag.
-  </video>
+
+[https://github.com/user-attachments/assets/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+](https://private-user-images.githubusercontent.com/112729185/650795559-48233ee6-3951-44dc-b42d-66477c88203a.mp4?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODkyNDk4MDUsIm5iZiI6MTc4OTI0OTUwNSwicGF0aCI6Ii8xMTI3MjkxODUvNjUwNzk1NTU5LTQ4MjMzZWU2LTM5NTEtNDRkYy1iNDJkLTY2NDc3Yzg4MjAzYS5tcDQ_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwOTEyJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDkxMlQyMTQ1MDVaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT00ZmUzOTkzMmQ4MzI4NzhiMmQ2OTAzYjlhMjFjYTg0YmVjODBhNzg4NzA1MDI1NWUwNGUyOGU4ODI5M2VhZGZkJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCZyZXNwb25zZS1jb250ZW50LXR5cGU9dmlkZW8lMkZtcDQifQ.nJ__qKC4dEPHh0larcWPSOUb_jOsjvXKszKxek6arl0)
 </div>
 
 ---
