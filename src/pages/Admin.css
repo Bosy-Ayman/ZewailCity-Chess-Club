@@ -343,7 +343,8 @@
 }
 
 .admin-table {
-  width: 100%;
+  width: 138%;
+  min-width: 1100px;
   border-collapse: collapse;
   text-align: left;
   background-color: #17140f;
@@ -374,26 +375,78 @@
   font-weight: 700;
 }
 
-.tournaments-desktop-table th:nth-child(1) { width: 18%; }
-.tournaments-desktop-table th:nth-child(2),
-.tournaments-desktop-table th:nth-child(3) { width: 13%; }
-.tournaments-desktop-table th:nth-child(4) { width: 10%; }
-.tournaments-desktop-table th:nth-child(5) { width: 8%; }
-.tournaments-desktop-table th:nth-child(6) { width: 24%; }
-.tournaments-desktop-table th:nth-child(7) { width: 14%; }
-
-.tournaments-desktop-table td {
+.admin-table td {
   overflow-wrap: anywhere;
   vertical-align: top;
 }
 
-.tournaments-desktop-table td:nth-child(2),
-.tournaments-desktop-table td:nth-child(3),
-.tournaments-desktop-table td:nth-child(4),
-.tournaments-desktop-table td:nth-child(5),
-.tournaments-desktop-table td:nth-child(7) {
+/* Tournaments table: Tournament | Type | Status | Date | Time | Location | Actions */
+.tournaments-table th:nth-child(1) { width: 18%; }
+.tournaments-table th:nth-child(2),
+.tournaments-table th:nth-child(3) { width: 13%; }
+.tournaments-table th:nth-child(4) { width: 10%; }
+.tournaments-table th:nth-child(5) { width: 8%; }
+.tournaments-table th:nth-child(6) { width: 24%; }
+.tournaments-table th:nth-child(7) { width: 14%; }
+.tournaments-table td:nth-child(2),
+.tournaments-table td:nth-child(3),
+.tournaments-table td:nth-child(4),
+.tournaments-table td:nth-child(5),
+.tournaments-table td:nth-child(7) { white-space: nowrap; }
+
+/* Applications table: Applicant | Email | ID | Major & Batch | Department | Applied Role | Status | Details */
+/* Applications table */
+.applications-table {
+  width: 1200px;
+  min-width: 1200px;
+  table-layout: fixed;
+}
+
+.applications-table th:nth-child(1) { width: 15%; }
+.applications-table th:nth-child(2) { width: 24%; } /* Email */
+.applications-table th:nth-child(3) { width: 8%; }  /* ID */
+.applications-table th:nth-child(4) { width: 14%; }
+.applications-table th:nth-child(5) { width: 14%; }
+.applications-table th:nth-child(6) { width: 11%; }
+.applications-table th:nth-child(7) { width: 7%; }
+.applications-table th:nth-child(8) { width: 7%; }
+
+.applications-table th,
+.applications-table td {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.applications-table td:nth-child(2) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.applications-table td:nth-child(3),
+.applications-table td:nth-child(7),
+.applications-table td:nth-child(8) {
   white-space: nowrap;
 }
+/* Users table: Name | Email | ID Number | Major | Role | Actions */
+.users-table th:nth-child(1) { width: 18%; }
+.users-table th:nth-child(2) { width: 26%; }
+.users-table th:nth-child(3) { width: 14%; }
+.users-table th:nth-child(4) { width: 16%; }
+.users-table th:nth-child(5) { width: 12%; }
+.users-table th:nth-child(6) { width: 14%; }
+.users-table td:nth-child(3),
+.users-table td:nth-child(5),
+.users-table td:nth-child(6) { white-space: nowrap; }
+
+/* Puzzle Tournaments table: Title | Beginning | Ending | Time Limit | Puzzles | Players | Actions */
+.puzzle-tournaments-table th:nth-child(1) { width: 18%; }
+.puzzle-tournaments-table th:nth-child(2),
+.puzzle-tournaments-table th:nth-child(3) { width: 16%; }
+.puzzle-tournaments-table th:nth-child(4) { width: 10%; }
+.puzzle-tournaments-table th:nth-child(5) { width: 8%; }
+.puzzle-tournaments-table th:nth-child(6) { width: 20%; }
+.puzzle-tournaments-table th:nth-child(7) { width: 12%; }
 
 .tournaments-desktop-table .admin-puzzle-participants {
   max-height: 116px;
