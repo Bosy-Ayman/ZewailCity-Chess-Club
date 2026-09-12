@@ -5,7 +5,7 @@ import Footer from "../components/Footer";
 import { 
   Users, Search, Swords, UserPlus, UserCheck, ExternalLink, 
   Crown, Heart, Send, X, CheckCircle2, Copy, Check, 
-  Mail, Sparkles, User, MapPin
+  Mail, Sparkles, User, MapPin, Calendar
 } from "lucide-react";
 import { safeFetchJson } from "../utils/api";
 import "./Community.css";
@@ -30,8 +30,10 @@ const Community = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [customAvatars, setCustomAvatars] = useState({});
+  const [communityTournaments, setCommunityTournaments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all"); // 'all' | 'champions' | 'officers' | 'following' | 'active'
+  const [sortBy, setSortBy] = useState("rating"); // 'rating' | 'cheers' | 'name'
   const [isLoading, setIsLoading] = useState(true);
 
   // Social & Auth State
@@ -82,6 +84,11 @@ const Community = () => {
             if (u.email) cMap[u.email.toLowerCase()] = count;
           });
           setCheersMap(cMap);
+        }
+
+        const tournamentList = await safeFetchJson(`${API_BASE}/api/tournaments`);
+        if (Array.isArray(tournamentList)) {
+          setCommunityTournaments(tournamentList);
         }
 
         // Fetch custom avatars
@@ -152,8 +159,21 @@ const Community = () => {
       result = result.filter(u => u.fideRating > 0 || u.chessComRating > 0 || u.lichessRating > 0);
     }
 
+    // Sort
+    if (sortBy === "rating") {
+      result = result.sort((a, b) => {
+        const ra = a.fideRating || a.chessComRating || a.rating || 0;
+        const rb = b.fideRating || b.chessComRating || b.rating || 0;
+        return rb - ra;
+      });
+    } else if (sortBy === "cheers") {
+      result = result.sort((a, b) => (b.cheers || 0) - (a.cheers || 0));
+    } else if (sortBy === "name") {
+      result = result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
     setFilteredUsers(result);
-  }, [users, searchQuery, activeFilter, followingMap, myProfile, loggedInEmail]);
+  }, [users, searchQuery, activeFilter, followingMap, myProfile, loggedInEmail, sortBy]);
 
   // Social Actions
   const handleFollowToggle = async (targetEmail, targetName, e) => {
@@ -351,6 +371,14 @@ const Community = () => {
     setTimeout(() => setCopiedInvite(false), 2500);
   };
 
+  const topRatedMember = [...users]
+    .filter((member) => (member.fideRating || member.chessComRating || member.rating || 0) > 0)
+    .sort((a, b) => (b.fideRating || b.chessComRating || b.rating || 0) - (a.fideRating || a.chessComRating || a.rating || 0))[0];
+  const mostCheeredMember = [...users].sort((a, b) => (b.cheers || 0) - (a.cheers || 0))[0];
+  const nextTournament = communityTournaments
+    .filter((tournament) => tournament.status !== "Completed")
+    .sort((a, b) => new Date(a.startDate || 0) - new Date(b.startDate || 0))[0];
+
   return (
     <div className="community-page">
       <Header />
@@ -362,7 +390,7 @@ const Community = () => {
             <Users size={15} />
             <span>ZC Chess Club Network</span>
           </div>
-          <h1 className="community-hero-title">ZC Chess Club Community</h1>
+          <h1 className="community-hero-title site-page-title">ZC Chess Club Community</h1>
           <p className="community-hero-subtitle">
             Connect with your fellow campus chess players, follow peers, challenge members to 1-on-1 matches, and celebrate our university champions!
           </p>
@@ -423,6 +451,45 @@ const Community = () => {
             </div>
           </section>
         )}
+
+        {/* Data-backed community pulse */}
+        <section className="community-pulse-section" aria-label="Community pulse">
+          <div className="community-pulse-heading">
+            <div>
+              <span className="community-pulse-kicker">Live club pulse</span>
+              <h2>What&apos;s happening in the club</h2>
+            </div>
+            <Link to="/history?tab=events" className="community-pulse-link">
+              View events <ExternalLink size={13} />
+            </Link>
+          </div>
+          <div className="community-pulse-grid">
+            <article className="community-pulse-card community-pulse-card--gold">
+              <span className="community-pulse-icon"><Crown size={18} /></span>
+              <div>
+                <span className="community-pulse-label">Leaderboard spotlight</span>
+                <strong>{topRatedMember?.name || "New challengers welcome"}</strong>
+                <p>{topRatedMember ? `${topRatedMember.fideRating || topRatedMember.chessComRating || topRatedMember.rating} Elo leads the directory.` : "Add a rating to appear on the club board."}</p>
+              </div>
+            </article>
+            <article className="community-pulse-card community-pulse-card--rose">
+              <span className="community-pulse-icon"><Heart size={18} /></span>
+              <div>
+                <span className="community-pulse-label">Community favorite</span>
+                <strong>{mostCheeredMember?.name || "Be the first to cheer"}</strong>
+                <p>{mostCheeredMember ? `${mostCheeredMember.cheers || 0} cheers from fellow tacticians.` : "Celebrate a teammate from the directory."}</p>
+              </div>
+            </article>
+            <article className="community-pulse-card community-pulse-card--teal">
+              <span className="community-pulse-icon"><Calendar size={18} /></span>
+              <div>
+                <span className="community-pulse-label">Next on the board</span>
+                <strong>{nextTournament?.title || "Tournament archives"}</strong>
+                <p>{nextTournament?.startDate ? `Scheduled for ${new Date(nextTournament.startDate).toLocaleDateString()}.` : "Explore past tournaments and champions."}</p>
+              </div>
+            </article>
+          </div>
+        </section>
 
         {/* Search & Filter Controls */}
         <section className="community-controls-section">
@@ -488,15 +555,108 @@ const Community = () => {
           </div>
         </section>
 
-        {/* Member Grid */}
+        {/* Member Grid + Leaderboard Sidebar Layout */}
         <section className="community-grid-section">
-          {isLoading ? (
-            <div className="community-loading-box">
-              <div className="loading-spinner" />
-              <p>Loading ZC Chess Club Community...</p>
-            </div>
-          ) : filteredUsers.length > 0 ? (
-            <div className="community-members-grid">
+          <div className="community-layout-with-sidebar">
+
+            {/* TOP RATED LEADERBOARD SIDEBAR */}
+            <aside className="community-leaderboard-sidebar">
+              <div className="leaderboard-header">
+                <span className="leaderboard-icon">🏅</span>
+                <h3 className="leaderboard-title">Top Rated</h3>
+              </div>
+              <div className="leaderboard-list">
+                {[...users]
+                  .filter(u => (u.fideRating || u.chessComRating || u.rating || 0) > 0)
+                  .sort((a, b) => {
+                    const ra = a.fideRating || a.chessComRating || a.rating || 0;
+                    const rb = b.fideRating || b.chessComRating || b.rating || 0;
+                    return rb - ra;
+                  })
+                  .slice(0, 5)
+                  .map((member, idx) => {
+                    const rating = member.fideRating || member.chessComRating || member.rating || 0;
+                    const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
+                    const rankColors = ['#f3c144', '#c0c0c0', '#cd7f32', '#8c8578', '#6b6560'];
+                    return (
+                      <div key={member.email || idx} className="leaderboard-entry">
+                        <span className="leaderboard-rank" style={{ color: rankColors[idx] }}>
+                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                        </span>
+                        <img
+                          src={avatar}
+                          alt={member.name}
+                          className="leaderboard-avatar"
+                          onError={e => { e.target.src = '/Icons/unknown.png'; }}
+                        />
+                        <div className="leaderboard-info">
+                          <span className="leaderboard-name">{member.name?.split(' ')[0] || 'Member'}</span>
+                          <span className="leaderboard-rating">{rating} Elo</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Most Cheered */}
+              <div className="leaderboard-header" style={{ marginTop: '20px' }}>
+                <span className="leaderboard-icon">❤️</span>
+                <h3 className="leaderboard-title">Most Cheered</h3>
+              </div>
+              <div className="leaderboard-list">
+                {[...users]
+                  .sort((a, b) => (b.cheers || 0) - (a.cheers || 0))
+                  .slice(0, 3)
+                  .map((member, idx) => {
+                    const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
+                    return (
+                      <div key={(member.email || idx) + '-cheer'} className="leaderboard-entry">
+                        <span className="leaderboard-rank" style={{ color: '#e05b7c' }}>#{idx + 1}</span>
+                        <img
+                          src={avatar}
+                          alt={member.name}
+                          className="leaderboard-avatar"
+                          onError={e => { e.target.src = '/Icons/unknown.png'; }}
+                        />
+                        <div className="leaderboard-info">
+                          <span className="leaderboard-name">{member.name?.split(' ')[0] || 'Member'}</span>
+                          <span className="leaderboard-rating" style={{ color: '#e05b7c' }}>❤️ {member.cheers || 0}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </aside>
+
+            {/* MAIN GRID AREA */}
+            <div className="community-grid-main">
+
+              {/* Sort Controls */}
+              <div className="community-sort-bar">
+                <span className="sort-label">Sort by:</span>
+                {[
+                  { key: 'rating', label: '📊 Rating' },
+                  { key: 'cheers', label: '❤️ Cheers' },
+                  { key: 'name', label: '🔤 Name' },
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    className={`sort-btn ${sortBy === opt.key ? 'active' : ''}`}
+                    onClick={() => setSortBy(opt.key)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <span className="sort-count">{filteredUsers.length} member{filteredUsers.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              {isLoading ? (
+                <div className="community-loading-box site-loading-state">
+                  <div className="loading-spinner site-loading-spinner" />
+                  <p>Loading ZC Chess Club Community...</p>
+                </div>
+              ) : filteredUsers.length > 0 ? (
+                <div className="community-members-grid">
               {filteredUsers.map((member, idx) => {
                 const isSelf = loggedInEmail && member.email && member.email.toLowerCase() === loggedInEmail.toLowerCase();
                 const isFollowing = !!followingMap[member.email?.toLowerCase()];
@@ -687,7 +847,10 @@ const Community = () => {
               </button>
             </div>
           )}
-        </section>
+        </div>
+      </div>
+    </section>
+
 
         {/* Direct Challenge Modal Popup */}
         {challengeModalOpen && selectedPlayer && (

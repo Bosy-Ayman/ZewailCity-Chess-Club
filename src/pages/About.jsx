@@ -63,7 +63,7 @@ export default function About() {
               <Users size={14} />
               <span>Established 2018 • Zewail City</span>
             </div>
-            <h1 className="title">About ZC Chess Club</h1>
+            <h1 className="title site-page-title">About ZC Chess Club</h1>
             <p className="subtitle">
               Fostering strategic mastery, competitive excellence, and a vibrant community of passionate tacticians.
             </p>

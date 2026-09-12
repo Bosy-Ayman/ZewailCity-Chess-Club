@@ -13,11 +13,15 @@ const NAV_ITEMS = [
   { to: "/puzzlechallenge", label: "Puzzles", icon: "🧩" },
   { to: "/history", label: "History", icon: "📜" },
   { to: "/calendar", label: "Calendar", icon: "📅" },
-  { to: "/about", label: "About", icon: "ℹ️" },
   { to: "/clubroles", label: "Club Roles", icon: "✨" },
+  { to: "/about", label: "About", icon: "ℹ️" },
+  { to: "/contact", label: "Contact", icon: "📬" },
 ];
 
-const Header = ({ sidebarOpen, toggleSidebar }) => {
+const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggleSidebar }) => {
+  const [internalSidebarOpen, setInternalSidebarOpen] = useState(false);
+  const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen;
+  const toggleSidebar = externalToggleSidebar || (() => setInternalSidebarOpen(prev => !prev));
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem("adminToken"));
@@ -533,10 +537,16 @@ const Header = ({ sidebarOpen, toggleSidebar }) => {
                 <span className="drawer-link-icon">📅</span> Calendar
               </Link>
               <Link to="/history" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/history" ? "drawer-link--active" : ""}`}>
-                <span className="drawer-link-icon">📜</span> History
+                <span className="drawer-link-icon">📜</span> History & Archives
+              </Link>
+              <Link to="/clubroles" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/clubroles" ? "drawer-link--active" : ""}`}>
+                <span className="drawer-link-icon">✨</span> Club Roles
               </Link>
               <Link to="/about" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/about" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">ℹ️</span> About Us
+              </Link>
+              <Link to="/contact" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/contact" ? "drawer-link--active" : ""}`}>
+                <span className="drawer-link-icon">📬</span> Contact Us
               </Link>
 
               {/* Management section for admins/hr/oc */}
@@ -544,7 +554,7 @@ const Header = ({ sidebarOpen, toggleSidebar }) => {
                 <>
                   <div className="drawer-section-label" style={{ marginTop: "12px" }}>Management</div>
                   <Link to="/admin" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📊</span> Dashboard
+                    <span className="drawer-link-icon">📊</span> Admin Dashboard
                   </Link>
                 </>
               )}
@@ -563,6 +573,12 @@ const Header = ({ sidebarOpen, toggleSidebar }) => {
                   <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">👥</span> Manage Users
                   </Link>
+                  <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">🧩</span> Manage Puzzles
+                  </Link>
+                  <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                  </Link>
                 </>
               )}
 
@@ -580,12 +596,11 @@ const Header = ({ sidebarOpen, toggleSidebar }) => {
                   <Link to="/admin?tab=tournaments-list" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">⚙️</span> Manage Tournaments
                   </Link>
+                  <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">🧩</span> Manage Puzzles
+                  </Link>
                 </>
               )}
-
-              <Link to="/clubroles" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/clubroles" ? "drawer-link--active" : ""}`}>
-                <span className="drawer-link-icon">✨</span> Club Roles
-              </Link>
             </nav>
 
             {/* Footer: Logout */}

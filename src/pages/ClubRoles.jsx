@@ -169,7 +169,7 @@ export default function ClubRoles() {
             <Briefcase size={14} />
             <span>Join the Leadership Team</span>
           </div>
-          <h1>Club Role Opportunities</h1>
+          <h1 className="site-page-title">Club Role Opportunities</h1>
           <p>
             Explore available leadership, organizing, and development roles in ZC Chess Club. Apply today to build your skills and shape our community!
           </p>

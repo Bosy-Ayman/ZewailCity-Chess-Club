@@ -131,7 +131,7 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
       <Header />
       
       <main className="form-container">
-        <h1>♟️ ZC Chess Club Recruitment Form</h1>
+        <h1 className="site-page-title">♟️ ZC Chess Club Recruitment Form</h1>
         <p className="form-description">
           "Chess is the gymnasium of the mind." – Blaise Pascal. We are currently accepting applications for the 
           {title} team.

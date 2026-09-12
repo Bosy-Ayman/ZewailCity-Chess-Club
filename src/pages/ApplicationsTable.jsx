@@ -96,7 +96,7 @@ const ApplicationsTable = () => {
         <div className="layout-container">
           <div className="content-wrapper">
             <div className="layout-content-container">
-              <h1 className="page-title">Loading Applications...</h1>
+              <h1 className="page-title site-page-title">Loading Applications...</h1>
             </div>
           </div>
         </div>
@@ -112,7 +112,7 @@ const ApplicationsTable = () => {
         <div className="layout-container">
           <div className="content-wrapper">
             <div className="layout-content-container">
-              <h1 className="page-title" style={{ color: '#ff6b6b' }}>
+                <h1 className="page-title site-page-title" style={{ color: '#ff6b6b' }}>
                 Error: {error}
               </h1>
             </div>
@@ -132,7 +132,7 @@ const ApplicationsTable = () => {
           <div className="layout-content-container">
             <header className="page-header-section">
               <div className="header-text-group">
-                <h1 className="page-title">♟️ Submitted Applications</h1>
+                <h1 className="page-title site-page-title">♟️ Submitted Applications</h1>
                 <p className="page-description">
                   A total of <strong>{applications.length}</strong> application(s) found.
                 </p>

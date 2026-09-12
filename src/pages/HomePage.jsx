@@ -10,6 +10,7 @@ import {
 import Confetti from "react-confetti";
 import { useWindowSize } from "react-use";
 import { getPlayerAvatarUrl } from "../utils/api";
+import { HISTORICAL_TOURNAMENT_COUNT } from "../utils/historicalTournamentCount";
 import "./HomePage.css";
 
 const CountUp = ({ end, duration = 2000, suffix = "" }) => {
@@ -179,6 +180,8 @@ const HomePage = () => {
 
   // Dynamic tournament & avatar data from backend
   const [customAvatars, setCustomAvatars] = useState({});
+  const [liveStats, setLiveStats] = useState({ members: null, matches: null, tournaments: null });
+  const [featuredLiveEvent, setFeaturedLiveEvent] = useState(null);
   const [liveTournament, setLiveTournament] = useState(null);
   const [registeredUsers, setRegisteredUsers] = useState([
     {
@@ -249,6 +252,50 @@ const HomePage = () => {
         const tRes = await fetch(`${API_BASE}/api/tournaments`);
         if (tRes.ok) {
           const tList = await tRes.json();
+
+          // Live stats: tournament count
+          if (Array.isArray(tList)) {
+            const completedTournaments = tList.filter((t) => t.status === "Completed");
+            // Count total matches across all tournaments
+            let totalMatches = 0;
+            tList.forEach(t => { totalMatches += (t.matches?.length || 0); });
+            setLiveStats(prev => ({
+              ...prev,
+              tournaments: completedTournaments.length,
+              matches: Math.max(totalMatches, 100)
+            }));
+
+            const now = new Date();
+            const chessEvents = tList
+              .filter((t) => t.startDate && ["Upcoming", "Ongoing", "In Progress"].includes(t.status))
+              .map((t) => ({
+                ...t,
+                eventKind: "tournament",
+                eventState: t.status === "Upcoming" ? "upcoming" : "live"
+              }));
+            const puzzleRes = await fetch(`${API_BASE}/api/puzzle-tournaments`);
+            const puzzleList = puzzleRes.ok ? await puzzleRes.json() : [];
+            const puzzleEvents = (Array.isArray(puzzleList) ? puzzleList : [])
+              .filter((p) => p.startDate)
+              .map((p) => {
+                const start = new Date(`${p.startDate}T${p.startTime || "00:00"}:00`);
+                const end = p.endDate ? new Date(`${p.endDate}T${p.endTime || "23:59"}:59`) : null;
+                return {
+                  ...p,
+                  eventKind: "puzzle",
+                  eventState: start > now ? "upcoming" : (!end || end >= now ? "live" : "completed")
+                };
+              })
+              .filter((p) => p.eventState !== "completed");
+            const featuredEvent = [...chessEvents, ...puzzleEvents]
+              .sort((a, b) => {
+                if (a.eventState !== b.eventState) return a.eventState === "live" ? -1 : 1;
+                return new Date(a.startDate) - new Date(b.startDate);
+              })[0];
+            if (featuredEvent) setFeaturedLiveEvent(featuredEvent);
+
+          }
+
           const ongoing = tList.find((t) => t.status === "Ongoing" || t.status === "In Progress");
           if (ongoing) {
             const detRes = await fetch(`${API_BASE}/api/tournaments/${ongoing._id}`);
@@ -276,6 +323,7 @@ const HomePage = () => {
         if (uRes.ok) {
           const uList = await uRes.json();
           if (Array.isArray(uList)) {
+            setLiveStats(prev => ({ ...prev, members: uList.filter(u => u.email && u.email.toLowerCase() !== 'admin2@zcchessclub.com').length }));
             const valid = uList.filter(u => u.email && u.email.toLowerCase() !== "admin2@zcchessclub.com");
             if (valid.length > 0) {
               setRegisteredUsers(valid);
@@ -742,6 +790,23 @@ const HomePage = () => {
   ];
 
   const activeTournament = recentTournaments[activeTournamentIndex] || recentTournaments[0];
+  const featuredAnnouncement = featuredLiveEvent
+    ? {
+        ...pinnedAnnouncement,
+        category: featuredLiveEvent.eventKind === "puzzle" ? "puzzle" : "tournament",
+        categoryLabel: featuredLiveEvent.eventKind === "puzzle" ? "Puzzle Challenge" : "Tournament",
+        title: featuredLiveEvent.title || featuredLiveEvent.name,
+        description: featuredLiveEvent.eventKind === "puzzle"
+          ? `${featuredLiveEvent.title} is live in the ZC tactics arena. Register, solve the puzzles, and climb the leaderboard.`
+          : `${featuredLiveEvent.title || featuredLiveEvent.name} is on the club calendar. Check the schedule, register your place, and compete for the podium.`,
+        date: featuredLiveEvent.startDate,
+        image: featuredLiveEvent.image || (featuredLiveEvent.eventKind === "puzzle" ? "/Images/Tournaments/2025-2026/PuzzleChallenge.jpg" : pinnedAnnouncement.image),
+        link: featuredLiveEvent.eventKind === "puzzle" ? "/puzzlechallenge" : "/tournaments",
+        linkLabel: featuredLiveEvent.eventKind === "puzzle" ? "Enter Puzzle Arena" : "View Tournament"
+      }
+    : pinnedAnnouncement;
+  const historicalChampionships = HISTORICAL_TOURNAMENT_COUNT;
+  const championshipCount = Math.max(liveStats.tournaments || 0, historicalChampionships);
 
   const liveMatch = liveTournament && liveTournament.matches 
     ? (liveTournament.matches.find((m) => m.round === (liveTournament.currentRound || 3) && m.result === "Pending") || liveTournament.matches[0])
@@ -811,26 +876,36 @@ const HomePage = () => {
             </a>
           </div>
 
-          {/* Quick Metrics Strip */}
+          {/* Quick Metrics Strip — Live from API */}
           <div className="hero-quick-stats">
             <div className="hero-stat-item">
-              <span className="hero-stat-num"><CountUp end={20} suffix="+" /></span>
-              <span className="hero-stat-lbl">Championships</span>
+              <span className="hero-stat-num">
+                {liveStats.members != null
+                  ? <CountUp end={liveStats.members} suffix="+" />
+                  : <CountUp end={20} suffix="+" />}
+              </span>
+              <span className="hero-stat-lbl">Active Members</span>
+            </div>
+            <div className="hero-stat-divider" />
+            <div className="hero-stat-item">
+              <span className="hero-stat-num">
+                <CountUp end={championshipCount} suffix="+" />
+              </span>
+              <span className="hero-stat-lbl">Championships &amp; Arenas</span>
+            </div>
+            <div className="hero-stat-divider" />
+            <div className="hero-stat-item">
+              <span className="hero-stat-num">
+                {liveStats.matches != null && liveStats.matches > 0
+                  ? <CountUp end={liveStats.matches} suffix="+" />
+                  : <CountUp end={500} suffix="+" />}
+              </span>
+              <span className="hero-stat-lbl">Games Played</span>
             </div>
             <div className="hero-stat-divider" />
             <div className="hero-stat-item">
               <span className="hero-stat-num">🥇 1st</span>
               <span className="hero-stat-lbl">Inter-Uni Girls</span>
-            </div>
-            <div className="hero-stat-divider" />
-            <div className="hero-stat-item">
-              <span className="hero-stat-num"><CountUp end={500} suffix="+" /></span>
-              <span className="hero-stat-lbl">Games Played</span>
-            </div>
-            <div className="hero-stat-divider" />
-            <div className="hero-stat-item">
-              <span className="hero-stat-num"><CountUp end={100} suffix="%" /></span>
-              <span className="hero-stat-lbl">Student Legacy</span>
             </div>
           </div>
 
@@ -982,11 +1057,11 @@ const HomePage = () => {
         </div>
 
         {/* Featured / Pinned announcement */}
-        {pinnedAnnouncement && (
+        {featuredAnnouncement && (
           <div className="news-featured-card">
             <div
               className="news-featured-image"
-              style={{ backgroundImage: `url("${pinnedAnnouncement.image}")` }}
+              style={{ backgroundImage: `url("${featuredAnnouncement.image}")` }}
             >
               <div className="news-featured-overlay" />
               <div className="news-featured-body">
@@ -995,20 +1070,27 @@ const HomePage = () => {
                     <Pin size={11} />
                     Pinned
                   </span>
-                  <span className={`news-category-tag news-category-tag--${pinnedAnnouncement.category}`}>
-                    {pinnedAnnouncement.categoryLabel}
+                  <span className={`news-category-tag news-category-tag--${featuredAnnouncement.category}`}>
+                    {featuredAnnouncement.categoryLabel}
                   </span>
                 </div>
-                <h3 className="news-featured-title">{pinnedAnnouncement.title}</h3>
-                <p className="news-featured-desc">{pinnedAnnouncement.description}</p>
-                <CountdownTimer targetDate="2026-10-20T18:00:00" />
+                <h3 className="news-featured-title">{featuredAnnouncement.title}</h3>
+                <p className="news-featured-desc">{featuredAnnouncement.description}</p>
+                {featuredLiveEvent && featuredLiveEvent.startDate ? (
+                  <div className="news-live-countdown-wrap">
+                    <span className="news-countdown-label">⏳ {featuredLiveEvent.eventState === "live" ? "Live now" : `${featuredLiveEvent.title} starts in:`}</span>
+                    {featuredLiveEvent.eventState === "upcoming" && <CountdownTimer targetDate={`${featuredLiveEvent.startDate}T${featuredLiveEvent.startTime || "00:00"}:00`} />}
+                  </div>
+                ) : (
+                  <CountdownTimer targetDate="2026-10-20T18:00:00" />
+                )}
                 <div className="news-featured-footer">
                   <span className="news-date">
                     <Calendar size={13} />
-                    {pinnedAnnouncement.date}
+                    {featuredAnnouncement.date}
                   </span>
-                  <a href={pinnedAnnouncement.link} className="news-cta-btn">
-                    {pinnedAnnouncement.linkLabel}
+                  <a href={featuredAnnouncement.link} className="news-cta-btn">
+                    {featuredAnnouncement.linkLabel}
                     <ExternalLink size={13} />
                   </a>
                 </div>
@@ -1040,6 +1122,57 @@ const HomePage = () => {
             ))}
           </div>
         )}
+      </section>
+
+      <div className="section-divider" />
+
+      {/* Grandmaster Legacy Feature */}
+      <section className="gm-legacy-section" id="grandmaster-legacy">
+        <div className="gm-legacy-header">
+          <div className="gm-legacy-badge">
+            <span>♞</span>
+            <span>Once Upon a Board</span>
+          </div>
+          <h2>Grandmasters Came to Zewail City</h2>
+          <p className="gm-legacy-subtitle">
+            Our club has hosted unforgettable chess moments with Adham Fawzy and Shahenda Wafa, inspiring students through live masterclasses and simultaneous exhibitions.
+          </p>
+        </div>
+
+        <div className="gm-legacy-showcase">
+          <div className="gm-legacy-feature-image">
+            <img
+              src="/Images/Tournaments/2018-2019/shahenda-adham.jpg"
+              alt="Adham Fawzy and Shahenda Wafa visiting Zewail City Chess Club"
+            />
+            <div className="gm-legacy-image-caption">
+              <span>2018</span>
+              <strong>A day the board felt bigger</strong>
+            </div>
+          </div>
+
+          <div className="gm-legacy-guests">
+            <article className="gm-guest-card gm-guest-card--adham">
+              <img src="/Images/Tournaments/2018-2019/adhamfawzy.jpg" alt="Adham Fawzy" />
+              <div>
+                <span className="gm-guest-role">Grandmaster Guest</span>
+                <h3>Adham Fawzy</h3>
+                <p>Led a landmark simultaneous exhibition against 16 Zewail City students.</p>
+              </div>
+            </article>
+            <article className="gm-guest-card gm-guest-card--shahenda">
+              <img src="/Images/Tournaments/2018-2019/shahenda.jpg" alt="Shahenda Wafa" />
+              <div>
+                <span className="gm-guest-role">Women&apos;s Grandmaster</span>
+                <h3>Shahenda Wafa</h3>
+                <p>Joined an historic simultaneous exhibition with 20 Zewail City players.</p>
+              </div>
+            </article>
+            <a href="/history?tab=events" className="gm-legacy-link">
+              Explore the full story <ExternalLink size={14} />
+            </a>
+          </div>
+        </div>
       </section>
 
       <div className="section-divider" />

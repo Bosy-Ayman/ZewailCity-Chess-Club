@@ -650,8 +650,8 @@ export default function Profile() {
 
   if (isLoading) return (
     <div className="profile">
-      <div className="page-loading">
-        <div className="loading-spinner lg"></div>
+      <div className="page-loading site-loading-state">
+        <div className="loading-spinner lg site-loading-spinner"></div>
         <p>Loading your dashboard…</p>
       </div>
     </div>

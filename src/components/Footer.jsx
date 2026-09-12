@@ -6,26 +6,46 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       <div className="footer-inner">
-        {/* Brand */}
+        {/* Brand Column */}
         <div className="footer-brand">
           <span className="footer-logo-text">♟ ZC Chess Club</span>
-          <p className="footer-tagline">Where every move matters.</p>
+          <p className="footer-tagline">
+            Fostering strategic mastery, competitive excellence, and a vibrant community of campus tacticians at Zewail City.
+          </p>
+          <div className="footer-meeting-pill">
+            <span>📍 Academic Building, Gaming Room Zone E • Fridays at 9:00 PM</span>
+          </div>
         </div>
 
-        {/* Links */}
-        <nav className="footer-links">
-          <Link to="/">Home</Link>
-          <Link to="/tournaments">Tournaments</Link>
-          <Link to="/history">History</Link>
-          <Link to="/calendar">Calendar</Link>
-          <Link to="/about">About</Link>
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/terms">Terms</Link>
-        </nav>
+        {/* Column 1: Explore */}
+        <div className="footer-col">
+          <h4 className="footer-col-title">Navigation</h4>
+          <nav className="footer-links">
+            <Link to="/">Home</Link>
+            <Link to="/tournaments">Tournaments</Link>
+            <Link to="/calendar">Calendar</Link>
+            <Link to="/history">History & Archives</Link>
+            <Link to="/about">About Us</Link>
+          </nav>
+        </div>
 
-        {/* Socials */}
-        <div className="footer-socials-col">
-          <h4 className="socials-title">Follow Us</h4>
+        {/* Column 2: Engage & Play */}
+        <div className="footer-col">
+          <h4 className="footer-col-title">Play & Connect</h4>
+          <nav className="footer-links">
+            <Link to="/community">Community Hub</Link>
+            <Link to="/puzzlechallenge">Daily Puzzles</Link>
+            <Link to="/clubroles">Club Roles & Apply</Link>
+            <Link to="/contact">Contact Us</Link>
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/terms">Terms of Service</Link>
+          </nav>
+        </div>
+
+        {/* Column 3: Socials & External Arenas */}
+        <div className="footer-col footer-socials-col">
+          <h4 className="footer-col-title">Arenas & Socials</h4>
+          <p className="footer-sub-text">Join our digital teams on global chess platforms:</p>
           <div className="footer-socials">
             <a href="https://www.facebook.com/chessclubzc" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 256 256">
@@ -37,18 +57,18 @@ export default function Footer() {
                 <path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160ZM176,24H80A56.06,56.06,0,0,0,24,80v96a56.06,56.06,0,0,0,56,56h96a56.06,56.06,0,0,0,56-56V80A56.06,56.06,0,0,0,176,24Zm40,152a40,40,0,0,1-40,40H80a40,40,0,0,1-40-40V80A40,40,0,0,1,80,40h96a40,40,0,0,1,40,40Z" />
               </svg>
             </a>
-            <a href="https://lichess.org/team/zewail-city-ust" target="_blank" rel="noopener noreferrer" aria-label="Lichess">
+            <a href="https://lichess.org/team/zewail-city-ust" target="_blank" rel="noopener noreferrer" aria-label="Lichess" title="Lichess Team">
               <img src="/Icons/Lichess.png" alt="Lichess" width="18" height="18" />
             </a>
-            <a href="https://www.chess.com/club/zewail-city-ust" target="_blank" rel="noopener noreferrer" aria-label="Chess.com">
-              <img src="/Icons/chess_com.png" alt="Chess.com" width="22" height="22" />
+            <a href="https://www.chess.com/club/zewail-city-ust" target="_blank" rel="noopener noreferrer" aria-label="Chess.com" title="Chess.com Club">
+              <img src="/Icons/chess_com.png" alt="Chess.com" width="20" height="20" />
             </a>
           </div>
         </div>
       </div>
 
       <div className="footer-bottom">
-        <p>© {new Date().getFullYear()} ZC Chess Club. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} ZC Chess Club • Zewail City of Science and Technology. All rights reserved.</p>
       </div>
     </footer>
   );

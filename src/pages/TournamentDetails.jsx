@@ -2,10 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import ChallongeBracket from "../components/ChallongeBracket";
+import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPickerToSchedule } from "../components/ChallongeBracket";
 import Confetti from "react-confetti";
 import { useWindowSize } from "react-use";
-import { getPlayerAvatarUrl } from "../utils/api";
+import { getPlayerAvatarUrl, compressImage } from "../utils/api";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -75,6 +75,10 @@ export default function TournamentDetails() {
   const [matchModalOpen, setMatchModalOpen] = useState(false);
   const [matchForm, setMatchForm] = useState({ round: 1, white: "", black: "", result: "1-0", matchTime: "" });
 
+  // Schedule Match Modal State (effortless visual date & time picker)
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [schedulingMatchData, setSchedulingMatchData] = useState({ matchId: null, date: "", time: "10:00" });
+
   // Edit Tournament Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -86,7 +90,8 @@ export default function TournamentDetails() {
     time: "",
     location: "",
     rounds: 5,
-    description: ""
+    description: "",
+    image: ""
   });
 
   const handleOpenEditModal = () => {
@@ -100,7 +105,8 @@ export default function TournamentDetails() {
       time: tournament.time || "",
       location: tournament.location || "Zewail Chess Club",
       rounds: tournament.rounds || 5,
-      description: tournament.description || ""
+      description: tournament.description || "",
+      image: tournament.image || ""
     });
     setEditModalOpen(true);
   };
@@ -125,11 +131,11 @@ export default function TournamentDetails() {
     }
   };
 
-  const handleSetMatchSchedule = async (matchId, currentTime) => {
-    const newTime = window.prompt("Set scheduled date & time for this match (e.g. Tomorrow 8:00 PM, or Sept 15, 18:30):", currentTime || "");
-    if (newTime !== null) {
-      await handleUpdateMatch(matchId, { matchTime: newTime.trim() });
-    }
+  const handleSetMatchSchedule = (matchId, currentTime) => {
+    const defaultD = extractDateForPicker(currentTime) || tournament?.startDate || new Date().toISOString().split("T")[0];
+    const defaultT = extractTimeForPicker(currentTime) || "10:00";
+    setSchedulingMatchData({ matchId, date: defaultD, time: defaultT });
+    setScheduleModalOpen(true);
   };
 
   const handleAddPlayerSubmit = async (e) => {
@@ -649,8 +655,8 @@ export default function TournamentDetails() {
       <div className="layout-container">
         <div className="main-content">
           {isLoading ? (
-            <div className="details-loading-container">
-              <div className="spinner-ring"></div>
+            <div className="details-loading-container site-loading-state">
+              <div className="spinner-ring site-loading-spinner"></div>
               <span>Loading tournament details...</span>
             </div>
           ) : error || !tournament ? (
@@ -1127,7 +1133,6 @@ export default function TournamentDetails() {
                                 <th>White Player</th>
                                 <th>Result / Toggle (Staff)</th>
                                 <th>Black Player</th>
-                                <th>Schedule</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1188,31 +1193,6 @@ export default function TournamentDetails() {
                                         </div>
                                       )}
                                     </td>
-                                    <td>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                        <span style={{ color: m.matchTime ? "#f3c144" : "#777", fontSize: "0.85rem", fontWeight: m.matchTime ? "600" : "normal" }}>
-                                          {m.matchTime ? `🕒 ${m.matchTime}` : isByeRow ? "—" : "TBD"}
-                                        </span>
-                                        {isStaff && !isByeRow && m._id && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
-                                            title="Schedule date and time for this match"
-                                            style={{
-                                              background: "rgba(243, 193, 68, 0.12)",
-                                              border: "1px solid rgba(243, 193, 68, 0.3)",
-                                              color: "#f3c144",
-                                              borderRadius: "4px",
-                                              padding: "2px 6px",
-                                              fontSize: "0.72rem",
-                                              cursor: "pointer"
-                                            }}
-                                          >
-                                            ✏️ Time
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1229,11 +1209,6 @@ export default function TournamentDetails() {
                                 <div className="mobile-card-header">
                                   <span style={{ fontSize: "0.78rem", color: "#888", fontWeight: "bold" }}>Board {idx + 1}</span>
                                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    {m.matchTime && (
-                                      <span style={{ fontSize: "0.72rem", color: "#f3c144", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                                        🕒 {m.matchTime}
-                                      </span>
-                                    )}
                                     {isByeRow ? (
                                       <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.78rem", background: "rgba(243,193,68,0.12)", padding: "2px 8px", borderRadius: "4px" }}>
                                         BYE (+1 pt)
@@ -1281,38 +1256,16 @@ export default function TournamentDetails() {
                                 </div>
 
                                 {isStaff && !isByeRow && m._id && (
-                                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                                    <div style={{ flex: 1 }}>
-                                      <select
-                                        value={m.result}
-                                        onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
-                                        style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
-                                      >
-                                        <option value="1-0">1 - 0 (White Wins)</option>
-                                        <option value="0-1">0 - 1 (Black Wins)</option>
-                                        <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                        <option value="Pending">Pending</option>
-                                      </select>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
-                                      style={{
-                                        background: "rgba(243, 193, 68, 0.12)",
-                                        border: "1px solid rgba(243, 193, 68, 0.35)",
-                                        color: "#f3c144",
-                                        padding: "8px 12px",
-                                        borderRadius: "8px",
-                                        fontWeight: "bold",
-                                        fontSize: "0.82rem",
-                                        cursor: "pointer",
-                                        whiteSpace: "nowrap"
-                                      }}
-                                      title="Set or update scheduled match time"
-                                    >
-                                      ⏰ {m.matchTime ? "Time" : "Set Time"}
-                                    </button>
-                                  </div>
+                                  <select
+                                    value={m.result}
+                                    onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
+                                    style={{ width: "100%", marginTop: "8px", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                                  >
+                                    <option value="1-0">1 - 0 (White Wins)</option>
+                                    <option value="0-1">0 - 1 (Black Wins)</option>
+                                    <option value="1/2-1/2">½ - ½ (Draw)</option>
+                                    <option value="Pending">Pending</option>
+                                  </select>
                                 )}
                               </div>
                             );
@@ -1811,32 +1764,55 @@ export default function TournamentDetails() {
                 <div>
                   <label>Start Date *</label>
                   <input
-                    type="text"
+                    type="date"
                     value={editForm.startDate}
                     onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
-                    placeholder="e.g. 2026-09-20"
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
                     required
                   />
                 </div>
                 <div>
-                  <label>End Date</label>
+                  <label>End Date (Optional)</label>
                   <input
-                    type="text"
+                    type="date"
                     value={editForm.endDate}
                     onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
-                    placeholder="e.g. 2026-09-25 or Ongoing"
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
                   />
                 </div>
               </div>
 
               <div className="modal-grid-2">
                 <div>
-                  <label>Time &amp; Clock (e.g. 11:00 PM) *</label>
+                  <label>Time &amp; Clock (e.g. 10:00 AM) *</label>
+                  {/* Quick Time Preset Buttons */}
+                  <div style={{ display: "flex", gap: "6px", margin: "5px 0", flexWrap: "wrap" }}>
+                    {["10:00 AM", "12:00 PM", "2:00 PM", "5:00 PM", "7:00 PM"].map((tPreset) => (
+                      <button
+                        key={tPreset}
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, time: tPreset })}
+                        style={{
+                          background: editForm.time === tPreset ? "#f3c144" : "rgba(243, 193, 68, 0.12)",
+                          color: editForm.time === tPreset ? "#15120c" : "#f3c144",
+                          border: "1px solid rgba(243, 193, 68, 0.3)",
+                          borderRadius: "10px",
+                          padding: "2px 7px",
+                          fontSize: "0.72rem",
+                          fontWeight: "700",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {tPreset}
+                      </button>
+                    ))}
+                  </div>
                   <input
                     type="text"
                     value={editForm.time}
                     onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                    placeholder="e.g. 11:00 PM or 5:00 PM - 8:00 PM"
+                    placeholder="e.g. 10:00 AM or 2:00 PM - 5:00 PM"
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%" }}
                     required
                   />
                 </div>
@@ -1847,6 +1823,7 @@ export default function TournamentDetails() {
                     value={editForm.location}
                     onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                     placeholder="e.g. Academic Building Lounge 2"
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%", marginTop: "5px" }}
                     required
                   />
                 </div>
@@ -1877,6 +1854,53 @@ export default function TournamentDetails() {
                 ></textarea>
               </div>
 
+              <div>
+                <label style={{ display: "block", marginBottom: "6px", color: "#f3c144", fontWeight: "700" }}>
+                  📷 Tournament Photo / Podium Celebration (Visible in History)
+                </label>
+                {editForm.image ? (
+                  <div style={{ position: "relative", marginBottom: "10px" }}>
+                    <img 
+                      src={editForm.image} 
+                      alt="Tournament Cover" 
+                      style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", border: "1.5px solid #f3c144" }} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(prev => ({ ...prev, image: "" }))}
+                      style={{ position: "absolute", top: "8px", right: "8px", background: "rgba(0,0,0,0.8)", color: "#f87171", border: "1px solid #f87171", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "800" }}
+                    >
+                      ✕ Remove Photo
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ border: "2px dashed rgba(243, 193, 68, 0.35)", borderRadius: "10px", padding: "16px", textAlign: "center", background: "rgba(243, 193, 68, 0.04)" }}>
+                    <p style={{ margin: "0 0 8px", color: "#bab19c", fontSize: "0.85rem" }}>
+                      Upload event poster, trophy celebration, or podium champions photo.
+                    </p>
+                    <label style={{ display: "inline-block", background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.4)", borderRadius: "8px", padding: "6px 16px", cursor: "pointer", fontSize: "0.85rem", fontWeight: "800" }}>
+                      Choose Photo File
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: "none" }} 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const compressed = await compressImage(file, 900, 600, 0.8);
+                              setEditForm(prev => ({ ...prev, image: compressed }));
+                            } catch (err) {
+                              alert("Failed to process image: " + err.message);
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="modal-btn-row">
                 <button type="button" className="btn-secondary" onClick={() => setEditModalOpen(false)}>
                   Cancel
@@ -1886,6 +1910,147 @@ export default function TournamentDetails() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- VISUAL MATCH SCHEDULE MODAL --- */}
+      {scheduleModalOpen && (
+        <div className="modal-overlay" onClick={() => setScheduleModalOpen(false)}>
+          <div className="modal-card" style={{ maxWidth: "480px", background: "#1b1710", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "14px", padding: "24px" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #36332b", paddingBottom: "10px" }}>
+              <h3 style={{ margin: 0, color: "#f3c144", fontSize: "1.2rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "8px" }}>
+                🕒 Set Match Schedule
+              </h3>
+              <button
+                type="button"
+                onClick={() => setScheduleModalOpen(false)}
+                style={{ background: "transparent", border: "none", color: "#888", fontSize: "1.4rem", cursor: "pointer", lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Quick Date Presets */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.75rem", color: "#bab19c", fontWeight: "700" }}>📅 Quick Date:</span>
+              {[
+                { label: "Today", val: new Date().toISOString().split("T")[0] },
+                { label: "Tomorrow", val: new Date(Date.now() + 86400000).toISOString().split("T")[0] },
+                ...(tournament?.startDate ? [{ label: `Tournament (${tournament.startDate})`, val: tournament.startDate }] : [])
+              ].map((d, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSchedulingMatchData({ ...schedulingMatchData, date: d.val })}
+                  style={{
+                    background: schedulingMatchData.date === d.val ? "#f3c144" : "rgba(255, 255, 255, 0.08)",
+                    color: schedulingMatchData.date === d.val ? "#15120c" : "#ddd",
+                    border: "1px solid rgba(243, 193, 68, 0.25)",
+                    padding: "3px 9px",
+                    borderRadius: "10px",
+                    fontSize: "0.74rem",
+                    fontWeight: "700",
+                    cursor: "pointer"
+                  }}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Time Presets */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "14px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.75rem", color: "#bab19c", fontWeight: "700" }}>🕒 Quick Time:</span>
+              {["10:00", "11:30", "13:00", "14:30", "16:00", "17:00", "19:00"].map((tStr) => {
+                const h = parseInt(tStr.split(":")[0], 10);
+                const m = tStr.split(":")[1];
+                const ampm = h >= 12 ? "PM" : "AM";
+                const dispH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+                const label = `${dispH}:${m} ${ampm}`;
+                return (
+                  <button
+                    key={tStr}
+                    type="button"
+                    onClick={() => setSchedulingMatchData({ ...schedulingMatchData, time: tStr })}
+                    style={{
+                      background: schedulingMatchData.time === tStr ? "#f3c144" : "rgba(243, 193, 68, 0.12)",
+                      color: schedulingMatchData.time === tStr ? "#15120c" : "#f3c144",
+                      border: "1px solid rgba(243, 193, 68, 0.3)",
+                      padding: "3px 8px",
+                      borderRadius: "10px",
+                      fontSize: "0.74rem",
+                      fontWeight: "700",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Native Visual Date & Time Pickers */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+              <div>
+                <label style={{ fontSize: "0.75rem", color: "#8c867a", display: "block", marginBottom: "4px", fontWeight: "600" }}>
+                  Pick Date:
+                </label>
+                <input
+                  type="date"
+                  value={schedulingMatchData.date}
+                  onChange={(e) => setSchedulingMatchData({ ...schedulingMatchData, date: e.target.value })}
+                  style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px 10px", borderRadius: "6px", fontSize: "0.88rem", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.75rem", color: "#8c867a", display: "block", marginBottom: "4px", fontWeight: "600" }}>
+                  Pick Time:
+                </label>
+                <input
+                  type="time"
+                  value={schedulingMatchData.time}
+                  onChange={(e) => setSchedulingMatchData({ ...schedulingMatchData, time: e.target.value })}
+                  style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px 10px", borderRadius: "6px", fontSize: "0.88rem", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+
+            {/* Live Preview Pill */}
+            <div style={{ background: "rgba(0,0,0,0.3)", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+              <span style={{ fontSize: "0.78rem", color: "#8c867a" }}>Selected Schedule:</span>
+              <strong style={{ color: "#f3c144", fontSize: "0.92rem" }}>
+                📅 {formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time) || "Pick date and time"}
+              </strong>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setScheduleModalOpen(false)}
+                style={{ padding: "8px 16px", borderRadius: "6px" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={async () => {
+                  const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
+                  if (!formatted) {
+                    alert("Please select a date first!");
+                    return;
+                  }
+                  await handleUpdateMatch(schedulingMatchData.matchId, { matchTime: formatted });
+                  setScheduleModalOpen(false);
+                }}
+                style={{ padding: "8px 18px", borderRadius: "6px", fontWeight: "800" }}
+              >
+                Save &amp; Sync Calendar
+              </button>
+            </div>
           </div>
         </div>
       )}

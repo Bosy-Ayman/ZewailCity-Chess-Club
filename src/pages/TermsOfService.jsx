@@ -16,7 +16,7 @@ const TermsOfService = () => {
       <main className="terms-container">
         <div className="terms-header">
           <FileText size={48} className="terms-icon" />
-          <h1>Terms of Service</h1>
+          <h1 className="site-page-title">Terms of Service</h1>
           <p className="terms-last-updated">Last Updated: {new Date().toLocaleDateString()}</p>
         </div>
 

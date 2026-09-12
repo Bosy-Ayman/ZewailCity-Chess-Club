@@ -5,7 +5,7 @@ import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import "./Admin.css";
-import { safeFetchJson } from "../utils/api";
+import { safeFetchJson, compressImage } from "../utils/api";
 
 // API Base URL - works for both local and production
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
@@ -46,6 +46,7 @@ export default function AdminDashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [applications, setApplications] = useState([]);
   const [users, setUsers] = useState([]);
+  const [inquiries, setInquiries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -100,8 +101,18 @@ export default function AdminDashboard() {
     time: "",
     location: "Zewail Chess Club",
     description: "",
+    image: "",
     detailsUrl: "",
     rounds: 5  // Swiss only — FIDE: N rounds needs ≥ N+1 players
+  });
+
+  // Tournament Photo Modal state for managing/completed tournaments
+  const [photoModal, setPhotoModal] = useState({
+    isOpen: false,
+    tournamentId: null,
+    tournamentTitle: "",
+    previewUrl: "",
+    isSaving: false
   });
 
   // Fetch tournaments and applications
@@ -139,6 +150,16 @@ export default function AdminDashboard() {
           if (Array.isArray(userData)) setUsers(userData);
         } catch (e) {
           console.warn("Failed to fetch users:", e.message);
+        }
+      }
+
+      // Fetch Inquiries / Contact Dispatches
+      if (userRole === "admin" || userRole === "oc" || userRole === "hr") {
+        try {
+          const inqData = await safeFetchJson(`${API_BASE}/api/contact`);
+          if (Array.isArray(inqData)) setInquiries(inqData);
+        } catch (e) {
+          console.warn("Failed to fetch inquiries:", e.message);
         }
       }
     } catch (err) {
@@ -638,6 +659,30 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleRemovePuzzleParticipant = async (tournament, participant) => {
+    if (!window.confirm(`Remove ${participant.name} from "${tournament.title}"?`)) return;
+    try {
+      const adminEmail = localStorage.getItem("adminEmail") || "";
+      const updated = await safeFetchJson(
+        `${API_BASE}/api/puzzle-tournaments/${tournament._id}/participants/${encodeURIComponent(participant.email)}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Email": adminEmail
+          },
+          body: JSON.stringify({ adminEmail })
+        }
+      );
+      if (updated?.data) {
+        setPuzzleTournaments((prev) => prev.map((item) => item._id === tournament._id ? updated.data : item));
+      }
+      setSuccessMessage(`${participant.name} was removed from the tournament.`);
+    } catch (err) {
+      setErrorMessage(err.message || "Failed to remove participant.");
+    }
+  };
+
   const handleResetPuzzleForm = () => {
     setEditingPuzzleTournamentId(null);
     setPuzzleTitle("");
@@ -691,12 +736,32 @@ export default function AdminDashboard() {
         time: "",
         location: "Zewail Chess Club",
         description: "",
+        image: "",
         detailsUrl: "",
         rounds: 5
       });
       fetchData(); // Refresh list
     } catch (err) {
       setErrorMessage(err.message || "Something went wrong.");
+    }
+  };
+
+  // Save/Update Tournament Photo from Modal
+  const handleSaveTournamentPhoto = async () => {
+    if (!photoModal.tournamentId) return;
+    setPhotoModal((prev) => ({ ...prev, isSaving: true }));
+    try {
+      await safeFetchJson(`${API_BASE}/api/tournaments/${photoModal.tournamentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: photoModal.previewUrl })
+      });
+      setSuccessMessage(`Tournament photo updated for "${photoModal.tournamentTitle}"! It will now appear in History & Archives.`);
+      setPhotoModal({ isOpen: false, tournamentId: null, tournamentTitle: "", previewUrl: "", isSaving: false });
+      fetchData();
+    } catch (err) {
+      setErrorMessage("Failed to update tournament photo: " + err.message);
+      setPhotoModal((prev) => ({ ...prev, isSaving: false }));
     }
   };
 
@@ -786,7 +851,7 @@ export default function AdminDashboard() {
               <span className="admin-role-badge">
                 {userRole === "admin" ? "👑 Executive Admin Portal" : userRole === "oc" ? "⚡ Organizing Committee Portal" : "📋 HR Management Portal"}
               </span>
-              <h1>Zewail City Chess Club Dashboard</h1>
+              <h1 className="site-page-title">Zewail City Chess Club Dashboard</h1>
               <p>Manage club tournaments, schedule rounds, review member applications, and set up daily puzzle challenges.</p>
             </div>
 
@@ -833,6 +898,7 @@ export default function AdminDashboard() {
             {(userRole === "admin" || userRole === "oc") && (
               <option value="manage-puzzles">🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}</option>
             )}
+            <option value="inquiries">📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}</option>
           </select>
         </div>
 
@@ -878,6 +944,12 @@ export default function AdminDashboard() {
               🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}
             </button>
           )}
+          <button
+            className={`tab-btn ${activeTab === "inquiries" ? "active" : ""}`}
+            onClick={() => setActiveTab("inquiries")}
+          >
+            📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}
+          </button>
         </div>
 
         {/* Alert Messages */}
@@ -995,6 +1067,28 @@ export default function AdminDashboard() {
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="time">Time *</label>
+                    {/* Quick Time Preset Buttons */}
+                    <div style={{ display: "flex", gap: "6px", margin: "4px 0 8px", flexWrap: "wrap" }}>
+                      {["10:00 AM", "12:00 PM", "2:00 PM", "5:00 PM", "6:30 PM", "8:00 PM"].map((tPreset) => (
+                        <button
+                          key={tPreset}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, time: tPreset }))}
+                          style={{
+                            background: form.time === tPreset ? "#f3c144" : "rgba(243, 193, 68, 0.12)",
+                            color: form.time === tPreset ? "#15120c" : "#f3c144",
+                            border: "1px solid rgba(243, 193, 68, 0.3)",
+                            borderRadius: "10px",
+                            padding: "2px 8px",
+                            fontSize: "0.72rem",
+                            fontWeight: "700",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {tPreset}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       type="text"
                       id="time"
@@ -1030,6 +1124,54 @@ export default function AdminDashboard() {
                     placeholder="Provide details about the tournament rounds, rules, or prizes."
                     rows="4"
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>Tournament Poster / Cover Photo (Optional)</label>
+                  <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1.5px dashed rgba(243, 193, 68, 0.35)", borderRadius: "10px", padding: "16px", textAlign: "center" }}>
+                    {form.image ? (
+                      <div>
+                        <img 
+                          src={form.image} 
+                          alt="Tournament Preview" 
+                          style={{ maxWidth: "100%", maxHeight: "160px", borderRadius: "8px", objectFit: "cover", marginBottom: "10px", border: "1px solid #f3c144" }} 
+                        />
+                        <br />
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, image: "" }))}
+                          style={{ background: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.35)", borderRadius: "6px", padding: "4px 12px", cursor: "pointer", fontSize: "0.8rem", fontWeight: "700" }}
+                        >
+                          ✕ Remove Image
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <p style={{ margin: "0 0 10px", color: "#bab19c", fontSize: "0.85rem" }}>
+                          Upload event poster, banner, or hall photo (auto-compressed for fast loading)
+                        </p>
+                        <label style={{ display: "inline-block", background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.4)", borderRadius: "8px", padding: "6px 16px", cursor: "pointer", fontSize: "0.85rem", fontWeight: "700" }}>
+                          📷 Select Image File
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: "none" }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  const compressed = await compressImage(file, 900, 600, 0.8);
+                                  setForm(prev => ({ ...prev, image: compressed }));
+                                } catch (err) {
+                                  alert("Failed to process image: " + err.message);
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <button type="submit" className="submit-btn" disabled={isLoading}>
@@ -1074,7 +1216,7 @@ export default function AdminDashboard() {
                             <td>{t.time}</td>
                             <td>{t.location}</td>
                             <td>
-                              <div style={{ display: "flex", gap: "8px" }}>
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                 <a
                                   href={`/tournamentdetails?id=${t._id}`}
                                   className="action-btn"
@@ -1091,6 +1233,28 @@ export default function AdminDashboard() {
                                 >
                                   View & Edit Matches ➔
                                 </a>
+                                <button
+                                  type="button"
+                                  onClick={() => setPhotoModal({
+                                    isOpen: true,
+                                    tournamentId: t._id,
+                                    tournamentTitle: t.title,
+                                    previewUrl: t.image || "",
+                                    isSaving: false
+                                  })}
+                                  style={{
+                                    background: t.image ? "rgba(46, 204, 113, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                                    color: t.image ? "#2ecc71" : "#e5e5e5",
+                                    padding: "4px 10px",
+                                    borderRadius: "6px",
+                                    border: t.image ? "1px solid rgba(46, 204, 113, 0.35)" : "1px solid rgba(255, 255, 255, 0.15)",
+                                    cursor: "pointer",
+                                    fontSize: "0.8rem",
+                                    fontWeight: "700"
+                                  }}
+                                >
+                                  📷 {t.image ? "Photo ✓" : "+ Photo"}
+                                </button>
                                 <button
                                   className="delete-btn"
                                   onClick={() => handleDeleteTournament(t._id)}
@@ -1118,7 +1282,7 @@ export default function AdminDashboard() {
                           <div>Date: {t.startDate} ({t.time})</div>
                           <div>Location: {t.location}</div>
                         </div>
-                        <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                        <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
                           <a
                             href={`/tournamentdetails?id=${t._id}`}
                             className="mobile-full-btn"
@@ -1129,11 +1293,34 @@ export default function AdminDashboard() {
                               textAlign: "center",
                               border: "1px solid rgba(243, 193, 68, 0.3)",
                               fontWeight: "bold",
-                              padding: "8px"
+                              padding: "8px",
+                              flex: 1
                             }}
                           >
                             View Matches ➔
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => setPhotoModal({
+                              isOpen: true,
+                              tournamentId: t._id,
+                              tournamentTitle: t.title,
+                              previewUrl: t.image || "",
+                              isSaving: false
+                            })}
+                            style={{
+                              background: t.image ? "rgba(46, 204, 113, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                              color: t.image ? "#2ecc71" : "#e5e5e5",
+                              border: t.image ? "1px solid rgba(46, 204, 113, 0.35)" : "1px solid rgba(255, 255, 255, 0.15)",
+                              borderRadius: "6px",
+                              padding: "8px 12px",
+                              fontWeight: "700",
+                              fontSize: "0.82rem",
+                              cursor: "pointer"
+                            }}
+                          >
+                            📷 {t.image ? "Photo ✓" : "+ Photo"}
+                          </button>
                           <button
                             className="delete-btn"
                             style={{ flexShrink: 0, padding: "8px 14px" }}
@@ -1145,6 +1332,82 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Tournament Photo Management Modal */}
+                  {photoModal.isOpen && (
+                    <div className="modal-overlay" onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))}>
+                      <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: "460px" }}>
+                        <button className="close-btn" onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))}>✕</button>
+                        <h3 style={{ color: "#fff", margin: "0 0 6px", fontSize: "1.2rem" }}>📷 Tournament Photo</h3>
+                        <p style={{ color: "#bab19c", fontSize: "0.85rem", margin: "0 0 16px" }}>
+                          Upload or update photo for <strong style={{ color: "#f3c144" }}>{photoModal.tournamentTitle}</strong>. This photo will be highlighted in Tournaments and the permanent History & Archives.
+                        </p>
+
+                        {photoModal.previewUrl ? (
+                          <div style={{ textAlign: "center", marginBottom: "16px" }}>
+                            <img
+                              src={photoModal.previewUrl}
+                              alt="Tournament Preview"
+                              style={{ width: "100%", maxHeight: "200px", objectFit: "cover", borderRadius: "10px", border: "1.5px solid #f3c144", marginBottom: "10px" }}
+                            />
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setPhotoModal(prev => ({ ...prev, previewUrl: "" }))}
+                                style={{ background: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.35)", borderRadius: "6px", padding: "4px 12px", cursor: "pointer", fontSize: "0.8rem", fontWeight: "700" }}
+                              >
+                                ✕ Remove Photo
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ border: "2px dashed rgba(243, 193, 68, 0.35)", borderRadius: "10px", padding: "24px", textAlign: "center", background: "rgba(243, 193, 68, 0.04)", marginBottom: "16px" }}>
+                            <p style={{ color: "#bab19c", margin: "0 0 10px", fontSize: "0.88rem" }}>
+                              Select tournament banner, podium celebration, or champion photo
+                            </p>
+                            <label style={{ display: "inline-block", background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", borderRadius: "8px", padding: "8px 18px", cursor: "pointer", fontSize: "0.88rem", fontWeight: "800" }}>
+                              Select Image File
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{ display: "none" }}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    try {
+                                      const compressed = await compressImage(file, 900, 600, 0.8);
+                                      setPhotoModal(prev => ({ ...prev, previewUrl: compressed }));
+                                    } catch (err) {
+                                      alert("Failed to process image: " + err.message);
+                                    }
+                                  }
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "16px" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))}
+                            style={{ padding: "8px 16px", borderRadius: "8px", background: "rgba(255,255,255,0.08)", color: "#ddd", border: "1px solid #444", cursor: "pointer" }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveTournamentPhoto}
+                            disabled={photoModal.isSaving}
+                            style={{ padding: "8px 20px", borderRadius: "8px", background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800", border: "none", cursor: "pointer" }}
+                          >
+                            {photoModal.isSaving ? "Saving..." : "💾 Save Photo"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1366,7 +1629,44 @@ export default function AdminDashboard() {
                             <td>{t.endDate ? `${t.endDate} ${t.endTime ? `at ${t.endTime}` : ""}` : "Ongoing"}</td>
                             <td>{t.timeLimit || 60}s / puzzle</td>
                             <td><span className="player-count-badge">{t.puzzles ? t.puzzles.length : 0} 🧩</span></td>
-                            <td>{t.leaderboard ? t.leaderboard.length : 0}</td>
+                            <td>
+                              <strong>{t.participants ? t.participants.length : 0} registered</strong>
+                              {t.participants && t.participants.length > 0 && (
+                                <div className="admin-puzzle-participants">
+                                  {t.participants.map((participant) => (
+                                    <div className="admin-puzzle-participant" key={participant.email}>
+                                      <span title={participant.email}>{participant.name}</span>
+                                      <button
+                                        type="button"
+                                        className="admin-remove-participant-btn"
+                                        onClick={() => handleRemovePuzzleParticipant(t, participant)}
+                                        title={`Remove ${participant.name}`}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {t.leaderboard && t.leaderboard.length > 0 && (
+                                <div className="admin-puzzle-participants admin-puzzle-results">
+                                  <span className="admin-puzzle-list-label">{t.leaderboard.length} completed</span>
+                                  {t.leaderboard.map((entry) => (
+                                    <div className="admin-puzzle-participant" key={`score-${entry.email}`}>
+                                      <span title={entry.email}>{entry.name} · {entry.score} pts</span>
+                                      <button
+                                        type="button"
+                                        className="admin-remove-participant-btn"
+                                        onClick={() => handleRemovePuzzleParticipant(t, entry)}
+                                        title={`Remove ${entry.name} from this tournament`}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
                             <td>
                               <div style={{ display: "flex", gap: "8px" }}>
                                 <button
@@ -1406,7 +1706,42 @@ export default function AdminDashboard() {
                             <div>📅 <strong>Beginning:</strong> {t.startDate} {t.startTime && `(${t.startTime})`}</div>
                             <div>🏁 <strong>Ending:</strong> {t.endDate ? `${t.endDate} ${t.endTime ? `(${t.endTime})` : ''}` : "Ongoing"}</div>
                             <div>⏱️ <strong>Time Limit:</strong> {t.timeLimit || 60}s per puzzle</div>
-                            <div>👥 <strong>Participants:</strong> {t.leaderboard ? t.leaderboard.length : 0} players</div>
+                            <div>👥 <strong>Participants:</strong> {t.participants ? t.participants.length : 0} registered</div>
+                            {t.participants && t.participants.length > 0 && (
+                              <div className="admin-puzzle-participants mobile-participant-list">
+                                {t.participants.map((participant) => (
+                                  <div className="admin-puzzle-participant" key={participant.email}>
+                                    <span title={participant.email}>{participant.name}</span>
+                                    <button
+                                      type="button"
+                                      className="admin-remove-participant-btn"
+                                      onClick={() => handleRemovePuzzleParticipant(t, participant)}
+                                      title={`Remove ${participant.name}`}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {t.leaderboard && t.leaderboard.length > 0 && (
+                              <div className="admin-puzzle-participants mobile-participant-list admin-puzzle-results">
+                                <span className="admin-puzzle-list-label">{t.leaderboard.length} completed</span>
+                                {t.leaderboard.map((entry) => (
+                                  <div className="admin-puzzle-participant" key={`score-${entry.email}`}>
+                                    <span title={entry.email}>{entry.name} · {entry.score} pts</span>
+                                    <button
+                                      type="button"
+                                      className="admin-remove-participant-btn"
+                                      onClick={() => handleRemovePuzzleParticipant(t, entry)}
+                                      title={`Remove ${entry.name} from this tournament`}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
                             <button
@@ -1821,6 +2156,111 @@ export default function AdminDashboard() {
                   </button>
                 </form>
               </div>
+            </div>
+          )}
+
+          {/* Tab 5: Inquiries & Dispatches */}
+          {activeTab === "inquiries" && (
+            <div className="table-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <h2>📬 Contact Inquiries & Dispatches ({inquiries.length})</h2>
+                  <p style={{ color: "#caba91", margin: "4px 0 0", fontSize: "0.88rem" }}>
+                    Messages submitted by students and visitors via the Contact Us page.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="tab-btn"
+                  onClick={fetchData}
+                  style={{ fontSize: "0.8rem", padding: "6px 14px" }}
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+
+              {inquiries.length === 0 ? (
+                <p className="empty-message">No messages received yet. All inquiries from Contact Us will appear here.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {inquiries.map((inq) => (
+                    <div
+                      key={inq._id}
+                      style={{
+                        background: inq.read ? "rgba(255, 255, 255, 0.02)" : "rgba(243, 193, 68, 0.06)",
+                        border: inq.read ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(243, 193, 68, 0.35)",
+                        borderRadius: "12px",
+                        padding: "16px 20px"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <strong style={{ fontSize: "1rem", color: "#f5edd6" }}>{inq.name}</strong>
+                            <span style={{ fontSize: "0.82rem", color: "#f3c144", background: "rgba(243, 193, 68, 0.15)", padding: "2px 8px", borderRadius: "12px" }}>
+                              {inq.category}
+                            </span>
+                            {!inq.read && (
+                              <span style={{ fontSize: "0.72rem", color: "#111", background: "#f3c144", fontWeight: "bold", padding: "2px 6px", borderRadius: "6px" }}>
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "0.82rem", color: "#aaa", marginTop: "4px" }}>
+                            ✉️ <a href={`mailto:${inq.email}`} style={{ color: "#f3c144", textDecoration: "none" }}>{inq.email}</a>
+                            <span style={{ margin: "0 8px" }}>•</span>
+                            <span>📅 {new Date(inq.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await safeFetchJson(`${API_BASE}/api/contact/${inq._id}/read`, { method: "PUT" });
+                                setInquiries(prev => prev.map(m => m._id === inq._id ? { ...m, read: !m.read } : m));
+                              } catch (e) {
+                                alert("Failed to toggle read status: " + e.message);
+                              }
+                            }}
+                            className="view-btn"
+                            style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                          >
+                            {inq.read ? "Mark Unread" : "Mark Read"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Delete message from ${inq.name}?`)) return;
+                              try {
+                                await safeFetchJson(`${API_BASE}/api/contact/${inq._id}`, { method: "DELETE" });
+                                setInquiries(prev => prev.filter(m => m._id !== inq._id));
+                              } catch (e) {
+                                alert("Failed to delete message: " + e.message);
+                              }
+                            }}
+                            className="delete-btn"
+                            style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {inq.subject && (
+                        <div style={{ marginTop: "10px", fontWeight: "600", fontSize: "0.9rem", color: "#f3c144" }}>
+                          Subject: {inq.subject}
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: "8px", background: "rgba(0, 0, 0, 0.25)", padding: "12px", borderRadius: "8px", fontSize: "0.88rem", color: "#e0d8c3", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {inq.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

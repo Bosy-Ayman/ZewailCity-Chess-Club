@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { findRegisteredUserForHistoricalPlayer } from "../utils/tournamentWinners";
+import { compressImage, safeFetchJson } from "../utils/api";
+import { HISTORICAL_TOURNAMENT_COUNT } from "../utils/historicalTournamentCount";
 import "./History.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
@@ -56,6 +58,58 @@ export default function EventHistory() {
   const [selectedPlayerModal, setSelectedPlayerModal] = useState(null);
   const [highboardYearFilter, setHighboardYearFilter] = useState("all");
   const [registeredUsers, setRegisteredUsers] = useState([]);
+  
+  const userRole = localStorage.getItem("userRole") || "member";
+  const isLoggedIn = !!localStorage.getItem("adminToken");
+  const isStaff = isLoggedIn && (userRole === "admin" || userRole === "oc");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handleUploadEventPhoto = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !selectedEventModal) return;
+
+    setIsUploadingPhoto(true);
+    try {
+      const base64Data = await compressImage(file, 900, 600, 0.8);
+      const token = localStorage.getItem("adminToken");
+
+      const isPuzzleEvent = selectedEventModal.sourceType === "puzzle";
+      const isMongoId = selectedEventModal._id && !selectedEventModal._id.startsWith("hist-") && !isPuzzleEvent;
+
+      if (isMongoId) {
+        await safeFetchJson(`${API_BASE}/api/tournaments/${selectedEventModal._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ image: base64Data })
+        });
+      } else if (isPuzzleEvent && selectedEventModal.puzzleTournamentId) {
+        await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${selectedEventModal.puzzleTournamentId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ image: base64Data })
+        });
+      }
+
+      // Update state locally for instant UI reflection
+      setSelectedEventModal((prev) => (prev ? { ...prev, image: base64Data } : null));
+      setPastEvents((prev) =>
+        prev.map((ev) => (ev._id === selectedEventModal._id ? { ...ev, image: base64Data } : ev))
+      );
+      alert("Tournament photo updated successfully!");
+    } catch (err) {
+      console.error("Failed to upload tournament photo:", err);
+      alert(err.message || "Failed to upload photo. Please try again.");
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = "";
+    }
+  };
 
   // Check URL query params for active tab (e.g. ?tab=halloffame)
   useEffect(() => {
@@ -763,6 +817,7 @@ export default function EventHistory() {
     try {
       const res = await fetch(`${API_BASE}/api/tournaments`);
       let combined = [...defaultHistoricalEvents];
+      let completedPuzzleEvents = [];
       if (res.ok) {
         const data = await res.json();
         const completed = data.filter((t) => t.status === "Completed");
@@ -787,6 +842,44 @@ export default function EventHistory() {
         );
         combined = [...completedFormatted, ...filteredDefault];
       }
+
+      try {
+        const puzzleRes = await fetch(`${API_BASE}/api/puzzle-tournaments`);
+        if (puzzleRes.ok) {
+          const puzzleData = await puzzleRes.json();
+          const now = new Date();
+          completedPuzzleEvents = (Array.isArray(puzzleData) ? puzzleData : [])
+            .filter((puzzle) => {
+              if (!puzzle.endDate) return false;
+              const endDate = new Date(`${puzzle.endDate}T${puzzle.endTime || "23:59"}:59`);
+              return !Number.isNaN(endDate.getTime()) && endDate < now;
+            })
+            .map((puzzle) => {
+              const rankedPlayers = [...(puzzle.leaderboard || [])]
+                .sort((a, b) => (b.score || 0) - (a.score || 0));
+              return {
+                _id: `puzzle-${puzzle._id}`,
+                sourceType: "puzzle",
+                puzzleTournamentId: puzzle._id,
+                title: puzzle.title,
+                type: "Puzzle Tactics Arena",
+                category: "training",
+                startDate: puzzle.startDate,
+                endDate: puzzle.endDate,
+                location: "ZC Chess Club Online Arena",
+                image: puzzle.image || "/Images/Tournaments/2025-2026/PuzzleChallenge.jpg",
+                description: `${puzzle.title} completed with ${rankedPlayers.length} participating tactician${rankedPlayers.length === 1 ? "" : "s"}.`,
+                playersList: rankedPlayers.map((player, index) => ({
+                  name: `${index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`} ${player.name} (${player.score || 0} pts, ${player.solvedCount || 0} solved)`
+                }))
+              };
+            });
+        }
+      } catch (puzzleErr) {
+        console.warn("Could not load completed puzzle arenas for history:", puzzleErr);
+      }
+
+      combined = [...combined, ...completedPuzzleEvents];
 
       combined.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
       setPastEvents(combined);
@@ -838,6 +931,8 @@ export default function EventHistory() {
   });
 
   const years = Object.keys(groupedEvents).sort((a, b) => b - a);
+  const tournamentCount = (pastEvents.length > 0 ? pastEvents : defaultHistoricalEvents)
+    .filter((event) => event.category === "tournament").length || HISTORICAL_TOURNAMENT_COUNT;
 
   let globalItemCounter = 0;
 
@@ -851,7 +946,7 @@ export default function EventHistory() {
           <div className="history-badge">
             <span className="badge-icon">👑</span> ZC Chess Club Archives & Legacy
           </div>
-          <h1 className="history-main-title">
+          <h1 className="history-main-title site-page-title">
             Club History & <span className="gold-gradient-text">Hall of Fame</span>
           </h1>
           <p className="history-subtitle">
@@ -871,7 +966,7 @@ export default function EventHistory() {
             <div className="stat-box">
               <div className="stat-icon-wrap">🏆</div>
               <div className="stat-info">
-                <span className="stat-number">18+</span>
+                <span className="stat-number">{tournamentCount}</span>
                 <span className="stat-label">Campus Tournaments</span>
               </div>
             </div>
@@ -969,8 +1064,8 @@ export default function EventHistory() {
             </div>
 
             {isLoading ? (
-              <div className="history-loading-container">
-                <div className="spinner-ring"></div>
+              <div className="history-loading-container site-loading-state">
+                <div className="spinner-ring site-loading-spinner"></div>
                 <span>Loading Club Archives...</span>
               </div>
             ) : years.length === 0 ? (
@@ -1510,7 +1605,7 @@ export default function EventHistory() {
                 ✕
               </button>
 
-              {getImageUrl(selectedEventModal.image) && (
+              {selectedEventModal.image && (
                 <div className="modal-banner">
                   <img
                     src={getImageUrl(selectedEventModal.image)}
@@ -1655,6 +1750,55 @@ export default function EventHistory() {
                     </>
                   );
                 })()}
+
+                {/* Admin / Staff Photo Management */}
+                {isStaff && (
+                  <div
+                    style={{
+                      background: "rgba(243, 193, 68, 0.08)",
+                      border: "1px dashed rgba(243, 193, 68, 0.4)",
+                      borderRadius: "10px",
+                      padding: "14px 16px",
+                      marginBottom: "16px"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                      <div>
+                        <div style={{ color: "#f3c144", fontWeight: "700", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>🛡️ Staff Controls</span>
+                          <span style={{ fontSize: "0.75rem", color: "#888", fontWeight: "normal" }}>({selectedEventModal.image ? "Photo uploaded" : "No photo attached"})</span>
+                        </div>
+                        <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#aaa" }}>
+                          Upload or change the trophy podium or memory photo for this tournament.
+                        </p>
+                      </div>
+                      <label
+                        style={{
+                          background: "linear-gradient(135deg, #f3c144, #e5a922)",
+                          color: "#111",
+                          fontWeight: "700",
+                          fontSize: "0.82rem",
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          cursor: isUploadingPhoto ? "wait" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          transition: "all 0.2s ease"
+                        }}
+                      >
+                        {isUploadingPhoto ? "⏳ Uploading..." : "📷 Upload Photo"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          disabled={isUploadingPhoto}
+                          onChange={handleUploadEventPhoto}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 <div className="modal-footer-actions">
                   <a

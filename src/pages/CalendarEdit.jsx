@@ -38,8 +38,13 @@ export default function CalendarEdit() {
 
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
+    const role = localStorage.getItem("userRole") || "member";
     if (!token) {
       navigate("/?login=true");
+      return;
+    }
+    if (role !== "admin" && role !== "oc") {
+      navigate("/calendar");
       return;
     }
     fetchTournaments();
@@ -139,7 +144,7 @@ export default function CalendarEdit() {
       <Header sidebarOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
 
       <main className="calendar-edit-container">
-        <h1>Editable Calendar of Events</h1>
+        <h1 className="site-page-title">Editable Calendar of Events</h1>
 
         <div className="calendar-header">
           <button onClick={prevMonth}>◀</button>

@@ -123,6 +123,7 @@ const TournamentSchema = new mongoose.Schema({
   time: { type: String, default: 'TBD' },
   location: { type: String, default: 'Zewail Chess Club' },
   description: { type: String, default: '' },
+  image: { type: String, default: '' },
   players: { type: Number, default: 0 },
   detailsUrl: { type: String, default: '' },
   playersList: [{
@@ -247,7 +248,13 @@ const PuzzleTournamentSchema = new mongoose.Schema({
   endDate: { type: String, default: "" },      // Ending Date: YYYY-MM-DD
   endTime: { type: String, default: "" },      // Ending Time: HH:MM
   timeLimit: { type: Number, required: true, default: 60 }, // seconds per puzzle
+  image: { type: String, default: "" },
   puzzles: [PuzzleSchema],
+  participants: [{
+    email: { type: String, required: true },
+    name: { type: String, required: true },
+    registeredAt: { type: Date, default: Date.now }
+  }],
   leaderboard: [{
     email: { type: String, required: true },
     name: { type: String, required: true },
@@ -258,6 +265,19 @@ const PuzzleTournamentSchema = new mongoose.Schema({
 });
 
 const PuzzleTournament = mongoose.model('PuzzleTournament', PuzzleTournamentSchema, 'puzzle_tournaments');
+
+// --- Contact Message Schema & Model ---
+const ContactMessageSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  category: { type: String, default: "General Inquiry" },
+  subject: { type: String, default: "" },
+  message: { type: String, required: true },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ContactMessage = mongoose.model('ContactMessage', ContactMessageSchema, 'contact_messages');
 
 // --- MongoDB Connection ---
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
@@ -2281,7 +2301,7 @@ app.put('/api/applications/:id/status', async (req, res) => {
 // POST: create a new tournament
 app.post('/api/tournaments', async (req, res) => {
   try {
-    const { title, type, status, startDate, endDate, time, location, description, players, detailsUrl, rounds } = req.body;
+    const { title, type, status, startDate, endDate, time, location, description, image, players, detailsUrl, rounds } = req.body;
     
     const newTournament = new Tournament({
       title: title || 'Untitled Tournament',
@@ -2292,6 +2312,7 @@ app.post('/api/tournaments', async (req, res) => {
       time: time || 'TBD',
       location: location || 'Zewail Chess Club',
       description: description || '',
+      image: image || '',
       players: players || 0,
       detailsUrl: detailsUrl || '',
       rounds: rounds ? Number(rounds) : 0
@@ -2481,6 +2502,85 @@ app.post('/api/notifications/mark-one-read', express.json(), async (req, res) =>
   }
 });
 
+// ============================================================
+// CONTACT MESSAGES / INQUIRIES
+// ============================================================
+
+// POST: submit a message from Contact Us form
+app.post('/api/contact', express.json(), async (req, res) => {
+  try {
+    const { name, email, category, subject, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Name, email, and message are required' });
+    }
+
+    const newMsg = new ContactMessage({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      category: category || 'General Inquiry',
+      subject: (subject || '').trim(),
+      message: message.trim()
+    });
+
+    const savedMsg = await newMsg.save();
+
+    // Notify admins / staff
+    try {
+      const admins = await User.find({ role: { $in: ['admin', 'oc', 'hr'] } });
+      for (const admin of admins) {
+        await createNotification({
+          recipientEmail: admin.email,
+          type: 'system',
+          actorName: name,
+          actorEmail: email,
+          message: `📬 New inquiry from ${name}: "${(subject || message).substring(0, 45)}..."`,
+          link: '/admin?tab=inquiries'
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Could not broadcast contact message notification:', notifErr.message);
+    }
+
+    res.status(201).json({ message: 'Message sent successfully!', data: savedMsg });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send message', details: error.message });
+  }
+});
+
+// GET: fetch all contact messages (staff only)
+app.get('/api/contact', async (req, res) => {
+  try {
+    const messages = await ContactMessage.find().sort({ createdAt: -1 });
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch messages', details: error.message });
+  }
+});
+
+// PUT: toggle or mark contact message read status
+app.put('/api/contact/:id/read', express.json(), async (req, res) => {
+  try {
+    const msg = await ContactMessage.findById(req.params.id);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    msg.read = !msg.read;
+    await msg.save();
+    res.json({ success: true, data: msg });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update message status', details: error.message });
+  }
+});
+
+// DELETE: delete a contact message
+app.delete('/api/contact/:id', async (req, res) => {
+  try {
+    const deleted = await ContactMessage.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Message not found' });
+    res.json({ success: true, message: 'Message deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete message', details: error.message });
+  }
+});
+
 // --- Puzzle Tournament Routes ---
 
 // POST: create a new puzzle tournament
@@ -2530,10 +2630,73 @@ app.get('/api/puzzle-tournaments/:id', async (req, res) => {
   }
 });
 
+// POST: register a tactician before a puzzle tournament starts
+app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    const now = new Date();
+    const startAt = tournament.startDate
+      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00`)
+      : null;
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      : null;
+    if (startAt && now >= startAt) return res.status(403).json({ error: 'Registration is closed because this challenge has started.' });
+    if (endAt && now > endAt) return res.status(403).json({ error: 'This challenge is closed.' });
+
+    const normalizedEmail = email.trim().toLowerCase();
+    tournament.participants = tournament.participants || [];
+    if (!tournament.participants.some((participant) => participant.email.toLowerCase() === normalizedEmail)) {
+      tournament.participants.push({ name: name.trim(), email: normalizedEmail });
+      await tournament.save();
+    }
+
+    res.json({ message: 'Registered successfully!', data: tournament });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to register for tournament', details: error.message });
+  }
+});
+
+// DELETE: admin removes a registered tactician from a puzzle tournament
+app.delete('/api/puzzle-tournaments/:id/participants/:email', async (req, res) => {
+  try {
+    const adminEmail = req.body?.adminEmail || req.headers['x-admin-email'];
+    const admin = adminEmail && await User.findOne({ email: new RegExp(`^${adminEmail.trim()}$`, 'i') });
+    const isAuthorized = (admin && admin.role === 'admin') || (adminEmail && isAdminEmail(adminEmail));
+    if (!isAuthorized) return res.status(403).json({ error: 'Unauthorized. Administrator access required.' });
+
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    const participantEmail = decodeURIComponent(req.params.email).trim().toLowerCase();
+    const originalParticipantCount = (tournament.participants || []).length;
+    const originalLeaderboardCount = (tournament.leaderboard || []).length;
+    tournament.participants = (tournament.participants || []).filter(
+      (participant) => participant.email.trim().toLowerCase() !== participantEmail
+    );
+    tournament.leaderboard = (tournament.leaderboard || []).filter(
+      (entry) => entry.email.trim().toLowerCase() !== participantEmail
+    );
+    if (tournament.participants.length === originalParticipantCount && tournament.leaderboard.length === originalLeaderboardCount) {
+      return res.status(404).json({ error: 'Player is not registered or scored in this tournament' });
+    }
+
+    const saved = await tournament.save();
+    res.json({ message: 'Player removed successfully!', data: saved });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove participant', details: error.message });
+  }
+});
+
 // PUT: update an entire puzzle tournament (dates, times, puzzles, etc.)
 app.put('/api/puzzle-tournaments/:id', async (req, res) => {
   try {
-    const { title, startDate, startTime, endDate, endTime, timeLimit, puzzles } = req.body;
+    const { title, startDate, startTime, endDate, endTime, timeLimit, image, puzzles } = req.body;
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
@@ -2543,6 +2706,7 @@ app.put('/api/puzzle-tournaments/:id', async (req, res) => {
     if (endDate !== undefined) tournament.endDate = endDate;
     if (endTime !== undefined) tournament.endTime = endTime;
     if (timeLimit !== undefined) tournament.timeLimit = timeLimit;
+    if (image !== undefined) tournament.image = image;
     if (puzzles !== undefined) tournament.puzzles = puzzles;
 
     const saved = await tournament.save();
@@ -2624,17 +2788,28 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
-    // Check if user already submitted a score
-    const existingIndex = tournament.leaderboard.findIndex(entry => entry.email === email);
-    if (existingIndex !== -1) {
-      if (score > tournament.leaderboard[existingIndex].score) {
-        tournament.leaderboard[existingIndex].score = score;
-        tournament.leaderboard[existingIndex].solvedCount = solvedCount;
-        tournament.leaderboard[existingIndex].name = name;
-      }
-    } else {
-      tournament.leaderboard.push({ name, email, score, solvedCount });
+    const now = new Date();
+    const startAt = tournament.startDate
+      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00`)
+      : null;
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      : null;
+    if (startAt && now < startAt) {
+      return res.status(403).json({ error: 'This challenge has not started yet.' });
     }
+    if (endAt && now > endAt) {
+      return res.status(403).json({ error: 'This challenge is closed.' });
+    }
+
+    // Check if user already submitted a score
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingIndex = tournament.leaderboard.findIndex(entry => entry.email.trim().toLowerCase() === normalizedEmail);
+    if (existingIndex !== -1) {
+      return res.status(409).json({ error: 'You have already completed this challenge.' });
+    }
+
+    tournament.leaderboard.push({ name, email: normalizedEmail, score, solvedCount });
 
     // Sort leaderboard desc
     tournament.leaderboard.sort((a, b) => b.score - a.score);

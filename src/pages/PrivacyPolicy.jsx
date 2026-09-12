@@ -16,7 +16,7 @@ const PrivacyPolicy = () => {
       <main className="privacy-container">
         <div className="privacy-header">
           <Shield size={48} className="privacy-icon" />
-          <h1>Privacy Policy</h1>
+          <h1 className="site-page-title">Privacy Policy</h1>
           <p className="privacy-last-updated">Last Updated: {new Date().toLocaleDateString()}</p>
         </div>
 

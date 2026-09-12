@@ -19,11 +19,12 @@ export default function PuzzleChallenge() {
   const [isLoading, setIsLoading] = useState(true);
   const [customAvatars, setCustomAvatars] = useState({});
   const [expandedTournaments, setExpandedTournaments] = useState({});
+  const [selectedRosterTournament, setSelectedRosterTournament] = useState(null);
 
   const toggleTournamentExpanded = (id) => {
     setExpandedTournaments((prev) => ({
       ...prev,
-      [id]: !prev[id]
+      [id]: prev[id] === false
     }));
   };
 
@@ -108,6 +109,8 @@ export default function PuzzleChallenge() {
   useEffect(() => {
     fetchTournaments();
     fetchAvatars();
+    const refreshTimer = setInterval(fetchTournaments, 15000);
+    return () => clearInterval(refreshTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -161,7 +164,8 @@ export default function PuzzleChallenge() {
     setIsLoading(true);
     try {
       const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments`);
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
+        // An empty response is authoritative: admins may have deleted every challenge.
         setTournaments(data);
         return;
       }
@@ -212,6 +216,26 @@ export default function PuzzleChallenge() {
       alert("This tournament has no puzzles added yet!");
       return;
     }
+
+    const now = new Date();
+    const startAt = tournament.startDate
+      ? new Date(`${tournament.startDate}T${tournament.startTime || "00:00"}:00`)
+      : null;
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || "23:59"}:59`)
+      : null;
+    if (startAt && now < startAt) {
+      alert(`This challenge starts on ${tournament.startDate}${tournament.startTime ? ` at ${tournament.startTime}` : ""}.`);
+      return;
+    }
+    if (endAt && now > endAt) {
+      alert("This challenge is closed.");
+      return;
+    }
+    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) {
+      alert("You have already completed this challenge.");
+      return;
+    }
     
     scoreRef.current = 0;
     solvedCountRef.current = 0;
@@ -223,6 +247,38 @@ export default function PuzzleChallenge() {
     setIsFinished(false);
     loadPuzzle(tournament.puzzles[0], tournament.timeLimit);
   };
+
+  const registerForTournament = async (tournament) => {
+    if (!isLoggedIn) {
+      alert("Please log in first to register for a challenge.");
+      return;
+    }
+    try {
+      const response = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${tournament._id}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: localStorage.getItem("userName") || userName, email: userEmail })
+      });
+      if (response?.data) {
+        setTournaments((prev) => prev.map((item) => item._id === tournament._id ? response.data : item));
+        setSelectedRosterTournament(response.data);
+      }
+    } catch (error) {
+      alert(error.message || "Could not register for this challenge.");
+    }
+  };
+
+  const getTournamentPhase = (tournament) => {
+    const state = getTournamentState(tournament);
+    return state === "upcoming" ? "registration" : state === "closed" || state === "completed" ? "results" : "live";
+  };
+
+  const getRosterAvatar = (player) => (
+    player.profileImage ||
+    customAvatars[player.name] ||
+    customAvatars[player.email] ||
+    getPlayerAvatarUrl(player.name, customAvatars)
+  );
 
   // Load a single puzzle
   const loadPuzzle = (puzzle, timeLimit) => {
@@ -539,13 +595,27 @@ export default function PuzzleChallenge() {
 
   const activePlayState = isPlaying && !isFinished;
 
+  const getTournamentState = (tournament) => {
+    const now = new Date();
+    const startAt = tournament.startDate
+      ? new Date(`${tournament.startDate}T${tournament.startTime || "00:00"}:00`)
+      : null;
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || "23:59"}:59`)
+      : null;
+    if (startAt && now < startAt) return "upcoming";
+    if (endAt && now > endAt) return "closed";
+    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) return "completed";
+    return "open";
+  };
+
   if (isLoading) {
     return (
       <div className="puzzle-challenge-root">
         <Header sidebarOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
         <main className="puzzle-layout-container loading-centered">
-          <div className="puzzle-loading-card">
-            <div className="spinner-ring"></div>
+          <div className="puzzle-loading-card site-loading-state">
+            <div className="spinner-ring site-loading-spinner"></div>
             <span>Loading Arenas...</span>
           </div>
         </main>
@@ -564,7 +634,7 @@ export default function PuzzleChallenge() {
           <div className="puzzle-selection-view">
             <div className="puzzle-hero-section">
               <div className="puzzle-hero-badge">♟ Tactics Arena</div>
-              <h1 className="puzzle-header-title">Chess Tactics Arena</h1>
+              <h1 className="puzzle-header-title site-page-title">Chess Tactics Arena</h1>
               <p className="puzzle-description">
                 Participate in active club puzzle challenges. Solve custom mate-in-1, mate-in-2, or mate-in-3 puzzles. You get 3 trials per puzzle. Earn speed bonus points!
               </p>
@@ -639,9 +709,9 @@ export default function PuzzleChallenge() {
                 ) : (
                   <div className="tournaments-grid">
                     {tournaments.map((t) => (
-                      <div key={t._id} className="tournament-card">
+                      <div key={t._id} className={`tournament-card tournament-${getTournamentState(t)}`}>
                         <div className="card-top">
-                          <span className="card-badge"><span className="card-badge-dot"></span>LIVE ARENA</span>
+                          <span className="card-badge"><span className="card-badge-dot"></span>{getTournamentState(t) === "upcoming" ? "UPCOMING" : getTournamentState(t) === "closed" ? "CLOSED" : getTournamentState(t) === "completed" ? "COMPLETED" : "LIVE ARENA"}</span>
                           <h3>{t.title}</h3>
                         </div>
                         <div className="card-info">
@@ -678,7 +748,10 @@ export default function PuzzleChallenge() {
                           {t.leaderboard && t.leaderboard.length > 0 ? (
                             <>
                               <div className="preview-list">
-                                {(expandedTournaments[t._id] ? t.leaderboard : t.leaderboard.slice(0, 3)).map((entry, idx) => {
+                                {[...t.leaderboard]
+                                  .sort((a, b) => (b.score || 0) - (a.score || 0))
+                                  .slice(expandedTournaments[t._id] === false ? 0 : undefined, expandedTournaments[t._id] === false ? 3 : undefined)
+                                  .map((entry, idx) => {
                                   const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
                                   return (
                                     <div key={idx} className={`leaderboard-preview-row ${entry.email === userEmail ? "highlight-user-row-preview" : ""}`}>
@@ -710,9 +783,9 @@ export default function PuzzleChallenge() {
                                     toggleTournamentExpanded(t._id);
                                   }}
                                 >
-                                  {expandedTournaments[t._id] 
-                                    ? "Show Top 3 ▲" 
-                                    : `View all ${t.leaderboard.length} players ▼`}
+                                  {expandedTournaments[t._id] === false
+                                    ? `View all ${t.leaderboard.length} players ▼`
+                                    : "Show Top 3 ▲"}
                                 </button>
                               )}
                             </>
@@ -721,11 +794,21 @@ export default function PuzzleChallenge() {
                           )}
                         </div>
 
+                        <button
+                          type="button"
+                          className="roster-btn"
+                          onClick={() => setSelectedRosterTournament(t)}
+                        >
+                          {getTournamentPhase(t) === "registration" ? "View participants" : "View full standings"}
+                          <span>{getTournamentPhase(t) === "registration" ? (t.participants?.length || 0) : (t.leaderboard?.length || 0)} people</span>
+                        </button>
+
                         <button 
                           className="enter-btn" 
-                          onClick={() => startTournamentChallenge(t)}
+                          onClick={() => getTournamentPhase(t) === "registration" ? registerForTournament(t) : startTournamentChallenge(t)}
+                          disabled={getTournamentState(t) === "closed" || getTournamentState(t) === "completed"}
                         >
-                          Join Challenge
+                          {getTournamentState(t) === "upcoming" ? "Register" : getTournamentState(t) === "closed" ? "Challenge Closed" : getTournamentState(t) === "completed" ? "Completed" : "Join Challenge"}
                         </button>
                       </div>
                     ))}
@@ -935,6 +1018,38 @@ export default function PuzzleChallenge() {
           </div>
         )}
       </main>
+      {selectedRosterTournament && (
+        <div className="roster-modal-backdrop" onClick={() => setSelectedRosterTournament(null)}>
+          <section className="roster-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="roster-modal-close" onClick={() => setSelectedRosterTournament(null)} aria-label="Close roster">×</button>
+            <span className="card-badge"><span className="card-badge-dot"></span>{getTournamentPhase(selectedRosterTournament) === "registration" ? "REGISTRATION ROSTER" : "FINAL RESULTS"}</span>
+            <h2>{selectedRosterTournament.title}</h2>
+            <p className="roster-modal-subtitle">
+              {getTournamentPhase(selectedRosterTournament) === "registration" ? "Tacticians registered to play this challenge." : "Final scores from every submitted attempt."}
+            </p>
+            <div className="roster-list">
+              {getTournamentPhase(selectedRosterTournament) === "registration" ? (
+                (selectedRosterTournament.participants || []).length > 0 ? selectedRosterTournament.participants.map((participant) => (
+                  <div className="roster-row" key={participant.email}>
+                    <img src={getRosterAvatar(participant)} alt={participant.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
+                    <strong>{participant.name}</strong>
+                    <span>Registered</span>
+                  </div>
+                )) : <p className="no-scores-text">No tacticians registered yet.</p>
+              ) : (
+                (selectedRosterTournament.leaderboard || []).length > 0 ? [...selectedRosterTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0)).map((entry, index) => (
+                  <div className="roster-row" key={entry.email}>
+                    <span className="roster-rank">#{index + 1}</span>
+                    <img src={getRosterAvatar(entry)} alt={entry.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
+                    <strong>{entry.name}</strong>
+                    <span>{entry.solvedCount || 0} solved · {entry.score || 0} pts</span>
+                  </div>
+                )) : <p className="no-scores-text">No scores submitted yet.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       {!activePlayState && <Footer />}
     </div>
   );

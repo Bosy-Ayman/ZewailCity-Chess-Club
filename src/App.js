@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import Signup from "./pages/SignUp";
 import ContactUs from "./pages/ContactUs";
@@ -12,13 +12,12 @@ import TournamentDetails from "./pages/TournamentDetails";
 import TournamentDetailsKnockout from "./pages/TournamentDetailsKnockout";
 import Calendar from './pages/Calendar.jsx'
 import CalendarEdit from './pages/CalendarEdit.jsx'
-import Archive from "./pages/Archive.jsx";
+import NotFound from "./pages/NotFound.jsx";
 import MultimediaForm from './pages/MultimediaForm'; 
 import HRForm from './pages/HRForm';
 import OCMemberForm from './pages/OCMemberForm';
 import TrainerForm from './pages/TrainerForm';
 import TraineeForm from './pages/TraineeForm';
-import ApplicationTable from './pages/ApplicationsTable';
 import Admin from './pages/Admin';
 import History from './pages/History';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -45,7 +44,7 @@ function App() {
         <Route path="/tournamentdetailsKnockout" element={<TournamentDetailsKnockout />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/calendaredit" element={<CalendarEdit />} />
-        <Route path="/archive" element={<Archive />} />
+        <Route path="/archive" element={<Navigate to="/history?tab=events" replace />} />
         <Route path="/history" element={<History />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
@@ -56,8 +55,11 @@ function App() {
         <Route path="/apply/oc-member" element={<OCMemberForm />} />
         <Route path="/apply/trainer" element={<TrainerForm />} />
         <Route path="/apply/trainee" element={<TraineeForm />} />
-        <Route path="/applicationtable" element={<ApplicationTable />} />
+        <Route path="/applicationtable" element={<Navigate to="/admin?tab=applications" replace />} />
         <Route path="/admin" element={<Admin />} />
+
+        {/* 404 Catch-all */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );

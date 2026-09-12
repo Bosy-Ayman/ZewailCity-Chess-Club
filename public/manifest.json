@@ -3,9 +3,9 @@
   "name": "Zewail City Chess Club App",
   "icons": [
     {
-      "src": "C:/Users/pouss/Desktop/ZC Chess Club/my-app/public/logo192.png",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "Icons/zcchessclub_logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
     }
   ],
   "start_url": ".",

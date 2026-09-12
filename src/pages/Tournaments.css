@@ -562,3 +562,371 @@ tbody tr:hover {
   width: 28px;
   height: 28px;
 }
+
+/* ========================
+   Page Header Stats Badges
+======================== */
+.page-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.header-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #d8d2c8;
+}
+
+.header-stat-pill.pill-live {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+}
+
+.header-stat-pill.pill-upcoming {
+  background: rgba(52, 152, 219, 0.12);
+  border-color: rgba(52, 152, 219, 0.3);
+  color: #5dade2;
+}
+
+.header-stat-pill.pill-completed {
+  background: rgba(243, 193, 68, 0.10);
+  border-color: rgba(243, 193, 68, 0.25);
+  color: #f3c144;
+}
+
+.header-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: livePulse 1.4s infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ========================
+   Tournament Card Grid
+======================== */
+.tournaments-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+/* Individual Tournament Card */
+.t-card {
+  --accent: #f3c144;
+  display: flex;
+  flex-direction: column;
+  background: #1b1810;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.t-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.t-card--proceeding {
+  border-color: rgba(46, 204, 113, 0.3);
+  box-shadow: 0 4px 20px rgba(46, 204, 113, 0.08);
+}
+
+/* Card Top Banner */
+.t-card-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  min-height: 44px;
+}
+
+.t-card-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Status pill */
+.t-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.t-status-pill--proceeding {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.35);
+}
+
+.t-status-pill--upcoming {
+  background: rgba(52, 152, 219, 0.15);
+  color: #5dade2;
+  border: 1px solid rgba(52, 152, 219, 0.35);
+}
+
+.t-status-pill--completed {
+  background: rgba(243, 193, 68, 0.12);
+  color: #f3c144;
+  border: 1px solid rgba(243, 193, 68, 0.3);
+}
+
+/* Format badge */
+.t-format-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #8c8578;
+  background: rgba(255,255,255,0.05);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Live pulse indicator */
+.t-live-pulse {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #2ecc71;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.t-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 6px #2ecc71;
+  animation: livePulse 1s infinite;
+}
+
+/* Card Body */
+.t-card-body {
+  flex: 1;
+  padding: 18px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.t-card-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+}
+
+.t-card-desc {
+  font-size: 0.82rem;
+  color: #8c8578;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Meta row */
+.t-card-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.t-meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.t-meta-icon {
+  font-size: 1rem;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.t-meta-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.t-meta-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #5c5750;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.t-meta-val {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #d8d2c8;
+}
+
+/* Registrant avatar stack toggle */
+.t-registrants-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.18s;
+  width: 100%;
+}
+
+.t-registrants-toggle:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.t-avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.t-avatar-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #36322b;
+  border: 2px solid #1b1810;
+  overflow: hidden;
+  margin-right: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #f3c144;
+}
+
+.t-avatar-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.t-avatar-more {
+  background: rgba(243, 193, 68, 0.15);
+  color: #f3c144;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.t-reg-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #a09890;
+  margin-left: 14px;
+  white-space: nowrap;
+}
+
+/* Expanded registrants panel */
+.t-registrants-expanded {
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  animation: slideDown 0.2s ease;
+}
+
+/* Card Footer */
+.t-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: rgba(0,0,0,0.15);
+}
+
+.t-btn-details {
+  flex: 1;
+  text-align: center;
+  padding: 9px 14px;
+  background: rgba(255,255,255,0.06);
+  color: #d8d2c8;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 700;
+  transition: all 0.18s ease;
+}
+
+.t-btn-details:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+.t-btn-join {
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #f3c144, #d4a32a);
+  color: #15120c;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.t-btn-join:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 16px rgba(243, 193, 68, 0.4);
+}
+
+.t-btn-joined {
+  padding: 9px 14px;
+  background: rgba(46, 204, 113, 0.12);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .tournaments-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .t-card-meta-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
