@@ -13,7 +13,7 @@ export default function Footer() {
             Fostering strategic mastery, competitive excellence, and a vibrant community of campus tacticians at Zewail City.
           </p>
           <div className="footer-meeting-pill">
-            <span>📍 Academic Building, Gaming Room Zone E • Fridays at 9:00 PM</span>
+            <span>📍 Academic Building, Gaming Room Zone E </span>
           </div>
         </div>
 
