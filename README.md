@@ -4,6 +4,12 @@ The official web platform for the **Zewail City Chess Club** — a full member h
 
 🔗 **Live site:** [zc-chess-club.vercel.app](https://zc-chess-club.vercel.app)
 
+<div align="center">
+  <video src="https://github.com/Bosy-Ayman/ZewailCity-Chess-Club/issues/1#issue-5435591686" controls width="720">
+    Your browser does not support the video tag.
+  </video>
+</div>
+
 ---
 
 ## 📖 About
