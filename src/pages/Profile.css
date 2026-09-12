@@ -1163,30 +1163,57 @@
 /* ==========================================================================
    6. ACCOUNT SETTINGS FORM
    ========================================================================= */
-.settings-container {
-  max-width: 960px;
-  margin: 0 auto;
+/* ==========================================================================
+   6. ACCOUNT SETTINGS FORM & THE GRAND RECTANGLE CONTAINER
+   ========================================================================== */
+
+/* The Grand Outer Rectangle (Matches Full 1180px Layout) */
+.settings-container,
+.settings-container.glass-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 40px 0 !important;
+  box-sizing: border-box !important;
+  background: linear-gradient(145deg, rgba(28, 25, 20, 0.92) 0%, rgba(16, 14, 11, 0.96) 100%);
+  border: 1px solid var(--profile-card-border);
+  border-radius: 24px;
+  padding: 34px 36px;
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.6), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.08),
+    0 0 40px rgba(243, 193, 68, 0.05);
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
 }
 
 .settings-header-strip {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 18px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-subtitle {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: var(--profile-text-muted);
-  margin: 4px 0 0 0;
+  margin: 6px 0 0 0;
+  line-height: 1.5;
 }
 
+/* Alert Notification Toasts */
 .alert-toast {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 20px;
   border-radius: 12px;
   font-size: 0.92rem;
   font-weight: 700;
   margin-bottom: 24px;
+  width: 100%;
+  box-sizing: border-box;
   animation: profileTabFadeIn 0.3s ease;
 }
 
@@ -1202,26 +1229,39 @@
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
+/* Form Structure */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Inner Section Cards */
 .form-section-card {
-  background: rgba(18, 16, 12, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(12, 11, 8, 0.65);
+  border: 1px solid rgba(243, 193, 68, 0.14);
   border-radius: 18px;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 26px 28px;
   transition: border-color 0.25s ease;
 }
 
 .form-section-card:hover {
-  border-color: rgba(243, 193, 68, 0.25);
+  border-color: rgba(243, 193, 68, 0.32);
 }
 
 .form-section-head {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   padding-bottom: 14px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .head-icon {
@@ -1232,56 +1272,98 @@
 .head-icon.blue { color: #38bdf8; }
 
 .form-section-heading {
-  font-size: 1.08rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: #ffffff;
-  margin: 0 0 2px 0;
+  margin: 0 0 3px 0;
 }
 
 .form-section-desc {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: var(--profile-text-muted);
   margin: 0;
 }
 
+/* Strict 50% / 50% Two-Column Balanced Grid */
 .form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 24px !important;
+  row-gap: 20px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
+/* Grid Cells */
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important; /* Prevents overflow blowouts */
+  box-sizing: border-box !important;
 }
 
-.form-group.full {
-  grid-column: 1 / -1;
+/* Spans full row across both columns */
+.form-group.full,
+.form-group.full-width {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
 }
 
 .form-group label {
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--profile-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
+/* Universal Inputs, Dropdowns, and Textareas */
 .form-group input,
 .form-group select,
 .form-group textarea {
-  background: rgba(10, 9, 7, 0.85);
-  border: 1px solid rgba(243, 193, 68, 0.18);
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  background: rgba(15, 14, 11, 0.95);
+  border: 1px solid rgba(243, 193, 68, 0.2);
   border-radius: 12px;
-  padding: 13px 16px;
   color: #ffffff;
   font-family: inherit;
   font-size: 0.94rem;
   transition: all 0.25s ease;
+  margin: 0 !important;
+}
+
+/* Standardized 48px Height */
+.form-group input,
+.form-group select {
+  height: 48px !important;
+  padding: 0 16px !important;
+  line-height: 48px;
+}
+
+/* Custom Dropdown Arrow */
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 42px !important;
+  cursor: pointer;
+}
+
+.form-group select option {
+  background: #14120e;
+  color: #ffffff;
 }
 
 .form-group input:focus,
@@ -1289,19 +1371,23 @@
 .form-group textarea:focus {
   outline: none;
   border-color: var(--profile-gold);
-  box-shadow: 0 0 0 4px rgba(243, 193, 68, 0.18);
-  background: rgba(14, 13, 10, 0.95);
+  box-shadow: 0 0 0 4px rgba(243, 193, 68, 0.2);
+  background: rgba(20, 18, 14, 0.98);
 }
 
 .form-group textarea {
   resize: vertical;
   line-height: 1.55;
+  min-height: 110px;
+  padding: 14px 16px !important;
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 28px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
 }
 
 .btn-save-settings-primary {
@@ -1330,6 +1416,183 @@
 .btn-save-settings-primary:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+
+/* ==========================================================================
+   9. ADMINISTRATOR COMMAND & DOSSIER CONTROLS
+   ========================================================================== */
+
+.admin-panel-card,
+.admin-panel-card.glass-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 40px 0 !important;
+  box-sizing: border-box !important;
+  background: linear-gradient(145deg, rgba(28, 25, 20, 0.92) 0%, rgba(16, 14, 11, 0.96) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 24px;
+  padding: 34px 36px;
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.6), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.admin-header-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--profile-gold);
+  flex-shrink: 0;
+}
+
+.admin-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.admin-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.88rem;
+  color: var(--profile-text-muted);
+}
+
+.admin-control-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-form-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 24px !important;
+  row-gap: 20px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.admin-control-form .form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.admin-control-form .form-group.full-width {
+  grid-column: 1 / -1 !important;
+}
+
+.admin-input,
+.admin-select,
+.admin-textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  background: rgba(15, 14, 11, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 0.92rem;
+  font-family: inherit;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease;
+  margin: 0 !important;
+}
+
+.admin-input,
+.admin-select {
+  height: 48px !important;
+  padding: 0 16px !important;
+  line-height: 48px;
+}
+
+.admin-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 42px !important;
+  cursor: pointer;
+}
+
+.admin-textarea {
+  resize: vertical;
+  line-height: 1.55;
+  min-height: 110px;
+  padding: 14px 16px !important;
+}
+
+.admin-input:focus,
+.admin-select:focus,
+.admin-textarea:focus {
+  outline: none;
+  border-color: var(--profile-gold);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+  background: rgba(20, 18, 14, 0.98);
+}
+
+/* ==========================================================================
+   RESPONSIVE ADJUSTMENTS FOR SETTINGS & ADMIN
+   ========================================================================== */
+@media (max-width: 768px) {
+  .settings-container,
+  .settings-container.glass-panel,
+  .admin-panel-card,
+  .admin-panel-card.glass-panel {
+    padding: 22px 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .form-section-card {
+    padding: 18px 16px !important;
+  }
+
+  .form-grid,
+  .admin-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .form-group input,
+  .form-group select,
+  .admin-input,
+  .admin-select {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS */
+    height: 46px !important;
+  }
+
+  .form-group textarea,
+  .admin-textarea {
+    font-size: 16px !important;
+  }
+
+  .btn-save-settings-primary,
+  .btn-admin-save {
+    width: 100% !important;
+    justify-content: center !important;
+  }
 }
 
 /* ==========================================================================
@@ -2198,6 +2461,10 @@
   color: #c084fc;
 }
 
+/* ==========================================================================
+   FIXED SIZING FOR ADMIN CONTROL FORM INPUTS
+   ========================================================================== */
+
 .admin-control-form {
   display: flex;
   flex-direction: column;
@@ -2221,6 +2488,28 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+.admin-control-form .form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.admin-input,
+.admin-select,
+.admin-textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  background: rgba(15, 14, 11, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease;
+}
+
 .admin-select {
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
@@ -2244,6 +2533,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 .admin-select:focus,
 .admin-input:focus,
 .admin-textarea:focus {
