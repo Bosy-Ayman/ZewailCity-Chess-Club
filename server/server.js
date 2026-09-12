@@ -2650,9 +2650,11 @@ app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
     if (endAt && now > endAt) return res.status(403).json({ error: 'This challenge is closed.' });
 
     const normalizedEmail = email.trim().toLowerCase();
+    const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
+    const displayName = registeredUser?.name?.trim() || name.trim();
     tournament.participants = tournament.participants || [];
     if (!tournament.participants.some((participant) => participant.email.toLowerCase() === normalizedEmail)) {
-      tournament.participants.push({ name: name.trim(), email: normalizedEmail });
+      tournament.participants.push({ name: displayName, email: normalizedEmail });
       await tournament.save();
     }
 
@@ -2804,12 +2806,14 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
 
     // Check if user already submitted a score
     const normalizedEmail = email.trim().toLowerCase();
+    const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
+    const displayName = registeredUser?.name?.trim() || name.trim();
     const existingIndex = tournament.leaderboard.findIndex(entry => entry.email.trim().toLowerCase() === normalizedEmail);
     if (existingIndex !== -1) {
       return res.status(409).json({ error: 'You have already completed this challenge.' });
     }
 
-    tournament.leaderboard.push({ name, email: normalizedEmail, score, solvedCount });
+    tournament.leaderboard.push({ name: displayName, email: normalizedEmail, score, solvedCount });
 
     // Sort leaderboard desc
     tournament.leaderboard.sort((a, b) => b.score - a.score);

@@ -53,6 +53,7 @@ export default function AdminDashboard() {
 
   // Dynamic container board width calculation for optimal ratio
   const boardWrapperRef = useRef(null);
+  const boardDragRef = useRef(0);
   const [boardWidth, setBoardWidth] = useState(() => Math.min(window.innerWidth - 32, 480));
 
   useEffect(() => {
@@ -326,6 +327,8 @@ export default function AdminDashboard() {
   };
 
   const handleSquareClick = (square) => {
+    if (Date.now() - boardDragRef.current < 150) return;
+
     if (setupMode) {
       try {
         const boardMap = extractBoardMapFromFen(activePuzzleFen);
@@ -392,6 +395,7 @@ export default function AdminDashboard() {
   };
 
   const handlePieceDrop = (sourceSquare, targetSquare) => {
+    boardDragRef.current = Date.now();
     setSelectedSquare(null);
     setOptionSquares({});
     if (setupMode) {
@@ -432,6 +436,7 @@ export default function AdminDashboard() {
   };
 
   const onPieceDragBegin = (piece, sourceSquare) => {
+    boardDragRef.current = Date.now();
     if (setupMode) return;
     const styles = getMoveOptionsStyles(sourceSquare, chessInstance);
     setSelectedSquare(sourceSquare);

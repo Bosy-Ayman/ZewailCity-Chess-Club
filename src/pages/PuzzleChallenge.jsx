@@ -18,6 +18,7 @@ export default function PuzzleChallenge() {
   const [activeTournament, setActiveTournament] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [customAvatars, setCustomAvatars] = useState({});
+  const [playerNamesByEmail, setPlayerNamesByEmail] = useState({});
   const [expandedTournaments, setExpandedTournaments] = useState({});
   const [selectedRosterTournament, setSelectedRosterTournament] = useState(null);
 
@@ -123,13 +124,16 @@ export default function PuzzleChallenge() {
       const uList = await safeFetchJson(`${API_BASE}/api/users`);
       if (Array.isArray(uList)) {
         const map = {};
+        const nameMap = {};
         uList.forEach((u) => {
+          if (u.email && u.name) nameMap[u.email.trim().toLowerCase()] = u.name.trim();
           if (u.profileImage) {
             if (u.name) map[u.name.trim()] = u.profileImage;
             if (u.email) map[u.email.trim()] = u.profileImage;
           }
         });
         setCustomAvatars((prev) => ({ ...prev, ...map }));
+        setPlayerNamesByEmail((prev) => ({ ...prev, ...nameMap }));
       }
     } catch (err) {
       console.warn("Could not load player avatars:", err.message);
@@ -280,6 +284,9 @@ export default function PuzzleChallenge() {
     getPlayerAvatarUrl(player.name, customAvatars)
   );
 
+  const getPlayerDisplayName = (player) =>
+    playerNamesByEmail[player.email?.trim().toLowerCase()] || player.name || player.email?.split("@")[0] || "Tactician";
+
   // Load a single puzzle
   const loadPuzzle = (puzzle, timeLimit) => {
     let freshChess;
@@ -398,8 +405,14 @@ export default function PuzzleChallenge() {
   const onPieceDrop = (sourceSquare, targetSquare) => {
     setSelectedSquare(null);
     setOptionSquares({});
+    const restoreBoardPosition = () => {
+      setBoardFen(chessGame.fen());
+    };
     // Block input while opponent is replying, puzzle is advancing, or game is finished
-    if (isFinished || boardLocked.current) return false;
+    if (isFinished || boardLocked.current) {
+      restoreBoardPosition();
+      return false;
+    }
 
     // Check if the move is legal in the current position first
     const legalMoves = chessGame.moves({ verbose: true });
@@ -409,12 +422,16 @@ export default function PuzzleChallenge() {
 
     if (!isLegal) {
       // Snap back silently for illegal moves (no penalty)
+      restoreBoardPosition();
       return false;
     }
 
     try {
       const targetMove = correctMovesList[currentMoveIdx];
-      if (!targetMove) return false;
+      if (!targetMove) {
+        restoreBoardPosition();
+        return false;
+      }
 
       // Attempt move on a fresh Chess instance (immutable — never mutate state directly)
       const newChess = new Chess(chessGame.fen());
@@ -424,7 +441,10 @@ export default function PuzzleChallenge() {
         promotion: "q"
       });
 
-      if (!move) return false; // illegal move
+      if (!move) {
+        restoreBoardPosition();
+        return false;
+      }
 
       const playerLan = move.lan || (move.from + move.to);
       const cleanTarget = targetMove.trim().toLowerCase();
@@ -504,12 +524,14 @@ export default function PuzzleChallenge() {
 
       } else {
         // ❌ Wrong move
+        restoreBoardPosition();
         chessAudio.playError();
         handleWrongMove();
         return false;
       }
     } catch (err) {
       console.error("onPieceDrop threw exception:", err);
+      restoreBoardPosition();
       chessAudio.playError();
       handleWrongMove();
       return false;
@@ -763,7 +785,7 @@ export default function PuzzleChallenge() {
                                           className="preview-avatar"
                                           onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
                                         />
-                                        <span className="preview-name" title={entry.name}>{entry.name}</span>
+                                        <span className="preview-name" title={getPlayerDisplayName(entry)}>{getPlayerDisplayName(entry)}</span>
                                       </div>
                                       <div className="preview-stats-col">
                                         <span className="preview-solved">{entry.solvedCount || 0} 🧩</span>
@@ -866,7 +888,7 @@ export default function PuzzleChallenge() {
                                   className="table-player-avatar"
                                   onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
                                 />
-                                <span className="player-name">{entry.name}</span>
+                                <span className="player-name">{getPlayerDisplayName(entry)}</span>
                                 {entry.email === userEmail && <span className="you-pill">YOU</span>}
                               </div>
                             </td>
@@ -999,7 +1021,7 @@ export default function PuzzleChallenge() {
                                 className="mini-avatar"
                                 onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
                               />
-                              <span className="mini-name">{entry.name}</span>
+                              <span className="mini-name">{getPlayerDisplayName(entry)}</span>
                             </div>
                             <div className="mini-stats">
                               <span className="mini-solved">{entry.solvedCount} 🧩</span>
@@ -1032,7 +1054,7 @@ export default function PuzzleChallenge() {
                 (selectedRosterTournament.participants || []).length > 0 ? selectedRosterTournament.participants.map((participant) => (
                   <div className="roster-row" key={participant.email}>
                     <img src={getRosterAvatar(participant)} alt={participant.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
-                    <strong>{participant.name}</strong>
+                    <strong>{getPlayerDisplayName(participant)}</strong>
                     <span>Registered</span>
                   </div>
                 )) : <p className="no-scores-text">No tacticians registered yet.</p>
@@ -1041,7 +1063,7 @@ export default function PuzzleChallenge() {
                   <div className="roster-row" key={entry.email}>
                     <span className="roster-rank">#{index + 1}</span>
                     <img src={getRosterAvatar(entry)} alt={entry.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
-                    <strong>{entry.name}</strong>
+                    <strong>{getPlayerDisplayName(entry)}</strong>
                     <span>{entry.solvedCount || 0} solved · {entry.score || 0} pts</span>
                   </div>
                 )) : <p className="no-scores-text">No scores submitted yet.</p>

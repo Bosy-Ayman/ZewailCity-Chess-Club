@@ -1025,6 +1025,17 @@
   border-color: rgba(243, 193, 68, 0.25);
 }
 
+/* react-chessboard 4 hides the source piece while using an empty drag preview. */
+.game-board-wrapper [style*="opacity"] {
+  opacity: 1 !important;
+}
+
+.game-board-wrapper [draggable="true"],
+.game-board-wrapper [data-testid*="piece"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 /* ========== PROGRESS BAR ========== */
 .puzzle-progress-bar-container {
   width: 100%;

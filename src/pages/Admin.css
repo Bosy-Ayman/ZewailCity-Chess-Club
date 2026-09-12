@@ -347,6 +347,7 @@
   border-collapse: collapse;
   text-align: left;
   background-color: #17140f;
+  table-layout: fixed;
 }
 
 .admin-table th,
@@ -371,6 +372,33 @@
 .admin-table td.strong {
   color: #ffffff;
   font-weight: 700;
+}
+
+.tournaments-desktop-table th:nth-child(1) { width: 18%; }
+.tournaments-desktop-table th:nth-child(2),
+.tournaments-desktop-table th:nth-child(3) { width: 13%; }
+.tournaments-desktop-table th:nth-child(4) { width: 10%; }
+.tournaments-desktop-table th:nth-child(5) { width: 8%; }
+.tournaments-desktop-table th:nth-child(6) { width: 24%; }
+.tournaments-desktop-table th:nth-child(7) { width: 14%; }
+
+.tournaments-desktop-table td {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.tournaments-desktop-table td:nth-child(2),
+.tournaments-desktop-table td:nth-child(3),
+.tournaments-desktop-table td:nth-child(4),
+.tournaments-desktop-table td:nth-child(5),
+.tournaments-desktop-table td:nth-child(7) {
+  white-space: nowrap;
+}
+
+.tournaments-desktop-table .admin-puzzle-participants {
+  max-height: 116px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 /* Desktop vs Mobile cards toggle */
@@ -569,6 +597,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+}
+
+/* Keep the dragged source visible; react-chessboard's default preview is empty. */
+.puzzle-board-wrapper [style*="opacity"] {
+  opacity: 1 !important;
+}
+
+.puzzle-board-wrapper [draggable="true"],
+.puzzle-board-wrapper [data-testid*="piece"] {
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .piece-palette {

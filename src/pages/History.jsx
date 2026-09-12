@@ -595,6 +595,17 @@ export default function EventHistory() {
     e.target.src = "/Icons/unknown.png";
   };
 
+  const getHistoricalPlayerAvatar = (name, email) => {
+    const cleanName = (name || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const normalizedName = cleanName.toLowerCase();
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    const registeredUser = registeredUsers.find((user) =>
+      (normalizedEmail && user.email?.toLowerCase() === normalizedEmail) ||
+      (normalizedName && user.name?.trim().toLowerCase() === normalizedName)
+    );
+    return getImageUrl(registeredUser?.profileImage || avatarMap[cleanName] || "/Icons/unknown.png");
+  };
+
   // Helper to trigger rich player trading card modal
   const openPlayerModal = (playerName, extraData = {}) => {
     if (!playerName || playerName.toLowerCase() === "unknown") return;
@@ -870,6 +881,7 @@ export default function EventHistory() {
                 image: puzzle.image || "/Images/Tournaments/2025-2026/PuzzleChallenge.jpg",
                 description: `${puzzle.title} completed with ${rankedPlayers.length} participating tactician${rankedPlayers.length === 1 ? "" : "s"}.`,
                 playersList: rankedPlayers.map((player, index) => ({
+                  email: player.email,
                   name: `${index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`} ${player.name} (${player.score || 0} pts, ${player.solvedCount || 0} solved)`
                 }))
               };
@@ -1181,6 +1193,7 @@ export default function EventHistory() {
                                       <div className="highlights-tags-list">
                                         {event.playersList.slice(0, 4).map((p, i) => {
                                           const h = parseHighlight(p.name);
+                                          const playerAvatar = getHistoricalPlayerAvatar(h.name, p.email);
                                           
                                           const names = h.name ? h.name.split(',').map(n => n.trim().replace(/\(.*\)/, "").trim()) : [];
                                           const isTeamEvent = (event.type || "").toLowerCase().includes("team");
@@ -1190,7 +1203,7 @@ export default function EventHistory() {
                                           const teamLogo = teamName && avatarMap[teamName] ? avatarMap[teamName] : null;
                                           const isTeam = isTeamEvent || (names.length > 1 && Boolean(teamName));
                                           
-                                          const singleAvatar = avatarMap[h.name];
+                                          const singleAvatar = playerAvatar;
                                           
                                           const tagClass =
                                             h.emoji === "🥇"
@@ -1210,7 +1223,7 @@ export default function EventHistory() {
                                               )}
                                               
                                               {isTeam && names.length > 1 ? names.map((n, idx) => {
-                                                const uAvatar = avatarMap[n];
+                                                const uAvatar = getHistoricalPlayerAvatar(n);
                                                 return uAvatar ? (
                                                   <img key={idx} src={uAvatar} alt={n} className="timeline-highlight-avatar" onError={handleImageError} title={n} />
                                                 ) : null;
@@ -1631,7 +1644,7 @@ export default function EventHistory() {
                   const placements = [];
                   const participants = [];
                   selectedEventModal.playersList.forEach((p) => {
-                    const h = parseHighlight(p.name);
+                      const h = { ...parseHighlight(p.name), email: p.email };
                     if (h.emoji.match(/(🥇|🥈|🥉|🏅|🏆)/)) {
                       placements.push(h);
                     } else {
@@ -1663,7 +1676,7 @@ export default function EventHistory() {
                               const potentialTeam = teamMatch ? teamMatch[1] : null;
                               const teamName = potentialTeam && (isTeamEvent || avatarMap[potentialTeam]) ? potentialTeam : null;
                               const teamLogo = teamName && avatarMap[teamName] ? avatarMap[teamName] : null;
-                              const singleAvatar = avatarMap[h.name];
+                              const singleAvatar = getHistoricalPlayerAvatar(h.name, h.email);
                               const isTeam = isTeamEvent || (names.length > 1 && Boolean(teamName));
 
                               return (
@@ -1694,7 +1707,7 @@ export default function EventHistory() {
                                         }}
                                       >
                                         {names.map((memberName, mIdx) => {
-                                          const memberAvatar = avatarMap[memberName] || "/Icons/unknown.png";
+                                          const memberAvatar = getHistoricalPlayerAvatar(memberName);
                                           return (
                                             <div
                                               key={mIdx}
