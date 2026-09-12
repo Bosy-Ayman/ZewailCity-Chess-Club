@@ -93,11 +93,11 @@ export default function ContactUs() {
     },
     {
       q: "Where are official tournaments hosted?",
-      a: "Official club tournaments take place at the Academic Building near the Palm Tree and Zone D, equipped with tournament boards and digital DGT clocks."
+      a: "Official club tournaments take place at the Academic Building near the Palm Tree and Zone D, equipped with tournament boards."
     },
     {
       q: "Do I need to bring my own chess set or clock?",
-      a: "No, the club provides high-quality tournament boards, weighted pieces, and digital DGT clocks for all members during sessions."
+      a: "No, the club provides tournament boards, weighted pieces for all members during sessions."
     },
     {
       q: "How can I participate in official tournaments?",
