@@ -10,7 +10,7 @@ The official web platform for the **Zewail City Chess Club** — a full member h
 
 This is the Zewail City Chess Club's all-in-one platform: members sign up, build a chess profile, join tournaments, solve timed puzzle sets, follow each other, and challenge friends to over-the-board games — while club admins run the whole thing (tournaments, applications, roles, and content) from a dedicated dashboard.
 
-> Built and maintained by [Bosy Ayman](https://github.com/Bosy-Ayman), President of the Zewail City Chess Club.
+> Built and maintained by [Bosy Ayman](https://github.com/Bosy-Ayman), President of the Zewail City Chess Club (2024 to 2026).
 
 ---
 
