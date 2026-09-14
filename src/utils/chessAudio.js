@@ -191,6 +191,37 @@ class ChessAudio {
       osc.stop(now + 0.2);
     } catch (e) {}
   }
+
+  /** Play incoming notification chime (smooth crystalline bell chime) */
+  playNotification() {
+    if (!this.soundEnabled) return;
+    try {
+      const ctx = this.getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // Two-tone bright crystalline bell (G5 -> E6)
+      const pitches = [784.0, 1318.5];
+      pitches.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = now + idx * 0.11;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.28, startTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.45);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.45);
+      });
+    } catch (e) {}
+  }
 }
 
 export const chessAudio = new ChessAudio();

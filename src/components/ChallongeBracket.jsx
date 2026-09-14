@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { getPlayerAvatarUrl } from "../utils/api";
+import { findCommonFreeSlots, findNearOverlapSlots, getNextDateForDay, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
 import "./ChallongeBracket.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
 // Fixed geometric layout constants for pixel-perfect bracket geometry
-const CARD_WIDTH = 345;
-const CARD_HEIGHT = 138;
-const COL_GAP = 75;
+const CARD_WIDTH = 390;
+const CARD_HEIGHT = 168;
+const COL_GAP = 85;
 const HEADER_HEIGHT = 65;
-const BASE_SLOT_HEIGHT = 186;
+const BASE_SLOT_HEIGHT = 224;
 
 /**
  * Helpers for easy visual date & time picking
@@ -82,22 +83,40 @@ function convertDBMatchesToBracket(dbMatches = [], dbPlayers = [], tournamentWin
 
   const parseMatches = (matchesArr) => {
     return matchesArr.map((m, mIdx) => {
-      const p1Winner = m.result === "1-0" || m.result === "1 - 0";
-      const p2Winner = m.result === "0-1" || m.result === "0 - 1";
-      const isDraw = m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw";
+      const res = String(m.result || "").trim();
+      const resLower = res.toLowerCase();
+      const p1Winner = res === "2-0" || res === "2 - 0" || res === "1.5-0.5" || res === "1.5 - 0.5" || res === "1-0" || res === "1 - 0" || resLower.includes("white wins") || resLower.includes("armageddon: white");
+      const p2Winner = res === "0-2" || res === "0 - 2" || res === "0.5-1.5" || res === "0.5 - 1.5" || res === "0-1" || res === "0 - 1" || resLower.includes("black wins") || resLower.includes("armageddon: black");
+      const isDraw = res === "1/2-1/2" || res === "½ - ½" || res === "Draw";
+
+      let p1Score = "-";
+      let p2Score = "-";
+      if (res && res !== "Pending") {
+        if (res.startsWith("2-0") || res.startsWith("2 - 0")) { p1Score = "2"; p2Score = "0"; }
+        else if (res.startsWith("1.5-0.5") || res.startsWith("1.5 - 0.5")) { p1Score = "1.5"; p2Score = "0.5"; }
+        else if (res.startsWith("0.5-1.5") || res.startsWith("0.5 - 1.5")) { p1Score = "0.5"; p2Score = "1.5"; }
+        else if (res.startsWith("0-2") || res.startsWith("0 - 2")) { p1Score = "0"; p2Score = "2"; }
+        else if (resLower.includes("armageddon: white")) { p1Score = "1 (A)"; p2Score = "1"; }
+        else if (resLower.includes("armageddon: black")) { p1Score = "1"; p2Score = "1 (A)"; }
+        else if (res.startsWith("1-0") || res.startsWith("1 - 0")) { p1Score = "1"; p2Score = "0"; }
+        else if (res.startsWith("0-1") || res.startsWith("0 - 1")) { p1Score = "0"; p2Score = "1"; }
+        else if (isDraw) { p1Score = "½"; p2Score = "½"; }
+        else { p1Score = p1Winner ? "W" : "L"; p2Score = p2Winner ? "W" : "L"; }
+      }
+
       return {
         id: m._id || `db-match-${m.round}-${mIdx}`,
         matchCode: m.matchCode || `R${m.round}-M${mIdx + 1}`,
         p1: { 
           seed: playerSeedMap[m.white] || "-", 
           name: m.white || "TBD", 
-          score: p1Winner ? "1" : isDraw ? "½" : (m.result && m.result !== "Pending" ? "0" : "-"), 
+          score: p1Score, 
           isWinner: p1Winner 
         },
         p2: { 
           seed: playerSeedMap[m.black] || "-", 
           name: m.black || "TBD", 
-          score: p2Winner ? "1" : isDraw ? "½" : (m.result && m.result !== "Pending" ? "0" : "-"), 
+          score: p2Score, 
           isWinner: p2Winner 
         },
         status: (!m.result || m.result === "Pending") ? "Pending" : "Completed",
@@ -308,10 +327,13 @@ export default function ChallongeBracket({
   matchesData, 
   playersData, 
   playerAvatars = {},
+  playersAvailability = {},
+  tournamentStartDate = "",
   tournamentTitle = "Knockout Championship Bracket",
   isStaff = false,
   onUpdateMatch,
-  onSelectPlayer
+  onSelectPlayer,
+  onScheduleMatch
 }) {
   const [activeTab, setActiveTab] = useState("upper"); // "upper" or "lower"
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -321,7 +343,7 @@ export default function ChallongeBracket({
   const [tempWhite, setTempWhite] = useState("");
   const [tempBlack, setTempBlack] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleTime, setScheduleTime] = useState("10:00");
+  const [scheduleTime, setScheduleTime] = useState("");
 
   const activeHighlight = highlightedPlayer || hoveredPlayer;
 
@@ -498,7 +520,6 @@ export default function ChallongeBracket({
   const rawMatch = selectedMatchModal 
     ? dbMatches.find(m => m._id === selectedMatchModal.id) 
     : null;
-  const modalMatchRound = rawMatch?.round || 1;
 
   // ── CANVAS-RELATIVE SVG CONNECTOR PATHS ──
   const renderBracketLines = () => {
@@ -795,15 +816,29 @@ export default function ChallongeBracket({
                               return;
                             }
                           }
+                          const raw = dbMatches.find(m => m._id === match.id || m.id === match.id);
+                          const curTime = raw?.matchTime || match.matchTime || "";
+                          let initDate = extractDateForPicker(curTime);
+                          let initTime = extractTimeForPicker(curTime);
+
+                          if (!curTime && match.p1?.name && match.p2?.name && match.p1.name !== "BYE" && match.p2.name !== "BYE" && match.p1.name !== "TBD" && match.p2.name !== "TBD") {
+                            const p1Avail = playersAvailability[match.p1.name.trim()] || playersAvailability[match.p1.name.trim().toLowerCase()] || [];
+                            const p2Avail = playersAvailability[match.p2.name.trim()] || playersAvailability[match.p2.name.trim().toLowerCase()] || [];
+                            const mutuals = findCommonFreeSlots(p1Avail, p2Avail);
+                            if (mutuals.length > 0) {
+                              const firstSlot = mutuals[0];
+                              const h24 = Math.floor(firstSlot.fromMinutes / 60);
+                              const m24 = firstSlot.fromMinutes % 60;
+                              initTime = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+                              initDate = getNextDateForDay(firstSlot.day, tournamentStartDate);
+                            }
+                          }
+
                           setSelectedMatchModal(match);
                           setTempWhite(match.p1.name);
                           setTempBlack(match.p2.name);
-                          const foundMatch = dbMatches.find(m => m._id === match.id);
-                          const curTime = foundMatch?.matchTime || match.matchTime || "";
-                          const parsedD = extractDateForPicker(curTime) || (matchesData?.[0]?.matchTime ? extractDateForPicker(matchesData[0].matchTime) : "2025-10-04");
-                          const parsedT = extractTimeForPicker(curTime) || "10:00";
-                          setScheduleDate(parsedD);
-                          setScheduleTime(parsedT);
+                          setScheduleDate(initDate);
+                          setScheduleTime(initTime);
                         }}
                       >
                         {/* Match Header with Code & Scheduled Time */}
@@ -965,34 +1000,47 @@ export default function ChallongeBracket({
 
             <div className="match-modal-vs-box">
               {/* Player 1 Details */}
-              <div 
-                className={`modal-player-card ${selectedMatchModal.p1.isWinner ? "winner" : ""}`}
-                onClick={() => {
-                  if (onSelectPlayer && selectedMatchModal.p1.name !== "BYE") {
-                    onSelectPlayer(selectedMatchModal.p1.name);
-                    setSelectedMatchModal(null);
-                  }
-                }}
-              >
+              <div className={`modal-player-card ${selectedMatchModal.p1.isWinner ? "winner" : ""}`}>
                 <img 
                   src={getPlayerAvatarUrl(selectedMatchModal.p1.name, playerAvatars)} 
                   alt={selectedMatchModal.p1.name} 
                   className="modal-player-avatar"
+                  style={{ cursor: onSelectPlayer && selectedMatchModal.p1.name !== "BYE" ? "pointer" : "default" }}
+                  onClick={() => {
+                    if (onSelectPlayer && selectedMatchModal.p1.name !== "BYE") {
+                      onSelectPlayer(selectedMatchModal.p1.name);
+                      setSelectedMatchModal(null);
+                    }
+                  }}
+                  title="View player profile"
                   onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
                 />
                 <span className="modal-seed">Seed #{selectedMatchModal.p1.seed}</span>
                 {isStaff && (rawMatch ? (!rawMatch.result || rawMatch.result === "Pending") : true) ? (
                   <select
                     value={tempWhite}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onChange={(e) => setTempWhite(e.target.value)}
-                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px", borderRadius: "6px", width: "100%", marginTop: "8px", fontWeight: "600", fontSize: "0.85rem", outline: "none" }}
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px", borderRadius: "6px", width: "100%", marginTop: "8px", fontWeight: "600", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}
                   >
                     {dbPlayers.map(p => (
                       <option key={p.name} value={p.name}>{p.name}</option>
                     ))}
                   </select>
                 ) : (
-                  <h4 className="modal-player-name">{selectedMatchModal.p1.name}</h4>
+                  <h4 
+                    className="modal-player-name"
+                    style={{ cursor: onSelectPlayer && selectedMatchModal.p1.name !== "BYE" ? "pointer" : "default" }}
+                    onClick={() => {
+                      if (onSelectPlayer && selectedMatchModal.p1.name !== "BYE") {
+                        onSelectPlayer(selectedMatchModal.p1.name);
+                        setSelectedMatchModal(null);
+                      }
+                    }}
+                  >
+                    {selectedMatchModal.p1.name}
+                  </h4>
                 )}
                 <span className="modal-score-big">{selectedMatchModal.p1.score}</span>
               </div>
@@ -1000,27 +1048,29 @@ export default function ChallongeBracket({
               <div className="modal-vs-symbol">VS</div>
 
               {/* Player 2 Details */}
-              <div 
-                className={`modal-player-card ${selectedMatchModal.p2.isWinner ? "winner" : ""}`}
-                onClick={() => {
-                  if (onSelectPlayer && selectedMatchModal.p2.name !== "BYE") {
-                    onSelectPlayer(selectedMatchModal.p2.name);
-                    setSelectedMatchModal(null);
-                  }
-                }}
-              >
+              <div className={`modal-player-card ${selectedMatchModal.p2.isWinner ? "winner" : ""}`}>
                 <img 
                   src={getPlayerAvatarUrl(selectedMatchModal.p2.name, playerAvatars)} 
                   alt={selectedMatchModal.p2.name} 
                   className="modal-player-avatar"
+                  style={{ cursor: onSelectPlayer && selectedMatchModal.p2.name !== "BYE" ? "pointer" : "default" }}
+                  onClick={() => {
+                    if (onSelectPlayer && selectedMatchModal.p2.name !== "BYE") {
+                      onSelectPlayer(selectedMatchModal.p2.name);
+                      setSelectedMatchModal(null);
+                    }
+                  }}
+                  title="View player profile"
                   onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
                 />
                 <span className="modal-seed">Seed #{selectedMatchModal.p2.seed}</span>
                 {isStaff && (rawMatch ? (!rawMatch.result || rawMatch.result === "Pending") : true) ? (
                   <select
                     value={tempBlack}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                     onChange={(e) => setTempBlack(e.target.value)}
-                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px", borderRadius: "6px", width: "100%", marginTop: "8px", fontWeight: "600", fontSize: "0.85rem", outline: "none" }}
+                    style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px", borderRadius: "6px", width: "100%", marginTop: "8px", fontWeight: "600", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}
                   >
                     <option value="BYE">BYE</option>
                     {dbPlayers.map(p => (
@@ -1028,7 +1078,18 @@ export default function ChallongeBracket({
                     ))}
                   </select>
                 ) : (
-                  <h4 className="modal-player-name">{selectedMatchModal.p2.name}</h4>
+                  <h4 
+                    className="modal-player-name"
+                    style={{ cursor: onSelectPlayer && selectedMatchModal.p2.name !== "BYE" ? "pointer" : "default" }}
+                    onClick={() => {
+                      if (onSelectPlayer && selectedMatchModal.p2.name !== "BYE") {
+                        onSelectPlayer(selectedMatchModal.p2.name);
+                        setSelectedMatchModal(null);
+                      }
+                    }}
+                  >
+                    {selectedMatchModal.p2.name}
+                  </h4>
                 )}
                 <span className="modal-score-big">{selectedMatchModal.p2.score}</span>
               </div>
@@ -1070,143 +1131,207 @@ export default function ChallongeBracket({
               </p>
             </div>
 
-            {/* Staff Scheduling Action */}
+            {/* Smart Mutual Free Time Suggestions Panel */}
+            {(() => {
+              const p1Name = selectedMatchModal.p1?.name ? selectedMatchModal.p1.name.trim() : "";
+              const p2Name = selectedMatchModal.p2?.name ? selectedMatchModal.p2.name.trim() : "";
+              const isRealPairing = p1Name && p2Name && p1Name !== "BYE" && p2Name !== "BYE" && p1Name !== "TBD" && p2Name !== "TBD" && !p1Name.startsWith("Winner of") && !p2Name.startsWith("Winner of");
+              if (!isRealPairing) return null;
+
+              const p1Avail = playersAvailability[p1Name] || playersAvailability[p1Name.toLowerCase()] || [];
+              const p2Avail = playersAvailability[p2Name] || playersAvailability[p2Name.toLowerCase()] || [];
+              const mutualSlots = findCommonFreeSlots(p1Avail, p2Avail);
+              const nearSlots = findNearOverlapSlots(p1Avail, p2Avail);
+
+              return (
+                <div style={{ background: mutualSlots.length > 0 ? "rgba(243, 193, 68, 0.08)" : (nearSlots.length > 0 ? "rgba(52, 152, 219, 0.08)" : "rgba(255, 255, 255, 0.03)"), border: `1px solid ${mutualSlots.length > 0 ? "rgba(243, 193, 68, 0.35)" : (nearSlots.length > 0 ? "rgba(52, 152, 219, 0.3)" : "rgba(255, 255, 255, 0.08)")}`, borderRadius: "10px", padding: "12px", marginTop: "14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "0.82rem", color: mutualSlots.length > 0 ? "#f3c144" : (nearSlots.length > 0 ? "#5dade2" : "#bab19c"), fontWeight: "800", display: "flex", alignItems: "center", gap: "6px" }}>
+                      🤝 Mutual Free Hours ({p1Name.split(" ")[0]} &amp; {p2Name.split(" ")[0]}):
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: mutualSlots.length > 0 ? "#2ecc71" : (nearSlots.length > 0 ? "#5dade2" : "#888"), fontWeight: "700", background: "rgba(0,0,0,0.3)", padding: "2px 8px", borderRadius: "10px" }}>
+                      {mutualSlots.length > 0 
+                        ? `✓ ${mutualSlots.length} Matching Window${mutualSlots.length === 1 ? "" : "s"}` 
+                        : (nearSlots.length > 0 ? `⚡ ${nearSlots.length} Adjacent / Near Slots` : "No Overlap Registered")}
+                    </span>
+                  </div>
+
+                  {/* 1. Mutual Direct Overlapping Windows */}
+                  {mutualSlots.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {mutualSlots.map((cs, idx) => {
+                        const h24 = Math.floor(cs.fromMinutes / 60);
+                        const m24 = cs.fromMinutes % 60;
+                        const timeVal = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+                        const dateVal = getNextDateForDay(cs.day, tournamentStartDate);
+                        const isSelected = scheduleTime === timeVal && scheduleDate === dateVal;
+                        const isNearest = idx === 0;
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setScheduleDate(dateVal);
+                              setScheduleTime(timeVal);
+                            }}
+                            style={{
+                              background: isSelected ? "#f3c144" : (isNearest ? "rgba(243, 193, 68, 0.15)" : "rgba(0, 0, 0, 0.4)"),
+                              color: isSelected ? "#15120c" : "#fff",
+                              border: `1px solid ${isSelected ? "#f3c144" : (isNearest ? "#d4a32a" : "rgba(243, 193, 68, 0.3)")}`,
+                              padding: "7px 10px",
+                              borderRadius: "7px",
+                              fontSize: "0.78rem",
+                              fontWeight: "700",
+                              textAlign: "left",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {isNearest && <span style={{ background: isSelected ? "#15120c" : "#f3c144", color: isSelected ? "#f3c144" : "#15120c", padding: "1px 5px", borderRadius: "4px", fontSize: "0.68rem", fontWeight: "900" }}>⭐ Nearest</span>}
+                              <span>📅 {cs.day}: {cs.from} – {cs.to}</span>
+                            </span>
+                            <span style={{ fontSize: "0.7rem", opacity: 0.9, background: isSelected ? "rgba(0,0,0,0.2)" : "rgba(243, 193, 68, 0.2)", color: isSelected ? "#15120c" : "#f3c144", padding: "2px 6px", borderRadius: "4px" }}>
+                              {cs.durationLabel} • Select
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 2. Adjacent / Transition Slots */}
+                  {mutualSlots.length === 0 && nearSlots.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: "0.72rem", color: "#d5dbdb" }}>
+                        🔍 <strong>Adjacent Slots (Back-to-back free periods):</strong>
+                      </p>
+                      {nearSlots.map((ns, idx) => {
+                        const h24 = Math.floor(ns.targetMinutes / 60);
+                        const m24 = ns.targetMinutes % 60;
+                        const timeVal = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+                        const dateVal = getNextDateForDay(ns.day, tournamentStartDate);
+                        const isSelected = scheduleTime === timeVal && scheduleDate === dateVal;
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setScheduleDate(dateVal);
+                              setScheduleTime(timeVal);
+                            }}
+                            style={{
+                              background: isSelected ? "#5dade2" : "rgba(0, 0, 0, 0.4)",
+                              color: isSelected ? "#15120c" : "#fff",
+                              border: `1px solid ${isSelected ? "#5dade2" : "rgba(93, 173, 226, 0.35)"}`,
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              textAlign: "left",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              cursor: "pointer"
+                            }}
+                          >
+                            <span>📅 {ns.day} at {ns.time}</span>
+                            <span style={{ fontSize: "0.68rem", background: isSelected ? "rgba(0,0,0,0.2)" : "rgba(93, 173, 226, 0.15)", color: isSelected ? "#15120c" : "#5dade2", padding: "2px 6px", borderRadius: "4px" }}>
+                              {ns.gapLabel} • Select
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 3. Universal Campus Breaks (12:00 PM Activity Breaks & 4:00 PM After-Hours) */}
+                  {mutualSlots.length === 0 && (
+                    <div style={{ marginTop: nearSlots.length > 0 ? "8px" : "2px", borderTop: nearSlots.length > 0 ? "1px solid rgba(255,255,255,0.08)" : "none", paddingTop: nearSlots.length > 0 ? "6px" : "0" }}>
+                      <span style={{ fontSize: "0.72rem", color: "#bab19c", fontWeight: "700", display: "block", marginBottom: "4px" }}>
+                        ⚡ Universal Campus Hours (12:00 PM Breaks &amp; 4:00 PM After-Hours):
+                      </span>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "5px" }}>
+                        {UNIVERSAL_CAMPUS_SLOTS.map((bSlot, bIdx) => {
+                          const dateVal = getNextDateForDay(bSlot.day, tournamentStartDate);
+                          const isSelected = scheduleTime === bSlot.time && scheduleDate === dateVal;
+                          return (
+                            <button
+                              key={bIdx}
+                              type="button"
+                              onClick={() => {
+                                setScheduleDate(dateVal);
+                                setScheduleTime(bSlot.time);
+                              }}
+                              style={{
+                                background: isSelected ? "#f3c144" : "rgba(255, 255, 255, 0.06)",
+                                color: isSelected ? "#15120c" : "#ddd",
+                                border: `1px solid ${isSelected ? "#f3c144" : "rgba(243, 193, 68, 0.25)"}`,
+                                padding: "5px 6px",
+                                borderRadius: "6px",
+                                fontSize: "0.7rem",
+                                fontWeight: "700",
+                                textAlign: "left",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              🏛️ {bSlot.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Staff Match Schedule Action */}
             {isStaff && onUpdateMatch && (
-              <div style={{ marginTop: "14px", background: "rgba(243, 193, 68, 0.06)", border: "1px solid rgba(243, 193, 68, 0.25)", borderRadius: "8px", padding: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
-                  <label style={{ color: "#f3c144", fontSize: "0.82rem", fontWeight: "700", margin: 0 }}>
-                    🕒 Set Match Schedule (Date &amp; Time):
-                  </label>
-                  <span style={{ fontSize: "0.7rem", color: "#2ecc71", fontWeight: "700", background: "rgba(46, 204, 113, 0.12)", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "2px 7px", borderRadius: "4px" }}>
-                    📅 Connected to Club Calendar
-                  </span>
+              <div style={{ marginTop: "14px", border: "1px dashed rgba(243, 193, 68, 0.4)", borderRadius: "10px", padding: "12px", background: "rgba(243, 193, 68, 0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: "700", color: "#f3c144" }}>🕒 Set Match Schedule:</span>
+                  {scheduleDate && (
+                    <span style={{ fontSize: "0.74rem", color: "#bab19c" }}>
+                      Preview: {formatPickerToSchedule(scheduleDate, scheduleTime)}
+                    </span>
+                  )}
                 </div>
-                {/* Quick Date Presets */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "4px 0 8px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "0.72rem", color: "#bab19c", fontWeight: "700" }}>
-                    📅 Quick Dates:
-                  </span>
-                  {[
-                    { label: "Oct 4 (R1)", val: "2025-10-04" },
-                    { label: "Oct 5 (L1)", val: "2025-10-05" },
-                    { label: "Oct 11 (Qtrs)", val: "2025-10-11" },
-                    { label: "Oct 17 (Semis)", val: "2025-10-17" },
-                    { label: "Oct 19 (Finals)", val: "2025-10-19" },
-                    { label: "Today", val: new Date().toISOString().split("T")[0] }
-                  ].map((dPreset, dIdx) => (
-                    <button
-                      key={dIdx}
-                      type="button"
-                      onClick={() => setScheduleDate(dPreset.val)}
-                      style={{
-                        background: scheduleDate === dPreset.val ? "#f3c144" : "rgba(255, 255, 255, 0.08)",
-                        color: scheduleDate === dPreset.val ? "#15120c" : "#ddd",
-                        border: "1px solid rgba(243, 193, 68, 0.25)",
-                        padding: "3px 8px",
-                        borderRadius: "10px",
-                        fontSize: "0.72rem",
-                        fontWeight: "700",
-                        cursor: "pointer"
-                      }}
-                    >
-                      {dPreset.label}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    style={{ flex: 1, minWidth: "120px", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px 10px", borderRadius: "6px", fontSize: "0.85rem", outline: "none" }}
+                  />
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    style={{ width: "110px", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "6px 10px", borderRadius: "6px", fontSize: "0.85rem", outline: "none" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const formatted = formatPickerToSchedule(scheduleDate, scheduleTime);
+                      if (!formatted) {
+                        alert("Please pick a date first!");
+                        return;
+                      }
+                      await onUpdateMatch(selectedMatchModal.id, { matchTime: formatted });
+                      setSelectedMatchModal(null);
+                    }}
+                    style={{ background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", border: "none", padding: "6px 14px", borderRadius: "6px", fontWeight: "bold", fontSize: "0.82rem", cursor: "pointer" }}
+                  >
+                    Set Time
+                  </button>
                 </div>
-
-                {/* Round-Specific Timing Presets */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "4px 0 10px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "0.72rem", color: "#bab19c", fontWeight: "700" }}>
-                    🎯 Round {modalMatchRound} Times:
-                  </span>
-                  {(modalMatchRound === 1 
-                    ? [{ label: "10:00 AM", val: "10:00" }, { label: "10:30 AM", val: "10:30" }, { label: "11:00 AM", val: "11:00" }, { label: "11:30 AM", val: "11:30" }] 
-                    : modalMatchRound === 2 
-                    ? [{ label: "1:00 PM", val: "13:00" }, { label: "1:30 PM", val: "13:30" }, { label: "2:00 PM", val: "14:00" }]
-                    : modalMatchRound === 3
-                    ? [{ label: "3:00 PM", val: "15:00" }, { label: "3:30 PM", val: "15:30" }, { label: "4:30 PM", val: "16:30" }]
-                    : modalMatchRound === 4
-                    ? [{ label: "2:00 PM", val: "14:00" }, { label: "3:30 PM", val: "15:30" }]
-                    : [{ label: "2:00 PM", val: "14:00" }, { label: "5:00 PM", val: "17:00" }]
-                  ).map((tPreset, pIdx) => (
-                    <button
-                      key={pIdx}
-                      type="button"
-                      onClick={() => setScheduleTime(tPreset.val)}
-                      style={{
-                        background: scheduleTime === tPreset.val ? "#f3c144" : "rgba(243, 193, 68, 0.12)",
-                        color: scheduleTime === tPreset.val ? "#15120c" : "#f3c144",
-                        border: "1px solid rgba(243, 193, 68, 0.3)",
-                        padding: "3px 8px",
-                        borderRadius: "12px",
-                        fontSize: "0.72rem",
-                        fontWeight: "700",
-                        cursor: "pointer"
-                      }}
-                    >
-                      {tPreset.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Visual Native Date & Time Pickers */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "8px", alignItems: "flex-end" }}>
-                  <div>
-                    <label style={{ fontSize: "0.72rem", color: "#8c867a", display: "block", marginBottom: "3px", fontWeight: "600" }}>
-                      Pick Date:
-                    </label>
-                    <input
-                      type="date"
-                      value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "7px 10px", borderRadius: "6px", fontSize: "0.85rem", outline: "none", boxSizing: "border-box" }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "0.72rem", color: "#8c867a", display: "block", marginBottom: "3px", fontWeight: "600" }}>
-                      Pick Time:
-                    </label>
-                    <input
-                      type="time"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "7px 10px", borderRadius: "6px", fontSize: "0.85rem", outline: "none", boxSizing: "border-box" }}
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const formatted = formatPickerToSchedule(scheduleDate, scheduleTime);
-                          if (!formatted) {
-                            alert("Please select a date first!");
-                            return;
-                          }
-                          await onUpdateMatch(selectedMatchModal.id, { matchTime: formatted });
-                          alert(`Match scheduled for ${formatted} and synced with the club calendar!`);
-                          setSelectedMatchModal(null);
-                        } catch (err) {
-                          alert("Error updating schedule: " + err.message);
-                        }
-                      }}
-                      style={{ background: "#f3c144", color: "#15120c", border: "none", padding: "8px 16px", borderRadius: "6px", fontWeight: "800", cursor: "pointer", fontSize: "0.82rem", whiteSpace: "nowrap" }}
-                    >
-                      Save Schedule
-                    </button>
-                  </div>
-                </div>
-
-                {/* Live Preview Pill */}
-                <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px", background: "rgba(0,0,0,0.3)", padding: "6px 12px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <span style={{ fontSize: "0.74rem", color: "#8c867a" }}>Selected Schedule:</span>
-                  <strong style={{ color: "#f3c144", fontSize: "0.84rem" }}>
-                    📅 {formatPickerToSchedule(scheduleDate, scheduleTime) || "Please pick date & time"}
-                  </strong>
-                </div>
-                <p style={{ margin: "7px 0 0", fontSize: "0.74rem", color: "#8c867a" }}>
-                  💡 Setting a date &amp; time automatically syncs this match to the <strong>Club Calendar</strong> with round info and live scores.
-                </p>
               </div>
             )}
 
@@ -1237,9 +1362,12 @@ export default function ChallongeBracket({
                   }}
                 >
                   <option value="Pending">Pending</option>
-                  <option value="1-0">1 - 0 (White Wins)</option>
-                  <option value="0-1">0 - 1 (Black Wins)</option>
-                  <option value="1/2-1/2">½ - ½ (Draw)</option>
+                  <option value="2-0">2 - 0 (White Wins Match)</option>
+                  <option value="1.5-0.5">1.5 - 0.5 (White Wins Match)</option>
+                  <option value="0.5-1.5">0.5 - 1.5 (Black Wins Match)</option>
+                  <option value="0-2">0 - 2 (Black Wins Match)</option>
+                  <option value="1-1 (Armageddon: White Wins)">1 - 1 (Armageddon: White Wins)</option>
+                  <option value="1-1 (Armageddon: Black Wins)">1 - 1 (Armageddon: Black Wins - Draw Odds)</option>
                 </select>
               </div>
             )}

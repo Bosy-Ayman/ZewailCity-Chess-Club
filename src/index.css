@@ -17,7 +17,7 @@
   --font-body: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   --page-surface: #181611;
-  --page-surface-image: linear-gradient(115deg, rgba(255, 255, 255, 0.018), transparent 36%, rgba(243, 193, 68, 0.025)), repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.01) 0, rgba(255, 255, 255, 0.01) 1px, transparent 1px, transparent 7px);
+  --page-surface-image: none;
 }
 
 html {
@@ -274,8 +274,7 @@ input:-webkit-autofill:active {
 .about-page,
 .app-container,
 .calendar-page,
-.calendar-edit-container,
-.clubroles-container,
+.club-wrapper,
 .community-page,
 .contact-page,
 .edit-profile-page,
@@ -289,8 +288,8 @@ input:-webkit-autofill:active {
 .signup-page,
 .terms-page,
 .tournament-wrapper {
-  background-color: var(--page-surface) !important;
-  background-image: var(--page-surface-image) !important;
+  background-color: transparent !important;
+  background-image: none !important;
   font-family: var(--font-body) !important;
 }
 

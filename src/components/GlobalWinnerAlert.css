@@ -1,0 +1,221 @@
+/* ==========================================================================
+   Global Floating Winner Alert Toast / Banner
+   ========================================================================== */
+
+.global-winner-alert-bar {
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9990;
+  max-width: 680px;
+  width: calc(100% - 32px);
+  background: linear-gradient(135deg, rgba(38, 30, 16, 0.96) 0%, rgba(20, 17, 12, 0.98) 100%);
+  border: 1.5px solid rgba(243, 193, 68, 0.55);
+  border-radius: 16px;
+  padding: 10px 16px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 25px rgba(243, 193, 68, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+  animation: floatDownAlert 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, top 0.3s ease;
+}
+
+/* Offset downwards when Administrator mode ribbon is active */
+body:has(.home-admin-ribbon) .global-winner-alert-bar,
+.global-winner-alert-bar.with-admin-ribbon {
+  top: 136px;
+}
+
+.global-winner-alert-bar:hover {
+  transform: translateX(-50%) translateY(-2px);
+  border-color: rgba(243, 193, 68, 0.85);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.85), 0 0 35px rgba(243, 193, 68, 0.4);
+}
+
+@keyframes floatDownAlert {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.global-winner-alert-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #f3c144, #fff, #f3c144, transparent);
+  border-radius: 16px 16px 0 0;
+}
+
+.global-winner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.global-winner-trophy {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(243, 193, 68, 0.6));
+  animation: trophyShimmer 2.5s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes trophyShimmer {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.15) rotate(6deg); }
+}
+
+.global-winner-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.global-winner-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #f3c144;
+  box-shadow: 0 0 10px rgba(243, 193, 68, 0.5);
+}
+
+.global-winner-crown {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  font-size: 0.95rem;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.8));
+}
+
+.global-winner-text-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.global-winner-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.global-winner-type-tag {
+  background: rgba(243, 193, 68, 0.18);
+  border: 1px solid rgba(243, 193, 68, 0.35);
+  color: #f3c144;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.global-winner-live-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71;
+  animation: pulseDot 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.global-winner-status {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #bab19c;
+  letter-spacing: 0.5px;
+}
+
+.global-winner-headline {
+  font-size: 0.92rem;
+  color: #f5f0e6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-winner-headline strong {
+  color: #f3c144;
+  font-weight: 800;
+}
+
+.global-winner-headline em {
+  font-style: normal;
+  color: #ffffff;
+}
+
+.global-winner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.global-winner-view-btn {
+  background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%);
+  color: #12100d;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(243, 193, 68, 0.35);
+  transition: all 0.2s ease;
+}
+
+.global-winner-view-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(243, 193, 68, 0.55);
+}
+
+.global-winner-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: #888072;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.global-winner-dismiss-btn:hover {
+  color: #ff7675;
+}
+
+@media (max-width: 650px) {
+  .global-winner-alert-bar {
+    top: 68px;
+    padding: 8px 12px;
+  }
+  .global-winner-view-btn {
+    padding: 5px 10px;
+    font-size: 0.74rem;
+  }
+  .global-winner-headline {
+    font-size: 0.82rem;
+  }
+}

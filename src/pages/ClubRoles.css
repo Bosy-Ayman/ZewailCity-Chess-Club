@@ -3,7 +3,7 @@
 /* 🌌 General Layout */
 .club-wrapper {
   font-family: 'Montserrat', 'Inter', sans-serif;
-  background-color: #181611;
+  background-color: transparent;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

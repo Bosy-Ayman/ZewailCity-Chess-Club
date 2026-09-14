@@ -4,6 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { safeFetchJson, getPlayerAvatarUrl } from "../utils/api";
 import { chessAudio } from "../utils/chessAudio";
 import "./PuzzleChallenge.css";
@@ -20,13 +21,88 @@ export default function PuzzleChallenge() {
   const [customAvatars, setCustomAvatars] = useState({});
   const [playerNamesByEmail, setPlayerNamesByEmail] = useState({});
   const [expandedTournaments, setExpandedTournaments] = useState({});
-  const [selectedRosterTournament, setSelectedRosterTournament] = useState(null);
+  const [selectedSolutionsTournament, setSelectedSolutionsTournament] = useState(null);
+  const [solutionPuzzleIdx, setSolutionPuzzleIdx] = useState(0);
+  const [solutionMoveStep, setSolutionMoveStep] = useState(0);
+  const [solutionsModalTab, setSolutionsModalTab] = useState("solutions"); // 'solutions' | 'standings' | 'roster'
+  const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
+  const [celebrationTournament, setCelebrationTournament] = useState(null);
+
+  const handleOpenTournamentCelebration = (tournament) => {
+    setCelebrationTournament(tournament);
+    setCelebrationModalOpen(true);
+  };
+
+  const handleOpenSolutionsModal = (tournament, initialTab = "solutions") => {
+    setSelectedSolutionsTournament(tournament);
+    setSolutionPuzzleIdx(0);
+    setSolutionMoveStep(0);
+    setSolutionsModalTab(initialTab);
+  };
 
   const toggleTournamentExpanded = (id) => {
     setExpandedTournaments((prev) => ({
       ...prev,
       [id]: prev[id] === false
     }));
+  };
+
+  // Helper: Get board FEN position at a specific step in the solution replay
+  const getSolutionBoardAtStep = (puzzle, step) => {
+    if (!puzzle || !puzzle.initialFen) return "";
+    try {
+      const g = new Chess(puzzle.initialFen);
+      const moves = puzzle.correctMoves || [];
+      for (let i = 0; i < step && i < moves.length; i++) {
+        const uci = moves[i];
+        if (uci && uci.length >= 4) {
+          const from = uci.slice(0, 2);
+          const to = uci.slice(2, 4);
+          const promotion = uci.length > 4 ? uci[4] : "q";
+          g.move({ from, to, promotion });
+        }
+      }
+      return g.fen();
+    } catch (err) {
+      return puzzle.initialFen;
+    }
+  };
+
+  // Helper: Get detailed algebraic SAN notation for the solution moves
+  const getSolutionMovesDetails = (puzzle) => {
+    if (!puzzle || !puzzle.initialFen) return [];
+    try {
+      const g = new Chess(puzzle.initialFen);
+      const moves = puzzle.correctMoves || [];
+      const result = [];
+      moves.forEach((uci) => {
+        if (!uci || uci.length < 4) return;
+        const from = uci.slice(0, 2);
+        const to = uci.slice(2, 4);
+        const promotion = uci.length > 4 ? uci[4] : "q";
+        const isWhite = g.turn() === "w";
+        const moveNumber = Math.floor(result.length / 2) + 1;
+        const m = g.move({ from, to, promotion });
+        if (m) {
+          result.push({
+            uci,
+            san: m.san,
+            isWhite,
+            moveNumber,
+            piece: m.piece,
+            captured: m.captured
+          });
+        }
+      });
+      return result;
+    } catch (err) {
+      return (puzzle.correctMoves || []).map((uci, i) => ({
+        uci,
+        san: uci,
+        isWhite: i % 2 === 0,
+        moveNumber: Math.floor(i / 2) + 1
+      }));
+    }
   };
 
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -265,7 +341,7 @@ export default function PuzzleChallenge() {
       });
       if (response?.data) {
         setTournaments((prev) => prev.map((item) => item._id === tournament._id ? response.data : item));
-        setSelectedRosterTournament(response.data);
+        handleOpenSolutionsModal(response.data, "roster");
       }
     } catch (error) {
       alert(error.message || "Could not register for this challenge.");
@@ -589,6 +665,12 @@ export default function PuzzleChallenge() {
       if (data && data.data) {
         setActiveTournament(data.data);
         fetchTournaments();
+        // If this player took 1st place, trigger winner celebration
+        const sorted = [...(data.data.leaderboard || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
+        if (sorted[0] && sorted[0].email?.toLowerCase() === userEmail.toLowerCase() && finalScore > 0) {
+          setCelebrationTournament(data.data);
+          setCelebrationModalOpen(true);
+        }
       }
     } catch (err) {
       console.warn("Failed to submit score to server:", err.message);
@@ -816,22 +898,69 @@ export default function PuzzleChallenge() {
                           )}
                         </div>
 
-                        <button
-                          type="button"
-                          className="roster-btn"
-                          onClick={() => setSelectedRosterTournament(t)}
-                        >
-                          {getTournamentPhase(t) === "registration" ? "View participants" : "View full standings"}
-                          <span>{getTournamentPhase(t) === "registration" ? (t.participants?.length || 0) : (t.leaderboard?.length || 0)} people</span>
-                        </button>
+                        {/* Standardized Card Actions Container */}
+                        <div className="card-actions-wrapper">
+                          {t.leaderboard && t.leaderboard.length > 0 && (
+                            <button
+                              type="button"
+                              className="card-action-btn celebration-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenTournamentCelebration(t);
+                              }}
+                            >
+                              <span>🏆</span>
+                              <span>Champions Podium</span>
+                            </button>
+                          )}
 
-                        <button 
-                          className="enter-btn" 
-                          onClick={() => getTournamentPhase(t) === "registration" ? registerForTournament(t) : startTournamentChallenge(t)}
-                          disabled={getTournamentState(t) === "closed" || getTournamentState(t) === "completed"}
-                        >
-                          {getTournamentState(t) === "upcoming" ? "Register" : getTournamentState(t) === "closed" ? "Challenge Closed" : getTournamentState(t) === "completed" ? "Completed" : "Join Challenge"}
-                        </button>
+                          <button
+                            type="button"
+                            className="card-action-btn solutions-btn"
+                            onClick={() => handleOpenSolutionsModal(t, getTournamentPhase(t) === "registration" ? "roster" : "solutions")}
+                          >
+                            <span>{getTournamentPhase(t) === "registration" ? "👥" : "🧩"}</span>
+                            <span>
+                              {getTournamentPhase(t) === "registration" 
+                                ? `View Roster (${t.participants?.length || 0})` 
+                                : `Solutions & Standings (${t.leaderboard?.length || 0})`}
+                            </span>
+                          </button>
+
+                          {getTournamentState(t) === "upcoming" ? (
+                            <button 
+                              type="button"
+                              className="card-action-btn enter-btn upcoming-btn" 
+                              onClick={() => registerForTournament(t)}
+                            >
+                              📝 Register for Challenge
+                            </button>
+                          ) : getTournamentState(t) === "closed" ? (
+                            <button 
+                              type="button"
+                              className="card-action-btn enter-btn closed-btn"
+                              onClick={() => handleOpenSolutionsModal(t, "solutions")}
+                            >
+                              🔒 Closed · View Solutions
+                            </button>
+                          ) : getTournamentState(t) === "completed" ? (
+                            <button 
+                              type="button"
+                              className="card-action-btn enter-btn completed-btn"
+                              onClick={() => handleOpenSolutionsModal(t, "solutions")}
+                            >
+                              ✅ Completed · View Solutions
+                            </button>
+                          ) : (
+                            <button 
+                              type="button"
+                              className="card-action-btn enter-btn live-btn" 
+                              onClick={() => startTournamentChallenge(t)}
+                            >
+                              ⚡ Join Challenge
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -907,9 +1036,29 @@ export default function PuzzleChallenge() {
               </div>
             </div>
 
-            <button className="back-list-btn" onClick={() => { setIsPlaying(false); fetchTournaments(); }}>
-              Back to Arena List
-            </button>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "16px" }}>
+              <button 
+                className="btn-primary" 
+                style={{
+                  background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                  color: "#12100d",
+                  border: "none",
+                  fontWeight: "900",
+                  padding: "10px 20px",
+                  borderRadius: "8px",
+                  cursor: "pointer"
+                }}
+                onClick={() => {
+                  setCelebrationTournament(activeTournament);
+                  setCelebrationModalOpen(true);
+                }}
+              >
+                🏆 View Arena Champions
+              </button>
+              <button className="back-list-btn" onClick={() => { setIsPlaying(false); fetchTournaments(); }}>
+                Back to Arena List
+              </button>
+            </div>
           </div>
         ) : (
           /* SECTION 3: INTERACTIVE GAME BOARD SOLVER (FULL-SCREEN OPTIMIZED HUD) */
@@ -1040,38 +1189,425 @@ export default function PuzzleChallenge() {
           </div>
         )}
       </main>
-      {selectedRosterTournament && (
-        <div className="roster-modal-backdrop" onClick={() => setSelectedRosterTournament(null)}>
-          <section className="roster-modal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="roster-modal-close" onClick={() => setSelectedRosterTournament(null)} aria-label="Close roster">×</button>
-            <span className="card-badge"><span className="card-badge-dot"></span>{getTournamentPhase(selectedRosterTournament) === "registration" ? "REGISTRATION ROSTER" : "FINAL RESULTS"}</span>
-            <h2>{selectedRosterTournament.title}</h2>
-            <p className="roster-modal-subtitle">
-              {getTournamentPhase(selectedRosterTournament) === "registration" ? "Tacticians registered to play this challenge." : "Final scores from every submitted attempt."}
-            </p>
-            <div className="roster-list">
-              {getTournamentPhase(selectedRosterTournament) === "registration" ? (
-                (selectedRosterTournament.participants || []).length > 0 ? selectedRosterTournament.participants.map((participant) => (
-                  <div className="roster-row" key={participant.email}>
-                    <img src={getRosterAvatar(participant)} alt={participant.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
-                    <strong>{getPlayerDisplayName(participant)}</strong>
-                    <span>Registered</span>
-                  </div>
-                )) : <p className="no-scores-text">No tacticians registered yet.</p>
-              ) : (
-                (selectedRosterTournament.leaderboard || []).length > 0 ? [...selectedRosterTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0)).map((entry, index) => (
-                  <div className="roster-row" key={entry.email}>
-                    <span className="roster-rank">#{index + 1}</span>
-                    <img src={getRosterAvatar(entry)} alt={entry.name} onError={(event) => { event.currentTarget.src = "/Icons/unknown.png"; }} />
-                    <strong>{getPlayerDisplayName(entry)}</strong>
-                    <span>{entry.solvedCount || 0} solved · {entry.score || 0} pts</span>
-                  </div>
-                )) : <p className="no-scores-text">No scores submitted yet.</p>
-              )}
+      {/* Interactive Puzzle Solutions, Standings & 3-Winners Modal */}
+      {selectedSolutionsTournament && (
+        <div className="solutions-modal-backdrop" onClick={() => setSelectedSolutionsTournament(null)}>
+          <section className="solutions-modal" onClick={(e) => e.stopPropagation()}>
+            <button 
+              type="button" 
+              className="solutions-modal-close" 
+              onClick={() => setSelectedSolutionsTournament(null)} 
+              aria-label="Close solutions modal"
+            >
+              ×
+            </button>
+
+            {/* Modal Header */}
+            <div className="solutions-modal-header">
+              <div className="solutions-header-badge-row">
+                <span className="card-badge">
+                  <span className="card-badge-dot"></span>
+                  {getTournamentState(selectedSolutionsTournament) === "upcoming" 
+                    ? "UPCOMING" 
+                    : getTournamentState(selectedSolutionsTournament) === "closed" 
+                    ? "CLOSED" 
+                    : getTournamentState(selectedSolutionsTournament) === "completed" 
+                    ? "COMPLETED" 
+                    : "LIVE ARENA"}
+                </span>
+                <span className="format-tag">♟️ TACTICS ARENA</span>
+              </div>
+              <h2>{selectedSolutionsTournament.title}</h2>
+              <p className="solutions-modal-subtitle">
+                {getTournamentState(selectedSolutionsTournament) === "closed" || getTournamentState(selectedSolutionsTournament) === "completed"
+                  ? "Explore step-by-step puzzle solutions, grand overall scores across all puzzles, and the official 3 champions."
+                  : "Review challenge puzzles, current standings, and registered tacticians."}
+              </p>
             </div>
+
+            {/* 🏆 Top 3 Winners Podium Cards & Overall Cumulative Score Bar */}
+            {selectedSolutionsTournament.leaderboard && selectedSolutionsTournament.leaderboard.length > 0 && (
+              <div className="solutions-podium-section">
+                <div className="podium-section-title">
+                  <span>🏆</span>
+                  <h3>Arena Champions Podium & Overall Scores</h3>
+                </div>
+                <div className="solutions-winners-grid">
+                  {(() => {
+                    const sortedLb = [...selectedSolutionsTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+                    const top3 = sortedLb.slice(0, 3);
+                    return top3.map((winner, idx) => {
+                      const avatar = getRosterAvatar(winner);
+                      const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
+                      const rankClass = idx === 0 ? "rank-gold" : idx === 1 ? "rank-silver" : "rank-bronze";
+                      const label = idx === 0 ? "1st Champion" : idx === 1 ? "2nd Runner-Up" : "3rd Place";
+                      const totalPuzzles = selectedSolutionsTournament.puzzles?.length || 0;
+                      return (
+                        <div key={winner.email || idx} className={`solution-winner-card ${rankClass}`}>
+                          <div className="winner-medal">{medal}</div>
+                          <img 
+                            src={avatar} 
+                            alt={winner.name} 
+                            className="winner-avatar"
+                            onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                          />
+                          <div className="winner-info">
+                            <span className="winner-rank-label">{label}</span>
+                            <strong className="winner-name" title={getPlayerDisplayName(winner)}>
+                              {getPlayerDisplayName(winner)}
+                            </strong>
+                            <div className="winner-stats-row">
+                              <span className="winner-score">{winner.score} pts</span>
+                              <span className="winner-solved">{winner.solvedCount} / {totalPuzzles} 🧩</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Overall Score Metrics Bar */}
+                {(() => {
+                  const sortedLb = [...selectedSolutionsTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+                  const totalScoreAll = sortedLb.reduce((acc, curr) => acc + (curr.score || 0), 0);
+                  const totalSolvedAll = sortedLb.reduce((acc, curr) => acc + (curr.solvedCount || 0), 0);
+                  const maxScore = sortedLb[0]?.score || 0;
+                  const puzzleCount = selectedSolutionsTournament.puzzles?.length || 0;
+
+                  return (
+                    <div className="overall-metrics-bar">
+                      <div className="metric-box">
+                        <span className="metric-icon">👥</span>
+                        <span className="metric-label">Competitors</span>
+                        <strong className="metric-val">{sortedLb.length}</strong>
+                      </div>
+                      <div className="metric-box">
+                        <span className="metric-icon">🧩</span>
+                        <span className="metric-label">Total Puzzles</span>
+                        <strong className="metric-val">{puzzleCount}</strong>
+                      </div>
+                      <div className="metric-box">
+                        <span className="metric-icon">⚡</span>
+                        <span className="metric-label">Top Score</span>
+                        <strong className="metric-val">{maxScore} pts</strong>
+                      </div>
+                      <div className="metric-box">
+                        <span className="metric-icon">📊</span>
+                        <span className="metric-label">Total Solved</span>
+                        <strong className="metric-val">{totalSolvedAll}</strong>
+                      </div>
+                      <div className="metric-box">
+                        <span className="metric-icon">🏆</span>
+                        <span className="metric-label">Overall Points</span>
+                        <strong className="metric-val">{totalScoreAll} pts</strong>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Modal Tabs Switcher */}
+            <div className="solutions-tabs-nav">
+              <button
+                type="button"
+                className={`tab-btn ${solutionsModalTab === "solutions" ? "active" : ""}`}
+                onClick={() => setSolutionsModalTab("solutions")}
+              >
+                🧩 Puzzle Solutions ({selectedSolutionsTournament.puzzles?.length || 0})
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${solutionsModalTab === "standings" ? "active" : ""}`}
+                onClick={() => setSolutionsModalTab("standings")}
+              >
+                📊 Overall Standings ({selectedSolutionsTournament.leaderboard?.length || 0})
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${solutionsModalTab === "roster" ? "active" : ""}`}
+                onClick={() => setSolutionsModalTab("roster")}
+              >
+                👥 Registered Roster ({selectedSolutionsTournament.participants?.length || 0})
+              </button>
+            </div>
+
+            {/* TAB 1: INTERACTIVE PUZZLE SOLUTIONS */}
+            {solutionsModalTab === "solutions" && (
+              <div className="solutions-tab-content">
+                {(!selectedSolutionsTournament.puzzles || selectedSolutionsTournament.puzzles.length === 0) ? (
+                  <p className="no-scores-text">No tactical puzzles registered in this tournament.</p>
+                ) : (
+                  <div className="solutions-viewer-grid">
+                    {/* Left Column: Solution Chessboard & Step Controller */}
+                    <div className="solution-board-panel">
+                      {(() => {
+                        const currentPuzzle = selectedSolutionsTournament.puzzles[solutionPuzzleIdx] || selectedSolutionsTournament.puzzles[0];
+                        const currentFen = getSolutionBoardAtStep(currentPuzzle, solutionMoveStep);
+                        const movesDetails = getSolutionMovesDetails(currentPuzzle);
+                        const maxSteps = movesDetails.length;
+                        let isWhiteTurn = true;
+                        try {
+                          isWhiteTurn = new Chess(currentFen).turn() === "w";
+                        } catch (e) {}
+
+                        return (
+                          <>
+                            <div className="solution-board-header">
+                              <div className="puzzle-target-badge">
+                                🎯 Mate in {currentPuzzle.mateIn}
+                              </div>
+                              <div className="turn-indicator">
+                                {isWhiteTurn ? "⚪ White to move" : "⚫ Black to move"}
+                              </div>
+                            </div>
+
+                            <div className="solution-board-wrapper">
+                              <Chessboard
+                                position={currentFen}
+                                boardWidth={320}
+                                arePiecesDraggable={false}
+                                customDarkSquareStyle={{ backgroundColor: "#b58863" }}
+                                customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}
+                                customBoardStyle={{
+                                  borderRadius: "10px",
+                                  boxShadow: "0 8px 30px rgba(0, 0, 0, 0.65)"
+                                }}
+                              />
+                            </div>
+
+                            {/* Step Controller Bar */}
+                            <div className="solution-controls-bar">
+                              <button
+                                type="button"
+                                className="step-ctrl-btn"
+                                onClick={() => setSolutionMoveStep(0)}
+                                disabled={solutionMoveStep === 0}
+                                title="Reset to Initial Position"
+                              >
+                                ⏮ Start
+                              </button>
+                              <button
+                                type="button"
+                                className="step-ctrl-btn"
+                                onClick={() => setSolutionMoveStep(prev => Math.max(0, prev - 1))}
+                                disabled={solutionMoveStep === 0}
+                                title="Previous Move"
+                              >
+                                ◀ Prev
+                              </button>
+                              <span className="step-counter">
+                                Move {solutionMoveStep} / {maxSteps}
+                              </span>
+                              <button
+                                type="button"
+                                className="step-ctrl-btn"
+                                onClick={() => setSolutionMoveStep(prev => Math.min(maxSteps, prev + 1))}
+                                disabled={solutionMoveStep >= maxSteps}
+                                title="Next Move"
+                              >
+                                Next ▶
+                              </button>
+                              <button
+                                type="button"
+                                className="step-ctrl-btn auto-play-btn"
+                                onClick={() => setSolutionMoveStep(maxSteps)}
+                                disabled={solutionMoveStep >= maxSteps}
+                                title="Show Full Checkmate Solution"
+                              >
+                                💡 Mate ⏭
+                              </button>
+                            </div>
+
+                            {/* Move Notation Path */}
+                            <div className="solution-moves-box">
+                              <span className="moves-box-label">Official Solution Sequence:</span>
+                              <div className="moves-tags-row">
+                                {movesDetails.map((m, mIdx) => (
+                                  <button
+                                    key={mIdx}
+                                    type="button"
+                                    className={`move-tag ${solutionMoveStep === mIdx + 1 ? "active-move" : ""}`}
+                                    onClick={() => setSolutionMoveStep(mIdx + 1)}
+                                  >
+                                    <span className="move-num">{m.isWhite ? `${m.moveNumber}.` : `${m.moveNumber}...`}</span>
+                                    <strong>{m.san}</strong>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Right Column: Puzzle Selector List & Tactical Insights */}
+                    <div className="solution-puzzles-list-panel">
+                      <h4 className="panel-heading">Puzzles in this Challenge</h4>
+                      <div className="puzzles-selector-list">
+                        {selectedSolutionsTournament.puzzles.map((p, pIdx) => {
+                          const isActive = pIdx === solutionPuzzleIdx;
+                          return (
+                            <div
+                              key={pIdx}
+                              className={`puzzle-selector-card ${isActive ? "active" : ""}`}
+                              onClick={() => {
+                                setSolutionPuzzleIdx(pIdx);
+                                setSolutionMoveStep(0);
+                              }}
+                            >
+                              <div className="puzzle-card-left">
+                                <span className="puzzle-index-badge">#{pIdx + 1}</span>
+                                <div className="puzzle-details">
+                                  <strong className="puzzle-title">
+                                    Mate in {p.mateIn} {p.mateIn === 1 ? "Move" : "Moves"}
+                                  </strong>
+                                  <p className="puzzle-desc">
+                                    {p.description || "Calculate the decisive winning combination"}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="puzzle-card-right">
+                                <span className="moves-count-tag">
+                                  {(p.correctMoves || []).length} ply
+                                </span>
+                                <span className="arrow-icon">{isActive ? "▶" : "›"}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: OVERALL SCORES & STANDINGS */}
+            {solutionsModalTab === "standings" && (
+              <div className="standings-tab-content">
+                <div className="leaderboard-table-container">
+                  <table className="leaderboard-table">
+                    <thead>
+                      <tr>
+                        <th className="col-rank">Rank</th>
+                        <th className="col-player">Tactician</th>
+                        <th className="col-solved">Puzzles Cleared</th>
+                        <th className="col-rate">Solve Rate</th>
+                        <th className="col-score">Total Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedSolutionsTournament.leaderboard && selectedSolutionsTournament.leaderboard.length > 0 ? (
+                        [...selectedSolutionsTournament.leaderboard]
+                          .sort((a, b) => (b.score || 0) - (a.score || 0))
+                          .map((entry, idx) => {
+                            const avatarUrl = getRosterAvatar(entry);
+                            const puzzleCount = selectedSolutionsTournament.puzzles?.length || 1;
+                            const solvePct = Math.round(((entry.solvedCount || 0) / puzzleCount) * 100);
+                            return (
+                              <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
+                                <td className="col-rank">
+                                  <span className={`rank-badge rank-${idx + 1}`}>
+                                    {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
+                                  </span>
+                                </td>
+                                <td className="col-player">
+                                  <div className="table-player-cell">
+                                    <img
+                                      src={avatarUrl}
+                                      alt={entry.name}
+                                      className="table-player-avatar"
+                                      onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                                    />
+                                    <span className="player-name">{getPlayerDisplayName(entry)}</span>
+                                    {entry.email === userEmail && <span className="you-pill">YOU</span>}
+                                  </div>
+                                </td>
+                                <td className="col-solved">
+                                  <strong>{entry.solvedCount || 0}</strong> / {puzzleCount} 🧩
+                                </td>
+                                <td className="col-rate">
+                                  <div className="rate-bar-wrap">
+                                    <div className="rate-bar-fill" style={{ width: `${solvePct}%` }}></div>
+                                    <span className="rate-pct">{solvePct}%</span>
+                                  </div>
+                                </td>
+                                <td className="col-score">
+                                  <strong className="score-val">{entry.score} pts</strong>
+                                </td>
+                              </tr>
+                            );
+                          })
+                      ) : (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: "center", color: "#888", padding: "24px" }}>
+                            No scores recorded yet for this challenge.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: REGISTERED ROSTER */}
+            {solutionsModalTab === "roster" && (
+              <div className="roster-tab-content">
+                {(selectedSolutionsTournament.participants || []).length > 0 ? (
+                  <div className="roster-grid">
+                    {selectedSolutionsTournament.participants.map((p, idx) => (
+                      <div className="roster-card" key={p.email || idx}>
+                        <span className="roster-rank-badge">#{idx + 1}</span>
+                        <img
+                          src={getRosterAvatar(p)}
+                          alt={p.name}
+                          className="roster-avatar"
+                          onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                        />
+                        <div className="roster-meta">
+                          <strong className="roster-player-name">{getPlayerDisplayName(p)}</strong>
+                          <span className="roster-status-pill">♟️ Registered Tactician</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="roster-empty-state">
+                    <span style={{ fontSize: "2rem" }}>👥</span>
+                    <p style={{ color: "#aaa08f", margin: "8px 0 0" }}>
+                      No tacticians have registered for this challenge yet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}
+      {/* Universal Winner Celebration Modal for Tactics Arena */}
+      {(() => {
+        const sortedLb = celebrationTournament?.leaderboard ? [...celebrationTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0)) : [];
+        const puzzleP1 = sortedLb[0] ? { name: getPlayerDisplayName(sortedLb[0]), score: sortedLb[0].score, solvedCount: sortedLb[0].solvedCount, email: sortedLb[0].email } : null;
+        const puzzleP2 = sortedLb[1] ? { name: getPlayerDisplayName(sortedLb[1]), score: sortedLb[1].score, solvedCount: sortedLb[1].solvedCount, email: sortedLb[1].email } : null;
+        const puzzleP3 = sortedLb[2] ? { name: getPlayerDisplayName(sortedLb[2]), score: sortedLb[2].score, solvedCount: sortedLb[2].solvedCount, email: sortedLb[2].email } : null;
+
+        return (
+          <WinnerCelebrationModal
+            isOpen={celebrationModalOpen}
+            onClose={() => setCelebrationModalOpen(false)}
+            tournamentTitle={celebrationTournament?.title || "Tactics Arena"}
+            tournamentType="Puzzle Tactics Arena"
+            winner={puzzleP1}
+            runnerUp={puzzleP2}
+            thirdPlace={puzzleP3}
+            customAvatars={customAvatars}
+          />
+        );
+      })()}
+
       {!activePlayState && <Footer />}
     </div>
   );

@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPickerToSchedule } from "../components/ChallongeBracket";
-import Confetti from "react-confetti";
-import { useWindowSize } from "react-use";
+import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { getPlayerAvatarUrl, compressImage } from "../utils/api";
+import { findCommonFreeSlots, findNearOverlapSlots, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -18,7 +18,6 @@ export default function TournamentDetails() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
-  const { width, height } = useWindowSize();
 
   // Interactive Player Preview Modal State
   const [selectedPlayerModal, setSelectedPlayerModal] = useState(null);
@@ -31,12 +30,38 @@ export default function TournamentDetails() {
   const userRole = localStorage.getItem("userRole") || "member";
   const isLoggedIn = !!localStorage.getItem("adminToken");
   const isStaff = isLoggedIn && (userRole === "admin" || userRole === "oc");
+  const loggedInUserName = localStorage.getItem("userName") || "";
+  const loggedInUserEmail = localStorage.getItem("userEmail") || localStorage.getItem("adminEmail") || "";
 
   // Parse ID
   const queryParams = new URLSearchParams(window.location.search);
   const tournamentId = queryParams.get("id");
 
   const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+
+const isWhiteWinner = (result) => {
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2") return false;
+  const r = String(result).toLowerCase().trim();
+  return (
+    r === "1-0" || r === "1 - 0" ||
+    r.startsWith("1.5 - 0.5") || r.startsWith("1.5-0.5") ||
+    r.startsWith("2 - 0") || r.startsWith("2-0") ||
+    r.includes("white wins") || r.includes("white won") ||
+    r.includes("armageddon: white")
+  );
+};
+
+const isBlackWinner = (result) => {
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2") return false;
+  const r = String(result).toLowerCase().trim();
+  return (
+    r === "0-1" || r === "0 - 1" ||
+    r.startsWith("0.5 - 1.5") || r.startsWith("0.5-1.5") ||
+    r.startsWith("0 - 2") || r.startsWith("0-2") ||
+    r.includes("black wins") || r.includes("black won") ||
+    r.includes("armageddon: black")
+  );
+};
 
   const fetchTournamentDetails = async () => {
     if (!tournamentId) {
@@ -75,9 +100,85 @@ export default function TournamentDetails() {
   const [matchModalOpen, setMatchModalOpen] = useState(false);
   const [matchForm, setMatchForm] = useState({ round: 1, white: "", black: "", result: "1-0", matchTime: "" });
 
-  // Schedule Match Modal State (effortless visual date & time picker)
+  // Schedule Match Modal State (effortless visual date & time picker + mutual free time matching)
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
-  const [schedulingMatchData, setSchedulingMatchData] = useState({ matchId: null, date: "", time: "10:00" });
+  const [schedulingMatchData, setSchedulingMatchData] = useState({ matchId: null, date: "", time: "10:00", white: "", black: "" });
+  const [arbiterNote, setArbiterNote] = useState("");
+  const [isSubmittingSchedule, setIsSubmittingSchedule] = useState(false);
+  const [scheduleSuccessMessage, setScheduleSuccessMessage] = useState("");
+
+  const getNextDateForDay = (dayName, baseDateStr) => {
+    const dayIndexMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4 };
+    const targetDay = dayIndexMap[dayName];
+    if (targetDay === undefined) return baseDateStr || new Date().toISOString().split('T')[0];
+    
+    const base = baseDateStr ? new Date(baseDateStr) : new Date();
+    if (isNaN(base.getTime())) return new Date().toISOString().split('T')[0];
+    
+    const currentDay = base.getDay();
+    let diff = targetDay - currentDay;
+    if (diff < 0) diff += 7;
+    const targetDate = new Date(base.getTime() + diff * 86400000);
+    return targetDate.toISOString().split('T')[0];
+  };
+
+  const handleDispatchScheduleNotice = async (isArbiterOverride = false) => {
+    const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
+    if (!formatted) {
+      alert("Please select a date and time first!");
+      return;
+    }
+    setIsSubmittingSchedule(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/matches/${schedulingMatchData.matchId}/schedule-notice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderName: isArbiterOverride ? "Tournament Arbiter" : (localStorage.getItem("userName") || "Competitor"),
+          senderEmail: localStorage.getItem("userEmail") || "",
+          matchTime: formatted,
+          isArbiterOverride,
+          arbiterNote: isArbiterOverride ? arbiterNote : undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to dispatch schedule notice");
+
+      setScheduleSuccessMessage(isArbiterOverride ? "👑 Official Arbiter Schedule set and players notified!" : "📨 Match proposal dispatched and opponent alerted!");
+      fetchTournamentDetails();
+      setTimeout(() => {
+        setScheduleModalOpen(false);
+        setScheduleSuccessMessage("");
+      }, 1200);
+    } catch (err) {
+      alert("Schedule error: " + err.message);
+    } finally {
+      setIsSubmittingSchedule(false);
+    }
+  };
+
+  const handleSend15MinReminder = async () => {
+    if (!schedulingMatchData?.matchId) return;
+    setIsSubmittingSchedule(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/matches/${schedulingMatchData.matchId}/send-15min-reminder`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send 15-minute reminder");
+
+      setScheduleSuccessMessage("⏰ 15-Minute Game Alert & Rules dispatched to both players via email & notification!");
+      fetchTournamentDetails();
+      setTimeout(() => {
+        setScheduleModalOpen(false);
+        setScheduleSuccessMessage("");
+      }, 1500);
+    } catch (err) {
+      alert("Reminder error: " + err.message);
+    } finally {
+      setIsSubmittingSchedule(false);
+    }
+  };
 
   // Edit Tournament Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -131,10 +232,86 @@ export default function TournamentDetails() {
     }
   };
 
-  const handleSetMatchSchedule = (matchId, currentTime) => {
-    const defaultD = extractDateForPicker(currentTime) || tournament?.startDate || new Date().toISOString().split("T")[0];
-    const defaultT = extractTimeForPicker(currentTime) || "10:00";
-    setSchedulingMatchData({ matchId, date: defaultD, time: defaultT });
+  const handleJoinTournament = async () => {
+    if (!isLoggedIn || !loggedInUserEmail) {
+      window.location.href = "/?login=true";
+      return;
+    }
+
+    try {
+      const userRes = await fetch(`${API_BASE}/api/profile?email=${encodeURIComponent(loggedInUserEmail)}`);
+      const userData = await userRes.json();
+      const name = userData.name || loggedInUserEmail.split("@")[0];
+
+      // Check if tournament is a Knockout tournament: availability is required!
+      const isKnockout = tournament?.type && (
+        tournament.type.toLowerCase().includes("knockout") || 
+        tournament.type.toLowerCase().includes("elimination") ||
+        tournament.type === "Single Elimination" ||
+        tournament.type === "Double Elimination"
+      );
+
+      if (isKnockout && (!Array.isArray(userData.availability) || userData.availability.length === 0)) {
+        const confirmGo = window.confirm(
+          "🕒 Campus Free Time Required:\n\nKnockout tournaments require players to register their weekly free hours (Sunday–Thursday) in their Profile before joining, so opponents can coordinate mutual match times.\n\nWould you like to visit your Profile now to set your free hours?"
+        );
+        if (confirmGo) {
+          window.location.href = "/profile";
+        }
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loggedInUserEmail, name }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.requiresAvailability) {
+          const confirmGo = window.confirm(
+            "🕒 Campus Free Time Required:\n\n" + data.error + "\n\nWould you like to visit your Profile now to set your free hours?"
+          );
+          if (confirmGo) {
+            window.location.href = "/profile";
+          }
+          return;
+        }
+        throw new Error(data.error || "Failed to register for tournament");
+      }
+
+      alert("🎉 Successfully registered for " + (tournament.title || "the tournament") + "!");
+      fetchTournamentDetails();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleSetMatchSchedule = (matchId, currentTime, white = "", black = "") => {
+    let defaultD = extractDateForPicker(currentTime);
+    let defaultT = extractTimeForPicker(currentTime);
+
+    if (!currentTime && white && black && white !== "BYE" && black !== "BYE" && white !== "TBD" && black !== "TBD") {
+      const pAvailMap = tournament?.playersAvailability || {};
+      const wAvail = pAvailMap[white.trim()] || pAvailMap[white.trim().toLowerCase()] || [];
+      const bAvail = pAvailMap[black.trim()] || pAvailMap[black.trim().toLowerCase()] || [];
+      const mutuals = findCommonFreeSlots(wAvail, bAvail);
+      if (mutuals.length > 0) {
+        const firstSlot = mutuals[0];
+        const h24 = Math.floor(firstSlot.fromMinutes / 60);
+        const m24 = firstSlot.fromMinutes % 60;
+        defaultT = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+        defaultD = getNextDateForDay(firstSlot.day, tournament?.startDate);
+      }
+    }
+
+    if (!defaultD) defaultD = tournament?.startDate || new Date().toISOString().split("T")[0];
+    if (!defaultT) defaultT = "10:00";
+
+    setSchedulingMatchData({ matchId, date: defaultD, time: defaultT, white, black });
+    setArbiterNote("");
+    setScheduleSuccessMessage("");
     setScheduleModalOpen(true);
   };
 
@@ -504,7 +681,11 @@ export default function TournamentDetails() {
     });
   };
 
-  const isSwissFormat = tournament?.type === "Swiss";
+  const isSwissFormat = tournament?.type === "Swiss" || Boolean(tournament?.type && tournament.type.toLowerCase().includes("swiss"));
+  const isDoubleElimination = Boolean(
+    (tournament?.type && tournament.type.toLowerCase().includes("double")) ||
+    (tournament?.matches && tournament.matches.some(m => m.bracket === "lower" || m.bracket === "grand_finals"))
+  );
   const swissStandings = isSwissFormat ? calculateSwissStandings(tournament?.playersList, tournament?.matches) : [];
 
   // Group matches by Round for Swiss Round-by-Round display
@@ -631,11 +812,12 @@ export default function TournamentDetails() {
       const roundMatches = matches.filter(m => (m.round || 1) === maxRound);
       const isKnockout = (tournament.type || "").toLowerCase().includes("knockout") || 
                          (tournament.type || "").toLowerCase().includes("elimination");
+
       if (isKnockout && roundMatches.length === 1 && (maxRound > 1 || (tournament.playersList && tournament.playersList.length <= 2))) {
         const finalMatch = roundMatches[0];
         if (finalMatch && finalMatch.result && finalMatch.result !== "Pending") {
-          const champ = finalMatch.result === "1-0" ? finalMatch.white : (finalMatch.result === "0-1" ? finalMatch.black : null);
-          const runnerUp = finalMatch.result === "1-0" ? finalMatch.black : (finalMatch.result === "0-1" ? finalMatch.white : null);
+          const champ = isWhiteWinner(finalMatch.result) ? finalMatch.white : (isBlackWinner(finalMatch.result) ? finalMatch.black : null);
+          const runnerUp = isWhiteWinner(finalMatch.result) ? finalMatch.black : (isBlackWinner(finalMatch.result) ? finalMatch.white : null);
           if (champ && champ !== "BYE" && !podiumP1) podiumP1 = { name: champ, points: "1st Place" };
           if (runnerUp && runnerUp !== "BYE" && !podiumP2) podiumP2 = { name: runnerUp, points: "Finalist" };
         }
@@ -701,8 +883,8 @@ export default function TournamentDetails() {
                   <div className="hero-meta-item">
                     <span className="meta-icon">⏱️</span>
                     <div className="meta-texts">
-                      <span className="meta-label">Time &amp; Clock</span>
-                      <span className="meta-val">{tournament.time || "TBD"}</span>
+                      <span className="meta-label">Time Control</span>
+                      <span className="meta-val">{tournament.time || "10 min Rapid"}</span>
                     </div>
                   </div>
 
@@ -730,20 +912,17 @@ export default function TournamentDetails() {
 
                   if (currentStatus === "Completed") {
                     progressPct = 100;
-                    progressMsg = "Tournament Finished (100% Completed)";
+                    progressMsg = "Tournament Completed 🏆";
                     badgeColor = "#2ecc71";
                   } else if (currentStatus === "Ongoing") {
-                    const totalRounds = tournament.rounds || 5;
                     const matches = tournament.matches || [];
-                    const maxRound = matches.reduce((max, m) => Math.max(max, m.round || 1), 1);
-                    const completedMatches = matches.filter(m => m.result && m.result !== "Pending");
-
-                    if (isSwissFormat) {
-                      progressPct = Math.min(Math.round((maxRound / totalRounds) * 100), 90);
-                      progressMsg = `Round ${maxRound} of ${totalRounds} in Progress`;
+                    const completed = matches.filter(m => m.result && m.result !== "Pending").length;
+                    if (matches.length > 0) {
+                      progressPct = Math.round((completed / matches.length) * 100);
+                      progressMsg = `Live In Progress — Round ${tournament.currentRound || 1}`;
                     } else {
-                      progressPct = matches.length > 0 ? Math.min(Math.round((completedMatches.length / matches.length) * 100), 90) : 30;
-                      progressMsg = `Knockout Bracket Ongoing`;
+                      progressPct = 15;
+                      progressMsg = "Live In Progress — Pairings Active";
                     }
                     badgeColor = "#f3c144";
                   } else {
@@ -775,6 +954,41 @@ export default function TournamentDetails() {
                 })()}
 
                 <div className="tournament-export-actions">
+                  {(tournament.status === "Completed" || tournament.winner || podiumP1) && (
+                    <button 
+                      type="button"
+                      onClick={() => setCelebrationModalOpen(true)}
+                      className="export-tournament-btn celebration-trigger-btn"
+                      style={{
+                        background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                        color: "#12100d",
+                        fontWeight: "900",
+                        boxShadow: "0 4px 18px rgba(243, 193, 68, 0.45)",
+                        border: "none"
+                      }}
+                      title="View Championship Podium & Winner Celebration"
+                    >
+                      <span>🏆</span>
+                      <span>Championship Podium</span>
+                    </button>
+                  )}
+                  {!isStaff && tournament.status === "Upcoming" && !tournament?.registrations?.some(r => r.email?.toLowerCase() === loggedInUserEmail?.toLowerCase()) && !tournament?.playersList?.some(p => p.name?.toLowerCase() === loggedInUserName?.toLowerCase()) && (
+                    <button 
+                      type="button"
+                      onClick={handleJoinTournament}
+                      className="export-tournament-btn"
+                      style={{
+                        background: "linear-gradient(135deg, #2ecc71, #27ae60)",
+                        color: "#fff",
+                        fontWeight: "800",
+                        boxShadow: "0 4px 15px rgba(46, 204, 113, 0.4)"
+                      }}
+                      title="Register for this tournament"
+                    >
+                      <span>♟️</span>
+                      <span>Join Tournament</span>
+                    </button>
+                  )}
                   {isStaff && (
                     <button 
                       type="button"
@@ -915,6 +1129,78 @@ export default function TournamentDetails() {
               {/* SWISS FORMAT SPECIFIC DISPLAY */}
               {isSwissFormat ? (
                 <>
+                  {/* Official FIDE Swiss System Match Format & Rules Card */}
+                  <div className="format-rules-guide-card">
+                    <div className="format-rules-header">
+                      <div className="format-rules-title-group">
+                        <span className="format-rules-icon">🏛️</span>
+                        <div>
+                          <h3 className="format-rules-main-title">
+                            Official FIDE Swiss System Match Format &amp; Rules
+                          </h3>
+                          <span className="format-rules-subtitle">
+                            Non-Elimination Championship • Dynamic Score-Group Dutch Pairings • FIDE Color Balance &amp; Tiebreaks
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="format-rules-badge">
+                        <span>♟️</span>
+                        <span>{tournament.rounds || 5} Scheduled Rounds</span>
+                      </div>
+                    </div>
+
+                    <div className="format-rules-grid">
+                      {/* 1. Non-Elimination System */}
+                      <div className="rules-pillar-box">
+                        <div className="rules-pillar-title">
+                          <span>1.</span>
+                          <span>♾️ Non-Elimination System</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>Full Participation:</strong> No player is ever knocked out. All registered participants play all {tournament.rounds || 5} rounds from start to finish.</li>
+                          <li><strong>Every Game Counts:</strong> Win, draw, or loss, every result contributes directly to your final tournament standings and club rating.</li>
+                        </ul>
+                      </div>
+
+                      {/* 2. Score-Group Dutch Pairings */}
+                      <div className="rules-pillar-box">
+                        <div className="rules-pillar-title">
+                          <span>2.</span>
+                          <span>🎯 Score-Group Dutch Pairings</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>Equal Score Groups:</strong> In every round, players are paired strictly against opponents with the exact same (or closest) accumulated points.</li>
+                          <li><strong>No Rematches:</strong> Two players can <strong>never play each other twice</strong> in the same tournament.</li>
+                        </ul>
+                      </div>
+
+                      {/* 3. Color Balance & Alternation */}
+                      <div className="rules-pillar-box">
+                        <div className="rules-pillar-title">
+                          <span>3.</span>
+                          <span>⚖️ Color Balance &amp; Alternation</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>FIDE Color Alternation:</strong> Pieces (White ⚪ / Black ⚫) alternate round-by-round to ensure equal color distribution across the tournament.</li>
+                          <li><strong>Streak Prevention:</strong> The pairing algorithm guarantees no player receives the same color 3 times consecutively.</li>
+                        </ul>
+                      </div>
+
+                      {/* 4. Scoring & FIDE Tiebreaks */}
+                      <div className="rules-pillar-box highlight">
+                        <div className="rules-pillar-title">
+                          <span>4.</span>
+                          <span>📊 FIDE Scoring &amp; Tiebreaks</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>Points:</strong> Win = <strong>1.0 pt</strong>, Draw = <strong>0.5 pt</strong>, Loss = <strong>0.0 pt</strong>, Bye = <strong>1.0 pt</strong>.</li>
+                          <li><strong>Tiebreaker Hierarchy:</strong> 1. Direct Encounter (Head-to-Head) • 2. Buchholz Cut 1 (Strength of Schedule) • 3. Sonneborn-Berger Score • 4. Number of Wins.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Swiss Standings Table & Mobile Cards */}
                   <h2 className="section-title">🏆 Swiss System Standings (Live Table)</h2>
                   
@@ -1278,6 +1564,109 @@ export default function TournamentDetails() {
               ) : (
                 /* KNOCKOUT FORMAT SPECIFIC DISPLAY (Challonge Tree + Table View) */
                 <>
+                  {/* Knockout & Double Knockout 2-Game & Armageddon Guide Card */}
+                  <div className="format-rules-guide-card">
+                    <div className="format-rules-header">
+                      <div className="format-rules-title-group">
+                        <span className="format-rules-icon">{isDoubleElimination ? "⚡" : "⚔️"}</span>
+                        <div>
+                          <h3 className="format-rules-main-title">
+                            {isDoubleElimination 
+                              ? "Official Double Elimination (Double Knockout) Format & Rules" 
+                              : "Official Knockout Match Format & Armageddon Rules"}
+                          </h3>
+                          <span className="format-rules-subtitle">
+                            {isDoubleElimination 
+                              ? "Winners & Losers Brackets (Two Lives) • 2-Game Mini-Matches • Armageddon Sudden-Death • Grand Finals Reset"
+                              : "2-Game Mini-Matches with Color Reversal • Decisive Armageddon Sudden-Death"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <a 
+                        href="https://www.youtube.com/watch?v=JAYrNhOG-OM"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="armageddon-video-link-btn"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          background: "linear-gradient(135deg, #e74c3c, #c0392b)",
+                          color: "#ffffff",
+                          padding: "10px 20px",
+                          borderRadius: "10px",
+                          fontSize: "0.85rem",
+                          fontWeight: "800",
+                          textDecoration: "none",
+                          boxShadow: "0 4px 15px rgba(231, 76, 60, 0.35)",
+                          transition: "all 0.2s ease",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        <span>▶</span>
+                        <span>Watch Armageddon Video Guide</span>
+                      </a>
+                    </div>
+
+                    <div className="format-rules-grid">
+                      {/* Double Elimination Bracket Structure (Two Lives) */}
+                      {isDoubleElimination && (
+                        <div className="rules-pillar-box">
+                          <div className="rules-pillar-title">
+                            <span>1.</span>
+                            <span>🛡️ Two Lives (Winners &amp; Losers Brackets)</span>
+                          </div>
+                          <ul className="rules-pillar-list">
+                            <li><strong>Upper (Winners) Bracket:</strong> All players start in the Upper Bracket. Winning keeps you advancing on the upper path.</li>
+                            <li><strong>Lower (Losers) Bracket:</strong> Losing a match moves you to the Lower Bracket for a second chance at glory.</li>
+                            <li><strong>Elimination:</strong> A player is only knocked out of the tournament upon suffering their <strong>second match loss</strong>.</li>
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* 2-Game Mini Match Rule */}
+                      <div className="rules-pillar-box">
+                        <div className="rules-pillar-title">
+                          <span>{isDoubleElimination ? "2." : "1."}</span>
+                          <span>⚔️ Two-Game Mini-Match</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>Game 1:</strong> Initial assigned colors (White ⚪ vs Black ⚫).</li>
+                          <li><strong>Game 2:</strong> Immediate color reversal (Black ⚫ vs White ⚪).</li>
+                          <li><strong>Target:</strong> First player to score <strong>1.5 points</strong> (win + draw or 2 wins) wins the match series!</li>
+                        </ul>
+                      </div>
+
+                      {/* Armageddon Tiebreaker Rule */}
+                      <div className="rules-pillar-box highlight">
+                        <div className="rules-pillar-title">
+                          <span>{isDoubleElimination ? "3." : "2."}</span>
+                          <span>⚡ Armageddon Time Bidding (1 - 1 Tie)</span>
+                        </div>
+                        <ul className="rules-pillar-list">
+                          <li><strong>Secret Time Bid:</strong> Both players write down the time they want for Black. The player who bids <strong>less time gets Black</strong> and plays with their chosen clock time.</li>
+                          <li><strong>White Clock:</strong> The other player gets <strong>White</strong> with the standard base time.</li>
+                          <li><strong>Draw Odds:</strong> <strong>White must win to advance</strong>. Black only needs a <strong>draw or win</strong> to win the match and advance!</li>
+                        </ul>
+                      </div>
+
+                      {/* Grand Finals & Reset (Double Knockout Only) */}
+                      {isDoubleElimination && (
+                        <div className="rules-pillar-box highlight">
+                          <div className="rules-pillar-title">
+                            <span>4.</span>
+                            <span>👑 Grand Finals &amp; Bracket Reset</span>
+                          </div>
+                          <ul className="rules-pillar-list">
+                            <li><strong>Championship Duel:</strong> The Winners Bracket Champion battles the Losers Bracket Champion.</li>
+                            <li><strong>Bracket Reset:</strong> Because the Winners Champion has zero losses, if the Losers Champion wins Match 1, a <strong>decisive Bracket Reset Match</strong> is immediately played for the championship!</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", margin: "30px 0 15px" }}>
                     <h2 className="section-title" style={{ margin: 0 }}>Knockout Matches & Bracket</h2>
                     
@@ -1328,10 +1717,13 @@ export default function TournamentDetails() {
                         matchesData={tournament.matches} 
                         playersData={tournament.playersList}
                         playerAvatars={tournament?.playerAvatars}
+                        playersAvailability={tournament?.playersAvailability}
+                        tournamentStartDate={tournament?.startDate}
                         tournamentTitle={`${tournament.title} (${tournament.type || "Knockout Bracket"})`} 
                         isStaff={isStaff}
                         onUpdateMatch={handleUpdateMatch}
                         onSelectPlayer={(pName) => openPlayerPreview(pName)}
+                        onScheduleMatch={(matchId, matchTime, white, black) => handleSetMatchSchedule(matchId, matchTime, white, black)}
                       />
                       
                       {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
@@ -1438,21 +1830,21 @@ export default function TournamentDetails() {
                             {tournament.matches.map((m, index) => (
                               <tr key={index}>
                                 <td>Round {m.round}</td>
-                                <td style={{ fontWeight: m.result === "1-0" || m.result === "1 - 0" ? "bold" : "normal", color: m.result === "1-0" || m.result === "1 - 0" ? "#f3c144" : "#fff" }}>
-                                  {m.white} {m.result === "1-0" || m.result === "1 - 0" ? "✓" : ""}
+                                <td style={{ fontWeight: isWhiteWinner(m.result) ? "bold" : "normal", color: isWhiteWinner(m.result) ? "#f3c144" : "#fff" }}>
+                                  {m.white} {isWhiteWinner(m.result) ? "✓" : ""}
                                 </td>
-                                <td style={{ fontWeight: m.result === "0-1" || m.result === "0 - 1" ? "bold" : "normal", color: m.result === "0-1" || m.result === "0 - 1" ? "#f3c144" : "#fff" }}>
-                                  {m.black} {m.result === "0-1" || m.result === "0 - 1" ? "✓" : ""}
+                                <td style={{ fontWeight: isBlackWinner(m.result) ? "bold" : "normal", color: isBlackWinner(m.result) ? "#f3c144" : "#fff" }}>
+                                  {m.black} {isBlackWinner(m.result) ? "✓" : ""}
                                 </td>
                                 <td>
                                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                     <span style={{ color: m.matchTime ? "#f3c144" : "#777", fontSize: "0.85rem", fontWeight: m.matchTime ? "600" : "normal" }}>
                                       {m.matchTime ? `🕒 ${m.matchTime}` : "TBD"}
                                     </span>
-                                    {isStaff && m._id && (
+                                    {((isStaff || (loggedInUserName && (m.white?.toLowerCase() === loggedInUserName.toLowerCase() || m.black?.toLowerCase() === loggedInUserName.toLowerCase()))) && m._id) && (
                                       <button
                                         type="button"
-                                        onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                        onClick={() => handleSetMatchSchedule(m._id, m.matchTime, m.white, m.black)}
                                         title="Schedule date and time for this match"
                                         style={{
                                           background: "rgba(243, 193, 68, 0.12)",
@@ -1464,7 +1856,7 @@ export default function TournamentDetails() {
                                           cursor: "pointer"
                                         }}
                                       >
-                                        ✏️ Time
+                                        🕒 {isStaff ? "Time" : "Propose"}
                                       </button>
                                     )}
                                   </div>
@@ -1485,8 +1877,14 @@ export default function TournamentDetails() {
                                         cursor: "pointer"
                                       }}
                                     >
-                                      <option value="1-0">1 - 0 (White Wins)</option>
-                                      <option value="0-1">0 - 1 (Black Wins)</option>
+                                      <option value="1.5-0.5">1.5 - 0.5 (White Wins Match)</option>
+                                      <option value="2-0">2 - 0 (White Wins Match)</option>
+                                      <option value="0.5-1.5">0.5 - 1.5 (Black Wins Match)</option>
+                                      <option value="0-2">0 - 2 (Black Wins Match)</option>
+                                      <option value="1-1 (Armageddon: White Wins)">1 - 1 (Armageddon: White Wins)</option>
+                                      <option value="1-1 (Armageddon: Black Wins)">1 - 1 (Armageddon: Black Wins - Draw Odds)</option>
+                                      <option value="1-0">1 - 0 (White Wins Game)</option>
+                                      <option value="0-1">0 - 1 (Black Wins Game)</option>
                                       <option value="1/2-1/2">½ - ½ (Draw)</option>
                                       <option value="Pending">Pending</option>
                                     </select>
@@ -1517,32 +1915,40 @@ export default function TournamentDetails() {
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", margin: "6px 0" }}>
-                              <span style={{ fontWeight: (m.result === "1-0" || m.result === "1 - 0") ? "bold" : "normal", color: (m.result === "1-0" || m.result === "1 - 0") ? "#f3c144" : "#fff", fontSize: "0.95rem" }}>
-                                ⚪ {m.white}
+                              <span style={{ fontWeight: isWhiteWinner(m.result) ? "bold" : "normal", color: isWhiteWinner(m.result) ? "#f3c144" : "#fff", fontSize: "0.95rem" }}>
+                                ⚪ {m.white} {isWhiteWinner(m.result) ? "✓" : ""}
                               </span>
                               <span style={{ color: "#888", fontSize: "0.75rem", fontWeight: "bold" }}>VS</span>
-                              <span style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : "#fff", fontSize: "0.95rem" }}>
-                                ⚫ {m.black}
+                              <span style={{ fontWeight: isBlackWinner(m.result) ? "bold" : "normal", color: isBlackWinner(m.result) ? "#f3c144" : "#fff", fontSize: "0.95rem" }}>
+                                ⚫ {m.black} {isBlackWinner(m.result) ? "✓" : ""}
                               </span>
                             </div>
 
-                            {isStaff && m._id && (
+                            {((isStaff || (loggedInUserName && (m.white?.toLowerCase() === loggedInUserName.toLowerCase() || m.black?.toLowerCase() === loggedInUserName.toLowerCase()))) && m._id) && (
                               <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                                <div style={{ flex: 1 }}>
-                                  <select
-                                    value={m.result}
-                                    onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
-                                    style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
-                                  >
-                                    <option value="1-0">1 - 0 (White Wins)</option>
-                                    <option value="0-1">0 - 1 (Black Wins)</option>
-                                    <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                    <option value="Pending">Pending</option>
-                                  </select>
-                                </div>
+                                {isStaff && (
+                                  <div style={{ flex: 1 }}>
+                                    <select
+                                      value={m.result}
+                                      onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
+                                      style={{ width: "100%", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
+                                    >
+                                      <option value="1.5-0.5">1.5 - 0.5 (White Wins Match)</option>
+                                      <option value="2-0">2 - 0 (White Wins Match)</option>
+                                      <option value="0.5-1.5">0.5 - 1.5 (Black Wins Match)</option>
+                                      <option value="0-2">0 - 2 (Black Wins Match)</option>
+                                      <option value="1-1 (Armageddon: White Wins)">1 - 1 (Armageddon: White Wins)</option>
+                                      <option value="1-1 (Armageddon: Black Wins)">1 - 1 (Armageddon: Black Wins - Draw Odds)</option>
+                                      <option value="1-0">1 - 0 (White Wins)</option>
+                                      <option value="0-1">0 - 1 (Black Wins)</option>
+                                      <option value="1/2-1/2">½ - ½ (Draw)</option>
+                                      <option value="Pending">Pending</option>
+                                    </select>
+                                  </div>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => handleSetMatchSchedule(m._id, m.matchTime)}
+                                  onClick={() => handleSetMatchSchedule(m._id, m.matchTime, m.white, m.black)}
                                   style={{
                                     background: "rgba(243, 193, 68, 0.12)",
                                     border: "1px solid rgba(243, 193, 68, 0.35)",
@@ -1552,11 +1958,12 @@ export default function TournamentDetails() {
                                     fontWeight: "bold",
                                     fontSize: "0.82rem",
                                     cursor: "pointer",
-                                    whiteSpace: "nowrap"
+                                    whiteSpace: "nowrap",
+                                    flex: isStaff ? "none" : 1
                                   }}
                                   title="Set or update scheduled match time"
                                 >
-                                  ⏰ {m.matchTime ? "Time" : "Set Time"}
+                                  ⏰ {isStaff ? (m.matchTime ? "Time" : "Set Time") : (m.matchTime ? "Reschedule" : "Propose Time")}
                                 </button>
                               </div>
                             )}
@@ -1784,10 +2191,10 @@ export default function TournamentDetails() {
 
               <div className="modal-grid-2">
                 <div>
-                  <label>Time &amp; Clock (e.g. 10:00 AM) *</label>
+                  <label>⏱️ Clock &amp; Time Control *</label>
                   {/* Quick Time Preset Buttons */}
                   <div style={{ display: "flex", gap: "6px", margin: "5px 0", flexWrap: "wrap" }}>
-                    {["10:00 AM", "12:00 PM", "2:00 PM", "5:00 PM", "7:00 PM"].map((tPreset) => (
+                    {["3 min Blitz", "3+2 Blitz", "5 min Blitz", "5+3 Blitz", "10 min Rapid", "10+2 Rapid", "15+10 Classical"].map((tPreset) => (
                       <button
                         key={tPreset}
                         type="button"
@@ -1811,7 +2218,7 @@ export default function TournamentDetails() {
                     type="text"
                     value={editForm.time}
                     onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
-                    placeholder="e.g. 10:00 AM or 2:00 PM - 5:00 PM"
+                    placeholder="e.g. 10 min Rapid, 5+3 Blitz, 3+2 Blitz"
                     style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px", borderRadius: "8px", width: "100%" }}
                     required
                   />
@@ -1917,11 +2324,18 @@ export default function TournamentDetails() {
       {/* --- VISUAL MATCH SCHEDULE MODAL --- */}
       {scheduleModalOpen && (
         <div className="modal-overlay" onClick={() => setScheduleModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: "480px", background: "#1b1710", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "14px", padding: "24px" }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #36332b", paddingBottom: "10px" }}>
-              <h3 style={{ margin: 0, color: "#f3c144", fontSize: "1.2rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "8px" }}>
-                🕒 Set Match Schedule
-              </h3>
+          <div className="modal-card" style={{ maxWidth: "520px", maxHeight: "90vh", overflowY: "auto", background: "#1b1710", border: "1px solid rgba(243, 193, 68, 0.35)", borderRadius: "16px", padding: "24px", boxShadow: "0 20px 50px rgba(0,0,0,0.8)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #36332b", paddingBottom: "12px" }}>
+              <div>
+                <h3 style={{ margin: 0, color: "#f3c144", fontSize: "1.25rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "8px" }}>
+                  🕒 Set Match Schedule
+                </h3>
+                {schedulingMatchData.white && schedulingMatchData.black && (
+                  <span style={{ fontSize: "0.82rem", color: "#bab19c", marginTop: "4px", display: "block" }}>
+                    ⚔️ <strong>{schedulingMatchData.white}</strong> vs <strong>{schedulingMatchData.black}</strong>
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setScheduleModalOpen(false)}
@@ -1930,6 +2344,189 @@ export default function TournamentDetails() {
                 ✕
               </button>
             </div>
+
+            {/* Success Banner */}
+            {scheduleSuccessMessage && (
+              <div style={{ background: "rgba(46, 204, 113, 0.15)", border: "1px solid #2ecc71", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", color: "#2ecc71", fontSize: "0.85rem", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>✓</span>
+                <span>{scheduleSuccessMessage}</span>
+              </div>
+            )}
+
+            {/* MUTUAL FREE TIME & NEAR-OVERLAP SUGGESTIONS */}
+            {(() => {
+              const pAvailMap = tournament?.playersAvailability || {};
+              const whiteKey = schedulingMatchData.white ? schedulingMatchData.white.trim() : "";
+              const blackKey = schedulingMatchData.black ? schedulingMatchData.black.trim() : "";
+              const whiteAvail = pAvailMap[whiteKey] || pAvailMap[whiteKey.toLowerCase()] || [];
+              const blackAvail = pAvailMap[blackKey] || pAvailMap[blackKey.toLowerCase()] || [];
+
+              if (!whiteKey || !blackKey || whiteKey === "BYE" || blackKey === "BYE" || whiteKey === "TBD" || blackKey === "TBD") {
+                return null;
+              }
+
+              const commonSlots = findCommonFreeSlots(whiteAvail, blackAvail);
+              const nearSlots = findNearOverlapSlots(whiteAvail, blackAvail);
+
+              return (
+                <div style={{ background: commonSlots.length > 0 ? "rgba(243, 193, 68, 0.08)" : (nearSlots.length > 0 ? "rgba(52, 152, 219, 0.08)" : "rgba(255, 255, 255, 0.03)"), border: `1px solid ${commonSlots.length > 0 ? "rgba(243, 193, 68, 0.35)" : (nearSlots.length > 0 ? "rgba(52, 152, 219, 0.3)" : "rgba(255, 255, 255, 0.08)")}`, borderRadius: "12px", padding: "14px", marginBottom: "16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "0.82rem", color: commonSlots.length > 0 ? "#f3c144" : (nearSlots.length > 0 ? "#5dade2" : "#bab19c"), fontWeight: "800", display: "flex", alignItems: "center", gap: "6px" }}>
+                      🤝 Mutual Free Hours ({whiteKey.split(" ")[0]} &amp; {blackKey.split(" ")[0]}):
+                    </span>
+                    <span style={{ fontSize: "0.72rem", color: commonSlots.length > 0 ? "#2ecc71" : (nearSlots.length > 0 ? "#5dade2" : "#888"), fontWeight: "700", background: "rgba(0,0,0,0.3)", padding: "2px 8px", borderRadius: "10px" }}>
+                      {commonSlots.length > 0 
+                        ? `✓ ${commonSlots.length} Direct Window${commonSlots.length === 1 ? "" : "s"}` 
+                        : (nearSlots.length > 0 ? `⚡ ${nearSlots.length} Adjacent / Near Slots` : "No Overlap Registered")}
+                    </span>
+                  </div>
+
+                  {/* 1. Direct Overlapping Free Windows */}
+                  {commonSlots.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
+                      {commonSlots.map((cs, idx) => {
+                        const h24 = Math.floor(cs.fromMinutes / 60);
+                        const m24 = cs.fromMinutes % 60;
+                        const timeVal = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+                        const dateVal = getNextDateForDay(cs.day, tournament?.startDate);
+                        const isSelected = schedulingMatchData.time === timeVal && schedulingMatchData.date === dateVal;
+                        const isNearest = idx === 0;
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setSchedulingMatchData(prev => ({
+                                ...prev,
+                                date: dateVal,
+                                time: timeVal
+                              }));
+                            }}
+                            style={{
+                              background: isSelected ? "#f3c144" : (isNearest ? "rgba(243, 193, 68, 0.15)" : "rgba(0, 0, 0, 0.4)"),
+                              color: isSelected ? "#15120c" : "#fff",
+                              border: `1px solid ${isSelected ? "#f3c144" : (isNearest ? "#d4a32a" : "rgba(243, 193, 68, 0.3)")}`,
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              fontSize: "0.8rem",
+                              fontWeight: "700",
+                              textAlign: "left",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {isNearest && <span style={{ background: isSelected ? "#15120c" : "#f3c144", color: isSelected ? "#f3c144" : "#15120c", padding: "1px 5px", borderRadius: "4px", fontSize: "0.68rem", fontWeight: "900" }}>⭐ Nearest</span>}
+                              <span>📅 {cs.day}: {cs.from} – {cs.to}</span>
+                            </span>
+                            <span style={{ fontSize: "0.72rem", opacity: 0.9, background: isSelected ? "rgba(0,0,0,0.2)" : "rgba(243, 193, 68, 0.15)", color: isSelected ? "#15120c" : "#f3c144", padding: "2px 8px", borderRadius: "4px" }}>
+                              {cs.durationLabel} window • 1-Click Apply
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 2. Adjacent / Transition Free Slots (When no direct overlap) */}
+                  {commonSlots.length === 0 && nearSlots.length > 0 && (
+                    <div style={{ marginTop: "6px" }}>
+                      <p style={{ margin: "0 0 8px", fontSize: "0.75rem", color: "#d5dbdb" }}>
+                        🔍 <strong>Adjacent Free Slots Detected:</strong> Opponents have back-to-back free periods. You can schedule at the boundary transition time:
+                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {nearSlots.map((ns, idx) => {
+                          const h24 = Math.floor(ns.targetMinutes / 60);
+                          const m24 = ns.targetMinutes % 60;
+                          const timeVal = `${String(h24).padStart(2, "0")}:${String(m24).padStart(2, "0")}`;
+                          const dateVal = getNextDateForDay(ns.day, tournament?.startDate);
+                          const isSelected = schedulingMatchData.time === timeVal && schedulingMatchData.date === dateVal;
+
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setSchedulingMatchData(prev => ({
+                                  ...prev,
+                                  date: dateVal,
+                                  time: timeVal
+                                }));
+                              }}
+                              style={{
+                                background: isSelected ? "#5dade2" : "rgba(0, 0, 0, 0.4)",
+                                color: isSelected ? "#15120c" : "#fff",
+                                border: `1px solid ${isSelected ? "#5dade2" : "rgba(93, 173, 226, 0.35)"}`,
+                                padding: "8px 12px",
+                                borderRadius: "8px",
+                                fontSize: "0.8rem",
+                                fontWeight: "700",
+                                textAlign: "left",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                cursor: "pointer"
+                              }}
+                            >
+                              <span>📅 {ns.day} at {ns.time}</span>
+                              <span style={{ fontSize: "0.72rem", background: isSelected ? "rgba(0,0,0,0.2)" : "rgba(93, 173, 226, 0.15)", color: isSelected ? "#15120c" : "#5dade2", padding: "2px 8px", borderRadius: "4px" }}>
+                                {ns.gapLabel} • Apply
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Universal Campus Activity Breaks (12:00 PM Breaks & 4:00 PM After-Hours) */}
+                  {commonSlots.length === 0 && (
+                    <div style={{ marginTop: nearSlots.length > 0 ? "10px" : "4px", borderTop: nearSlots.length > 0 ? "1px solid rgba(255,255,255,0.08)" : "none", paddingTop: nearSlots.length > 0 ? "8px" : "0" }}>
+                      <span style={{ fontSize: "0.74rem", color: "#bab19c", fontWeight: "700", display: "block", marginBottom: "6px" }}>
+                        ⚡ Universal Campus Hours (12:00 PM Activity Breaks &amp; 4:00 PM After-Hours):
+                      </span>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(145px, 1fr))", gap: "6px" }}>
+                        {UNIVERSAL_CAMPUS_SLOTS.map((bSlot, bIdx) => {
+                          const dateVal = getNextDateForDay(bSlot.day, tournament?.startDate);
+                          const isSelected = schedulingMatchData.time === bSlot.time && schedulingMatchData.date === dateVal;
+                          return (
+                            <button
+                              key={bIdx}
+                              type="button"
+                              onClick={() => {
+                                setSchedulingMatchData(prev => ({
+                                  ...prev,
+                                  date: dateVal,
+                                  time: bSlot.time
+                                }));
+                              }}
+                              style={{
+                                background: isSelected ? "#f3c144" : "rgba(255, 255, 255, 0.06)",
+                                color: isSelected ? "#15120c" : "#ddd",
+                                border: `1px solid ${isSelected ? "#f3c144" : "rgba(243, 193, 68, 0.25)"}`,
+                                padding: "6px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.73rem",
+                                fontWeight: "700",
+                                textAlign: "left",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              🏛️ {bSlot.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Quick Date Presets */}
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>
@@ -1962,7 +2559,7 @@ export default function TournamentDetails() {
             {/* Quick Time Presets */}
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "14px", flexWrap: "wrap" }}>
               <span style={{ fontSize: "0.75rem", color: "#bab19c", fontWeight: "700" }}>🕒 Quick Time:</span>
-              {["10:00", "11:30", "13:00", "14:30", "16:00", "17:00", "19:00"].map((tStr) => {
+              {["10:00", "11:30", "12:00", "13:00", "14:30", "16:00", "17:00", "19:00"].map((tStr) => {
                 const h = parseInt(tStr.split(":")[0], 10);
                 const m = tStr.split(":")[1];
                 const ampm = h >= 12 ? "PM" : "AM";
@@ -2017,15 +2614,72 @@ export default function TournamentDetails() {
             </div>
 
             {/* Live Preview Pill */}
-            <div style={{ background: "rgba(0,0,0,0.3)", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+            <div style={{ background: "rgba(0,0,0,0.3)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
               <span style={{ fontSize: "0.78rem", color: "#8c867a" }}>Selected Schedule:</span>
-              <strong style={{ color: "#f3c144", fontSize: "0.92rem" }}>
+              <strong style={{ color: "#f3c144", fontSize: "0.95rem" }}>
                 📅 {formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time) || "Pick date and time"}
               </strong>
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            {/* 👑 MANAGER / ARBITER OFFICIAL OVERRIDE SECTION */}
+            {isStaff && (
+              <div style={{ background: "linear-gradient(135deg, rgba(243, 193, 68, 0.1), rgba(212, 163, 42, 0.05))", border: "1px solid rgba(243, 193, 68, 0.4)", borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "1.1rem" }}>👑</span>
+                  <div>
+                    <h4 style={{ margin: 0, color: "#f3c144", fontSize: "0.88rem", fontWeight: "800" }}>
+                      Arbiter / Manager Official Schedule Assignment
+                    </h4>
+                    <span style={{ fontSize: "0.72rem", color: "#bab19c" }}>
+                      Set the official match schedule manually and automatically notify both competitors.
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "8px" }}>
+                  <input
+                    type="text"
+                    placeholder="Arbiter instructions (e.g. Round deadline, play in Lounge Board 1)..."
+                    value={arbiterNote}
+                    onChange={(e) => setArbiterNote(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "#15120c",
+                      border: "1px solid rgba(243, 193, 68, 0.3)",
+                      color: "#fff",
+                      borderRadius: "6px",
+                      padding: "8px 10px",
+                      fontSize: "0.8rem",
+                      boxSizing: "border-box",
+                      marginBottom: "10px"
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    disabled={isSubmittingSchedule}
+                    onClick={() => handleDispatchScheduleNotice(true)}
+                    style={{
+                      width: "100%",
+                      background: "linear-gradient(135deg, #f3c144, #d4a32a)",
+                      color: "#15120c",
+                      border: "none",
+                      padding: "9px 16px",
+                      borderRadius: "6px",
+                      fontWeight: "800",
+                      fontSize: "0.84rem",
+                      cursor: "pointer",
+                      boxShadow: "0 4px 15px rgba(243, 193, 68, 0.3)"
+                    }}
+                  >
+                    {isSubmittingSchedule ? "⏳ Dispatching Arbiter Order..." : "👑 Set Official Arbiter Order & Alert Both Players"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ACTION BUTTONS */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", borderTop: "1px solid #36332b", paddingTop: "14px" }}>
               <button
                 type="button"
                 className="btn-secondary"
@@ -2034,145 +2688,83 @@ export default function TournamentDetails() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={async () => {
-                  const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
-                  if (!formatted) {
-                    alert("Please select a date first!");
-                    return;
-                  }
-                  await handleUpdateMatch(schedulingMatchData.matchId, { matchTime: formatted });
-                  setScheduleModalOpen(false);
-                }}
-                style={{ padding: "8px 18px", borderRadius: "6px", fontWeight: "800" }}
-              >
-                Save &amp; Sync Calendar
-              </button>
+
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {/* 15-Minute Match Reminder button */}
+                <button
+                  type="button"
+                  disabled={isSubmittingSchedule}
+                  onClick={handleSend15MinReminder}
+                  style={{
+                    background: "rgba(243, 193, 68, 0.15)",
+                    border: "1px solid #f3c144",
+                    color: "#f3c144",
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    fontWeight: "700",
+                    fontSize: "0.82rem",
+                    cursor: "pointer"
+                  }}
+                  title="Send 15-minute countdown alert and rules reminder to both players"
+                >
+                  ⏰ Alert 15-Min Reminder
+                </button>
+
+                {/* Competitor proposal button */}
+                <button
+                  type="button"
+                  disabled={isSubmittingSchedule}
+                  onClick={() => handleDispatchScheduleNotice(false)}
+                  style={{
+                    background: "rgba(52, 152, 219, 0.15)",
+                    border: "1px solid #3498db",
+                    color: "#5dade2",
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    fontWeight: "700",
+                    fontSize: "0.82rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  {isSubmittingSchedule ? "⏳ Dispatching..." : "📨 Propose & Alert Opponent"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={async () => {
+                    const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
+                    if (!formatted) {
+                      alert("Please select a date first!");
+                      return;
+                    }
+                    await handleUpdateMatch(schedulingMatchData.matchId, { matchTime: formatted });
+                    setScheduleModalOpen(false);
+                  }}
+                  style={{ padding: "8px 16px", borderRadius: "6px", fontWeight: "800", fontSize: "0.82rem" }}
+                >
+                  💾 Save &amp; Sync Calendar
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* --- CELEBRATION MODAL --- */}
-      {celebrationModalOpen && (
-        <div className="modal-overlay" onClick={() => setCelebrationModalOpen(false)}>
-          <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />
-          <div className="modal-card celebration-card" onClick={(e) => e.stopPropagation()} style={{ textAlign: "center", maxWidth: "600px", padding: "40px 20px" }}>
-            <button className="close-btn" onClick={() => setCelebrationModalOpen(false)}>
-              &times;
-            </button>
-            <h2 style={{ fontSize: "2rem", color: "#f3c144", marginBottom: "10px" }}>🏆 Tournament Complete! 🏆</h2>
-            <p style={{ color: "#bab19c", marginBottom: "24px", fontSize: "1.05rem" }}>
-              Congratulations to our top tacticians for their outstanding tournament performance!
-            </p>
-            
-            {/* Top 3 Podium with Player Photos & Profile Redirects */}
-            <div className="celebration-podium-container">
-              {/* 2nd Place */}
-              {podiumP2 && (
-                <div className="celebration-podium-col celebration-col-silver">
-                  <div className="celebration-avatar-wrapper">
-                    <img 
-                      src={getPlayerAvatarUrl(podiumP2.name, tournament?.playerAvatars)} 
-                      alt={podiumP2.name} 
-                      className="celebration-avatar celebration-avatar-silver"
-                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                    />
-                    <span className="celebration-medal-badge">🥈</span>
-                  </div>
-                  <div className="celebration-pedestal celebration-pedestal-silver">
-                    <h4 className="celebration-player-name" title={podiumP2.name}>{podiumP2.name}</h4>
-                    <p className="celebration-player-pts">{podiumP2.points != null ? `${podiumP2.points} pts` : "Runner-Up"}</p>
-                    <button 
-                      type="button" 
-                      className="celebration-profile-btn"
-                      onClick={() => {
-                        setCelebrationModalOpen(false);
-                        navigate(`/profile?name=${encodeURIComponent(podiumP2.name)}`);
-                      }}
-                    >
-                      Profile ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* 1st Place */}
-              {podiumP1 && (
-                <div className="celebration-podium-col celebration-col-gold">
-                  <div className="celebration-avatar-wrapper celebration-gold-wrapper">
-                    <div className="celebration-crown">👑</div>
-                    <img 
-                      src={getPlayerAvatarUrl(podiumP1.name, tournament?.playerAvatars)} 
-                      alt={podiumP1.name} 
-                      className="celebration-avatar celebration-avatar-gold"
-                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                    />
-                    <span className="celebration-medal-badge gold-badge">🥇</span>
-                  </div>
-                  <div className="celebration-pedestal celebration-pedestal-gold">
-                    <span className="champion-ribbon">CHAMPION</span>
-                    <h4 className="celebration-player-name gold-name" title={podiumP1.name}>{podiumP1.name}</h4>
-                    <p className="celebration-player-pts gold-pts">{podiumP1.points != null ? `${podiumP1.points} pts` : "Champion"}</p>
-                    <button 
-                      type="button" 
-                      className="celebration-profile-btn gold-btn"
-                      onClick={() => {
-                        setCelebrationModalOpen(false);
-                        navigate(`/profile?name=${encodeURIComponent(podiumP1.name)}`);
-                      }}
-                    >
-                      Profile ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 3rd Place */}
-              {podiumP3 && (
-                <div className="celebration-podium-col celebration-col-bronze">
-                  <div className="celebration-avatar-wrapper">
-                    <img 
-                      src={getPlayerAvatarUrl(podiumP3.name, tournament?.playerAvatars)} 
-                      alt={podiumP3.name} 
-                      className="celebration-avatar celebration-avatar-bronze"
-                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                    />
-                    <span className="celebration-medal-badge">🥉</span>
-                  </div>
-                  <div className="celebration-pedestal celebration-pedestal-bronze">
-                    <h4 className="celebration-player-name" title={podiumP3.name}>{podiumP3.name}</h4>
-                    <p className="celebration-player-pts">{podiumP3.points != null ? `${podiumP3.points} pts` : "3rd Place"}</p>
-                    <button 
-                      type="button" 
-                      className="celebration-profile-btn"
-                      onClick={() => {
-                        setCelebrationModalOpen(false);
-                        navigate(`/profile?name=${encodeURIComponent(podiumP3.name)}`);
-                      }}
-                    >
-                      Profile ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <button 
-              className="btn-primary" 
-              onClick={() => {
-                setCelebrationModalOpen(false);
-                handleUpdateTournamentStatus("Completed");
-              }}
-              style={{ padding: "12px 30px", fontSize: "1.1rem" }}
-            >
-              Mark Tournament as Completed
-            </button>
-          </div>
-        </div>
-      )}
+      <WinnerCelebrationModal
+        isOpen={celebrationModalOpen}
+        onClose={() => setCelebrationModalOpen(false)}
+        tournamentTitle={tournament?.title}
+        tournamentType={tournament?.type}
+        winner={podiumP1}
+        runnerUp={podiumP2}
+        thirdPlace={podiumP3}
+        customAvatars={tournament?.playerAvatars}
+        isCompletedStatus={tournament?.status === "Completed"}
+        isStaff={isStaff}
+        onMarkCompleted={() => handleUpdateTournamentStatus("Completed")}
+      />
       {/* Interactive Player Profile Modal */}
       {selectedPlayerModal && (
         <div className="player-modal-overlay" onClick={() => setSelectedPlayerModal(null)}>

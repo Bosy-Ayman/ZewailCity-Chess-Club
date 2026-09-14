@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import "./Header.css";
 import LoginModal from "./LoginModal";
+import GlobalWinnerAlert from "./GlobalWinnerAlert";
+import WinnerCelebrationModal from "./WinnerCelebrationModal";
 import { safeFetchJson, safeSetLocalStorage, compressBase64Image } from "../utils/api";
+import { chessAudio } from "../utils/chessAudio";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
@@ -19,6 +22,7 @@ const NAV_ITEMS = [
 ];
 
 const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggleSidebar }) => {
+  const navigate = useNavigate();
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(false);
   const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen;
   const toggleSidebar = externalToggleSidebar || (() => setInternalSidebarOpen(prev => !prev));
@@ -38,9 +42,39 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   const [userDrawerOpen, setUserDrawerOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [selectedNotif, setSelectedNotif] = useState(null);
+  const [winnerCelebrationData, setWinnerCelebrationData] = useState(null);
   const [notifLoading, setNotifLoading] = useState(false);
   const [activeTacticians, setActiveTacticians] = useState(12);
+  const [soundActive, setSoundActive] = useState(() => chessAudio.isSoundEnabled());
+  const prevUnreadRef = useRef(-1);
   const location = useLocation();
+
+  const getDestinationLabel = (link) => {
+    if (!link || link === '/' || link === '#' || link.trim() === '') return null;
+    const l = link.toLowerCase();
+    if (l.includes('tournament')) return '🏆 View Tournaments ➔';
+    if (l.includes('puzzle')) return '🧩 Solve Puzzles ➔';
+    if (l.includes('profile')) return '👤 View Player Dossier ➔';
+    if (l.includes('community')) return '👥 View Community ➔';
+    if (l.includes('calendar')) return '📅 View Calendar ➔';
+    if (l.includes('history')) return '📜 View History ➔';
+    if (l.includes('clubroles')) return '✨ View Club Roles ➔';
+    if (l.includes('contact') || l.includes('inquiries')) return '📬 View Inquiries ➔';
+    return '🚀 Open Related Page ➔';
+  };
+
+  const handleNavigateToDestination = (link) => {
+    setSelectedNotif(null);
+    if (!link || link === '/' || link === '#' || link.trim() === '') return;
+    let target = link.trim();
+    if (target.startsWith('http://') || target.startsWith('https://')) {
+      window.open(target, '_blank', 'noopener,noreferrer');
+    } else {
+      if (!target.startsWith('/')) target = `/${target}`;
+      navigate(target);
+    }
+  };
 
   // Relative time helper
   const relativeTime = (dateStr) => {
@@ -57,13 +91,21 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const fetchNotifications = async (email) => {
-    if (!email) return;
+    const targetEmail = email || userEmail || localStorage.getItem('adminEmail') || localStorage.getItem('userEmail');
+    if (!targetEmail) return;
     try {
       setNotifLoading(true);
-      const res = await fetch(`${API_BASE}/api/notifications?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`${API_BASE}/api/notifications?email=${encodeURIComponent(targetEmail)}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) setNotifications(data);
+        if (Array.isArray(data)) {
+          const count = data.filter(n => !n.read).length;
+          if (prevUnreadRef.current !== -1 && count > prevUnreadRef.current) {
+            chessAudio.playNotification();
+          }
+          prevUnreadRef.current = count;
+          setNotifications(data);
+        }
       }
     } catch (e) {
       // silently ignore
@@ -73,7 +115,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   };
 
   const handleMarkAllRead = async () => {
-    const email = localStorage.getItem('adminEmail');
+    const email = userEmail || localStorage.getItem('adminEmail') || localStorage.getItem('userEmail');
     if (!email) return;
     // Optimistic update
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -97,9 +139,76 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
     } catch (e) {}
   };
 
+  const handleDeleteNotification = async (id) => {
+    setNotifications(prev => prev.filter(n => n._id !== id));
+    if (selectedNotif && selectedNotif._id === id) {
+      setSelectedNotif(null);
+    }
+    try {
+      await fetch(`${API_BASE}/api/notifications/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
+  };
+
   const handleNotifClick = async (n) => {
     if (!n.read) await handleMarkSingleRead(n._id);
-    if (n.link && n.link !== '/') window.location.href = n.link;
+    if (n.type === 'winner' || (n.message && (n.message.includes('CHAMPION CROWNED') || n.message.includes('won the')))) {
+      const winnerName = n.actorName || n.metadata?.winner?.name || n.message?.match(/CHAMPION CROWNED:\s*([^!]+?)\s*(?:has won|won)/i)?.[1] || "Champion";
+      const titleMatch = n.message?.match(/won(?: the)? (.+?)(?:\s*\((.+?)\))?!/i);
+      const tournamentTitle = n.metadata?.tournamentTitle || titleMatch?.[1]?.trim() || "ZC Chess Championship";
+      const tournamentType = n.metadata?.tournamentType || titleMatch?.[2]?.trim() || "Tournament";
+
+      let winner = n.metadata?.winner || { name: winnerName, points: "Champion", avatar: n.actorAvatar };
+      let runnerUp = n.metadata?.runnerUp || null;
+      let thirdPlace = n.metadata?.thirdPlace || null;
+      let customAvatars = n.metadata?.customAvatars || {};
+
+      setWinnerCelebrationData({
+        tournamentTitle,
+        tournamentType,
+        winner,
+        runnerUp,
+        thirdPlace,
+        customAvatars,
+        link: n.link
+      });
+      setShowNotifications(false);
+
+      // Fetch full podium (2nd & 3rd place) if not in notification metadata
+      const tourneyIdMatch = n.link?.match(/[?&]id=([a-f0-9]+)/i) || n.link?.match(/\/tournaments\/([a-f0-9]+)/i);
+      if (tourneyIdMatch && (!runnerUp || !thirdPlace)) {
+        try {
+          const res = await fetch(`${API_BASE}/api/tournaments/${tourneyIdMatch[1]}`);
+          if (res.ok) {
+            const tData = await res.json();
+            const tourney = tData?.data || tData;
+            if (tourney) {
+              let p1 = tourney.podium?.[0] || (tourney.winner ? { name: tourney.winner, points: "Champion" } : winner);
+              let p2 = tourney.podium?.[1] || runnerUp;
+              let p3 = tourney.podium?.[2] || thirdPlace;
+
+              if (Array.isArray(tourney.playersList) && (!p2 || !p3)) {
+                const sorted = [...tourney.playersList].sort((a, b) => (b.points || 0) - (a.points || 0));
+                if (!p1 && sorted[0]) p1 = sorted[0];
+                if (!p2 && sorted[1]) p2 = sorted[1];
+                if (!p3 && sorted[2]) p3 = sorted[2];
+              }
+
+              setWinnerCelebrationData(prev => prev ? {
+                ...prev,
+                winner: p1 || prev.winner,
+                runnerUp: p2 || prev.runnerUp,
+                thirdPlace: p3 || prev.thirdPlace,
+                customAvatars: { ...(prev.customAvatars || {}), ...(tourney.playerAvatars || {}) }
+              } : null);
+            }
+          }
+        } catch (e) {}
+      }
+      return;
+    }
+    setSelectedNotif(n);
     setShowNotifications(false);
   };
 
@@ -222,6 +331,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
       window.removeEventListener("userNameUpdated", handleAvatarUpdate);
       window.removeEventListener("storage", handleAvatarUpdate);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -288,7 +398,22 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
               {showNotifications && (
                 <div className="notifications-dropdown">
                   <div className="notifications-header">
-                    <h3>Notifications</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h3>Notifications</h3>
+                      <button
+                        type="button"
+                        className="notif-sound-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = chessAudio.toggleSound();
+                          setSoundActive(next);
+                          if (next) chessAudio.playNotification();
+                        }}
+                        title={soundActive ? "Sound alerts on (click to test / toggle)" : "Sound muted (click to unmute)"}
+                      >
+                        {soundActive ? "🔊" : "🔇"}
+                      </button>
+                    </div>
                     {unreadCount > 0 && (
                       <button className="mark-read-btn" onClick={handleMarkAllRead}>
                         Mark all read
@@ -306,7 +431,9 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                       </div>
                     ) : (
                       notifications.map((n) => {
-                        const typeIcon = n.type === 'follow' ? '🤝'
+                        const isWinnerNotif = n.type === 'winner' || (n.message && (n.message.includes('CHAMPION CROWNED') || n.message.includes('won the')));
+                        const typeIcon = isWinnerNotif ? '👑'
+                          : n.type === 'follow' ? '🤝'
                           : n.type === 'tournament_join' ? '🏆'
                           : n.type === 'tournament_start' ? '🚀'
                           : '♟️';
@@ -316,7 +443,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                         return (
                           <div
                             key={n._id}
-                            className={`notification-item ${n.read ? 'read' : 'unread'}`}
+                            className={`notification-item ${n.read ? 'read' : 'unread'} ${isWinnerNotif ? 'winner-notif-row' : ''}`}
                             onClick={() => handleNotifClick(n)}
                             style={{ cursor: 'pointer' }}
                           >
@@ -326,17 +453,36 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                                 <img
                                   src={n.actorAvatar}
                                   alt={n.actorName}
-                                  style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(243,193,68,0.3)' }}
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    border: isWinnerNotif ? '2px solid #f3c144' : '2px solid rgba(243,193,68,0.3)',
+                                    boxShadow: isWinnerNotif ? '0 0 10px rgba(243,193,68,0.5)' : 'none'
+                                  }}
                                 />
                               ) : (
-                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3a3220,#2a2416)', border: '2px solid rgba(243,193,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: '#f3c144' }}>
+                                <div style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: '50%',
+                                  background: isWinnerNotif ? 'linear-gradient(135deg, #423518, #201a0d)' : 'linear-gradient(135deg,#3a3220,#2a2416)',
+                                  border: isWinnerNotif ? '2px solid #f3c144' : '2px solid rgba(243,193,68,0.3)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 800,
+                                  color: '#f3c144'
+                                }}>
                                   {initials}
                                 </div>
                               )}
-                              <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: '0.7rem', lineHeight: 1 }}>{typeIcon}</span>
+                              <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: isWinnerNotif ? '0.85rem' : '0.7rem', lineHeight: 1 }}>{typeIcon}</span>
                             </div>
                             <div className="notification-content">
-                              <p className="notification-text">{n.message}</p>
+                              <p className={`notification-text ${isWinnerNotif ? 'winner-notif-text' : ''}`}>{n.message}</p>
                               <span className="notification-time">{relativeTime(n.createdAt)}</span>
                             </div>
                           </div>
@@ -576,6 +722,9 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                   <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">🧩</span> Manage Puzzles
                   </Link>
+                  <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">📢</span> Broadcast & Email
+                  </Link>
                   <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">📬</span> Inquiries & Messages
                   </Link>
@@ -614,6 +763,131 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
       )}
 
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
+
+      {/* ============================================================
+          NOTIFICATION DETAIL MODAL
+      ============================================================ */}
+      {selectedNotif && (
+        <div className="notif-modal-overlay" onClick={() => setSelectedNotif(null)}>
+          <div className="notif-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="notif-modal-header">
+              <div className="notif-modal-type-wrap">
+                <span className="notif-modal-icon">
+                  {selectedNotif.type === 'broadcast' ? '📢'
+                    : selectedNotif.type === 'follow' ? '🤝'
+                    : selectedNotif.type === 'tournament_join' ? '🏆'
+                    : selectedNotif.type === 'tournament_start' ? '🚀'
+                    : selectedNotif.type === 'direct_message' ? '✉️'
+                    : '♟️'}
+                </span>
+                <div>
+                  <h3 className="notif-modal-title">
+                    {selectedNotif.type === 'broadcast' ? 'Club Announcement'
+                      : selectedNotif.type === 'follow' ? 'Player Connection'
+                      : selectedNotif.type === 'tournament_join' || selectedNotif.type === 'tournament_start' ? 'Tournament Alert'
+                      : 'Notification Details'}
+                  </h3>
+                  <span className="notif-modal-time">
+                    {new Date(selectedNotif.createdAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} ({relativeTime(selectedNotif.createdAt)})
+                  </span>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                className="notif-modal-close-btn" 
+                onClick={() => setSelectedNotif(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="notif-modal-body">
+              {/* Sender Info */}
+              <div className="notif-modal-sender-bar">
+                {selectedNotif.actorAvatar ? (
+                  <img
+                    src={selectedNotif.actorAvatar}
+                    alt={selectedNotif.actorName || 'Sender'}
+                    className="notif-modal-sender-avatar"
+                  />
+                ) : (
+                  <div className="notif-modal-sender-initials">
+                    {(selectedNotif.actorName || 'ZC').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="notif-modal-sender-info">
+                  <span className="notif-modal-sender-name">
+                    {selectedNotif.actorName || 'Zewail City Chess Club'}
+                  </span>
+                  <span className="notif-modal-sender-sub">
+                    {selectedNotif.actorEmail || 'chesszc@zewailcity.edu.eg'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Message Content */}
+              <div className="notif-modal-message-box">
+                {selectedNotif.message}
+              </div>
+            </div>
+
+            <div className="notif-modal-actions">
+              <button
+                type="button"
+                className="notif-modal-delete-btn"
+                onClick={() => handleDeleteNotification(selectedNotif._id)}
+              >
+                🗑️ Delete
+              </button>
+
+              <div className="notif-modal-right-actions">
+                <button
+                  type="button"
+                  className="notif-modal-cancel-btn"
+                  onClick={() => setSelectedNotif(null)}
+                >
+                  Close
+                </button>
+                {(() => {
+                  const destLabel = getDestinationLabel(selectedNotif.link);
+                  return destLabel ? (
+                    <button
+                      type="button"
+                      className="notif-modal-cta-btn"
+                      onClick={() => handleNavigateToDestination(selectedNotif.link)}
+                    >
+                      {destLabel}
+                    </button>
+                  ) : null;
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Floating Winner Announcement Banner */}
+      <GlobalWinnerAlert notifications={notifications} />
+
+      {/* Champion Celebration Modal triggered from notifications */}
+      {winnerCelebrationData && (
+        <WinnerCelebrationModal
+          isOpen={!!winnerCelebrationData}
+          onClose={() => setWinnerCelebrationData(null)}
+          tournamentTitle={winnerCelebrationData.tournamentTitle}
+          tournamentType={winnerCelebrationData.tournamentType}
+          winner={winnerCelebrationData.winner}
+          runnerUp={winnerCelebrationData.runnerUp}
+          thirdPlace={winnerCelebrationData.thirdPlace}
+          customAvatars={winnerCelebrationData.customAvatars}
+          onViewBracketOrStandings={() => {
+            if (winnerCelebrationData.link) {
+              handleNavigateToDestination(winnerCelebrationData.link);
+            }
+          }}
+        />
+      )}
     </>
   );
 };

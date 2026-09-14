@@ -5,7 +5,7 @@ import Footer from "../components/Footer";
 import { 
   Users, Search, Swords, UserPlus, UserCheck, ExternalLink, 
   Crown, Heart, Send, X, CheckCircle2, Copy, Check, 
-  Mail, Sparkles, User, MapPin, Calendar
+  Mail, Sparkles, User, MapPin
 } from "lucide-react";
 import { safeFetchJson } from "../utils/api";
 import "./Community.css";
@@ -371,14 +371,6 @@ const Community = () => {
     setTimeout(() => setCopiedInvite(false), 2500);
   };
 
-  const topRatedMember = [...users]
-    .filter((member) => (member.fideRating || member.chessComRating || member.rating || 0) > 0)
-    .sort((a, b) => (b.fideRating || b.chessComRating || b.rating || 0) - (a.fideRating || a.chessComRating || a.rating || 0))[0];
-  const mostCheeredMember = [...users].sort((a, b) => (b.cheers || 0) - (a.cheers || 0))[0];
-  const nextTournament = communityTournaments
-    .filter((tournament) => tournament.status !== "Completed")
-    .sort((a, b) => new Date(a.startDate || 0) - new Date(b.startDate || 0))[0];
-
   return (
     <div className="community-page">
       <Header />
@@ -452,45 +444,6 @@ const Community = () => {
           </section>
         )}
 
-        {/* Data-backed community pulse */}
-        <section className="community-pulse-section" aria-label="Community pulse">
-          <div className="community-pulse-heading">
-            <div>
-              <span className="community-pulse-kicker">Live club pulse</span>
-              <h2>What&apos;s happening in the club</h2>
-            </div>
-            <Link to="/history?tab=events" className="community-pulse-link">
-              View events <ExternalLink size={13} />
-            </Link>
-          </div>
-          <div className="community-pulse-grid">
-            <article className="community-pulse-card community-pulse-card--gold">
-              <span className="community-pulse-icon"><Crown size={18} /></span>
-              <div>
-                <span className="community-pulse-label">Leaderboard spotlight</span>
-                <strong>{topRatedMember?.name || "New challengers welcome"}</strong>
-                <p>{topRatedMember ? `${topRatedMember.fideRating || topRatedMember.chessComRating || topRatedMember.rating} Elo leads the directory.` : "Add a rating to appear on the club board."}</p>
-              </div>
-            </article>
-            <article className="community-pulse-card community-pulse-card--rose">
-              <span className="community-pulse-icon"><Heart size={18} /></span>
-              <div>
-                <span className="community-pulse-label">Community favorite</span>
-                <strong>{mostCheeredMember?.name || "Be the first to cheer"}</strong>
-                <p>{mostCheeredMember ? `${mostCheeredMember.cheers || 0} cheers from fellow tacticians.` : "Celebrate a teammate from the directory."}</p>
-              </div>
-            </article>
-            <article className="community-pulse-card community-pulse-card--teal">
-              <span className="community-pulse-icon"><Calendar size={18} /></span>
-              <div>
-                <span className="community-pulse-label">Next on the board</span>
-                <strong>{nextTournament?.title || "Tournament archives"}</strong>
-                <p>{nextTournament?.startDate ? `Scheduled for ${new Date(nextTournament.startDate).toLocaleDateString()}.` : "Explore past tournaments and champions."}</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
         {/* Search & Filter Controls */}
         <section className="community-controls-section">
           <div className="search-input-wrapper">
@@ -554,18 +507,21 @@ const Community = () => {
             </button>
           </div>
         </section>
-
-        {/* Member Grid + Leaderboard Sidebar Layout */}
-        <section className="community-grid-section">
-          <div className="community-layout-with-sidebar">
-
-            {/* TOP RATED LEADERBOARD SIDEBAR */}
-            <aside className="community-leaderboard-sidebar">
-              <div className="leaderboard-header">
-                <span className="leaderboard-icon">🏅</span>
-                <h3 className="leaderboard-title">Top Rated</h3>
+        {/* Spotlight Leaders & Cheered Banner (Podium Bar) */}
+        <section className="community-spotlight-section">
+          <div className="community-spotlight-container">
+            {/* Top Rated Spotlight */}
+            <div className="community-spotlight-card spotlight-gold">
+              <div className="spotlight-card-header">
+                <div className="spotlight-header-title">
+                  <span className="spotlight-icon">🏅</span>
+                  <div>
+                    <h3 className="spotlight-title">Top Rated Contenders</h3>
+                    <span className="spotlight-sub">Highest Elo on campus</span>
+                  </div>
+                </div>
               </div>
-              <div className="leaderboard-list">
+              <div className="spotlight-entries-row">
                 {[...users]
                   .filter(u => (u.fideRating || u.chessComRating || u.rating || 0) > 0)
                   .sort((a, b) => {
@@ -573,63 +529,81 @@ const Community = () => {
                     const rb = b.fideRating || b.chessComRating || b.rating || 0;
                     return rb - ra;
                   })
-                  .slice(0, 5)
+                  .slice(0, 4)
                   .map((member, idx) => {
                     const rating = member.fideRating || member.chessComRating || member.rating || 0;
                     const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
-                    const rankColors = ['#f3c144', '#c0c0c0', '#cd7f32', '#8c8578', '#6b6560'];
+                    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
                     return (
-                      <div key={member.email || idx} className="leaderboard-entry">
-                        <span className="leaderboard-rank" style={{ color: rankColors[idx] }}>
-                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
-                        </span>
+                      <div 
+                        key={member.email || idx} 
+                        className="spotlight-entry-pill"
+                        onClick={(e) => handleOpenProfileModal(member, e)}
+                        title={`View ${member.name}'s profile`}
+                      >
+                        <span className="spotlight-rank">{medal}</span>
                         <img
                           src={avatar}
                           alt={member.name}
-                          className="leaderboard-avatar"
+                          className="spotlight-avatar"
                           onError={e => { e.target.src = '/Icons/unknown.png'; }}
                         />
-                        <div className="leaderboard-info">
-                          <span className="leaderboard-name">{member.name?.split(' ')[0] || 'Member'}</span>
-                          <span className="leaderboard-rating">{rating} Elo</span>
+                        <div className="spotlight-entry-text">
+                          <span className="spotlight-name">{member.name || 'Member'}</span>
+                          <span className="spotlight-stat gold">{rating} Elo</span>
                         </div>
                       </div>
                     );
                   })}
               </div>
+            </div>
 
-              {/* Most Cheered */}
-              <div className="leaderboard-header" style={{ marginTop: '20px' }}>
-                <span className="leaderboard-icon">❤️</span>
-                <h3 className="leaderboard-title">Most Cheered</h3>
+            {/* Most Cheered Spotlight */}
+            <div className="community-spotlight-card spotlight-rose">
+              <div className="spotlight-card-header">
+                <div className="spotlight-header-title">
+                  <span className="spotlight-icon">❤️</span>
+                  <div>
+                    <h3 className="spotlight-title">Most Cheered Tacticians</h3>
+                    <span className="spotlight-sub">Fan favorites & peers</span>
+                  </div>
+                </div>
               </div>
-              <div className="leaderboard-list">
+              <div className="spotlight-entries-row">
                 {[...users]
                   .sort((a, b) => (b.cheers || 0) - (a.cheers || 0))
-                  .slice(0, 3)
+                  .slice(0, 4)
                   .map((member, idx) => {
                     const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
                     return (
-                      <div key={(member.email || idx) + '-cheer'} className="leaderboard-entry">
-                        <span className="leaderboard-rank" style={{ color: '#e05b7c' }}>#{idx + 1}</span>
+                      <div 
+                        key={(member.email || idx) + '-cheer'} 
+                        className="spotlight-entry-pill"
+                        onClick={(e) => handleOpenProfileModal(member, e)}
+                        title={`View ${member.name}'s profile`}
+                      >
+                        <span className="spotlight-rank rank-rose">#{idx + 1}</span>
                         <img
                           src={avatar}
                           alt={member.name}
-                          className="leaderboard-avatar"
+                          className="spotlight-avatar"
                           onError={e => { e.target.src = '/Icons/unknown.png'; }}
                         />
-                        <div className="leaderboard-info">
-                          <span className="leaderboard-name">{member.name?.split(' ')[0] || 'Member'}</span>
-                          <span className="leaderboard-rating" style={{ color: '#e05b7c' }}>❤️ {member.cheers || 0}</span>
+                        <div className="spotlight-entry-text">
+                          <span className="spotlight-name">{member.name || 'Member'}</span>
+                          <span className="spotlight-stat rose">❤️ {member.cheers || 0}</span>
                         </div>
                       </div>
                     );
                   })}
               </div>
-            </aside>
+            </div>
+          </div>
+        </section>
 
-            {/* MAIN GRID AREA */}
-            <div className="community-grid-main">
+        {/* Member Grid Section */}
+        <section className="community-grid-section">
+          <div className="community-grid-main">
 
               {/* Sort Controls */}
               <div className="community-sort-bar">
@@ -848,8 +822,7 @@ const Community = () => {
             </div>
           )}
         </div>
-      </div>
-    </section>
+      </section>
 
 
         {/* Direct Challenge Modal Popup */}

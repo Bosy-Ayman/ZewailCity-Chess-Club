@@ -831,7 +831,7 @@ const HomePage = () => {
             <a href="/profile" className="admin-ribbon-btn">
               Admin Profile &amp; Inbox
             </a>
-            <a href="/createtournament" className="admin-ribbon-btn highlight">
+            <a href="/admin?tab=add-tournament" className="admin-ribbon-btn highlight">
               + Create Championship
             </a>
           </div>

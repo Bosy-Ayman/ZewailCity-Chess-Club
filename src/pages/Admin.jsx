@@ -4,6 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { Search, Users, Filter, Eye, Send, Mail, Bell, CheckCircle2, Sparkles } from "lucide-react";
 import "./Admin.css";
 import { safeFetchJson, compressImage } from "../utils/api";
 
@@ -46,10 +47,26 @@ export default function AdminDashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [applications, setApplications] = useState([]);
   const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [inquiries, setInquiries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Broadcast Notification & Email Dispatch states
+  const [broadcastRecipientType, setBroadcastRecipientType] = useState("all"); // 'all' | 'specific'
+  const [broadcastTargetEmail, setBroadcastTargetEmail] = useState("");
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastLink, setBroadcastLink] = useState("");
+  const [sendInApp, setSendInApp] = useState(true);
+  const [sendEmailFlag, setSendEmailFlag] = useState(true);
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [broadcastSuccessInfo, setBroadcastSuccessInfo] = useState(null);
+  const [broadcastLogs, setBroadcastLogs] = useState([]);
+  const [selectedLogPreview, setSelectedLogPreview] = useState(null);
+  const [logSearch, setLogSearch] = useState("");
 
   // Dynamic container board width calculation for optimal ratio
   const boardWrapperRef = useRef(null);
@@ -163,6 +180,16 @@ export default function AdminDashboard() {
           console.warn("Failed to fetch inquiries:", e.message);
         }
       }
+
+      // Fetch Dispatched Announcements & Emails History
+      if (userRole === "admin" || userRole === "oc" || userRole === "hr") {
+        try {
+          const logData = await safeFetchJson(`${API_BASE}/api/admin/broadcast-logs`);
+          if (Array.isArray(logData)) setBroadcastLogs(logData);
+        } catch (e) {
+          console.warn("Failed to fetch broadcast logs:", e.message);
+        }
+      }
     } catch (err) {
       console.error("Error fetching admin data:", err);
       setErrorMessage("Failed to load dashboard data. Is the server running?");
@@ -222,6 +249,151 @@ export default function AdminDashboard() {
     } catch (err) {
       setErrorMessage(err.message || "Failed to update status.");
     }
+  };
+
+  // Direct Role & Executive Privileges Assignment (without applying)
+  const handleDirectRoleChange = async (targetUser, newRole) => {
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const adminEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "chesszc@zewailcity.edu.eg";
+      await safeFetchJson(`${API_BASE}/api/admin/manage-user`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminEmail,
+          targetEmail: targetUser.email,
+          role: newRole
+        })
+      });
+      setSuccessMessage(`👑 Role updated to ${newRole.toUpperCase()} for ${targetUser.name}! Direct appointment email & in-app notification dispatched.`);
+      fetchData();
+    } catch (err) {
+      setErrorMessage(err.message || "Failed to update user role.");
+    }
+  };
+
+  // Quick Templates for Broadcasts
+  const handleApplyTemplate = (templateKey) => {
+    switch (templateKey) {
+      case "tournament":
+        setBroadcastTitle("🏆 New Chess Tournament Announced!");
+        setBroadcastMessage("Dear Tacticians,\n\nA new official Zewail City Chess Club tournament has been announced. Check the tournament schedule, formats, and register your spot on the dashboard.\n\nMay the best minds prevail!");
+        setBroadcastLink("/tournaments");
+        break;
+      case "match":
+        setBroadcastTitle("⚡ Upcoming Match & Pairing Alert");
+        setBroadcastMessage("Greetings,\n\nYour tournament pairings and match timings have been posted. Please be at the chess lounge 10 minutes before the clock starts with your student ID.\n\nGood luck!");
+        setBroadcastLink("/tournaments");
+        break;
+      case "swiss_rules":
+        setBroadcastTitle("🏛️ Official FIDE Swiss System Rules & Match Format");
+        setBroadcastMessage("Dear Tacticians,\n\nWelcome to our official FIDE Swiss System Tournament! Here is an overview of the championship rules:\n\n1. ♾️ NON-ELIMINATION SYSTEM:\n• No player is eliminated! All registered participants play all scheduled rounds from start to finish.\n• Every win, draw, or loss counts toward your final cumulative score and rating.\n\n2. 🎯 SCORE-GROUP DUTCH PAIRINGS:\n• In every round, players are paired strictly against opponents with the same (or closest) accumulated score.\n• No Rematches: You will never play the same opponent more than once.\n\n3. ⚖️ COLOR BALANCE & ALTERNATION:\n• White ⚪ and Black ⚫ pieces alternate each round according to FIDE regulations to ensure fairness.\n\n4. 📊 FIDE SCORING & TIEBREAKS:\n• Win = 1.0 pt, Draw = 0.5 pt, Loss = 0.0 pt, Bye = 1.0 pt.\n• Standings are decided by Direct Encounter, Buchholz Cut 1, and Sonneborn-Berger tiebreaks.\n\nPlay with honor and may the best tactician triumph!");
+        setBroadcastLink("/tournaments");
+        break;
+      case "double_knockout_rules":
+        setBroadcastTitle("⚡ Double Knockout (Double Elimination) Rules & Match Format");
+        setBroadcastMessage("Dear Competitors,\n\nWelcome to the Zewail City Double Knockout Championship! Please review the tournament rules:\n\n1. 🛡️ TWO LIVES (WINNERS & LOSERS BRACKETS):\n• All players begin in the Winners (Upper) Bracket.\n• Losing one match drops you to the Losers (Lower) Bracket.\n• You are only eliminated after suffering your SECOND match loss!\n\n2. ⚔️ TWO-GAME MINI-MATCHES:\n• Each knockout round is a 2-game series with alternating colors.\n• Game 1: Initial assigned colors (White vs Black).\n• Game 2: Immediate color reversal (Black vs White).\n• First player to score 1.5 points wins the match!\n\n3. ⚡ ARMAGEDDON DECIDER (1 - 1 TIEBREAKER):\n• If the series ends tied 1 - 1, Armageddon is played with the Secret Time Bidding System!\n• Time Bidding: Both players write down the time they want for Black. The player who bids LESS TIME gets Black and plays with that exact time on their clock. The other player gets White with the standard base time.\n• Draw Odds: White MUST WIN to advance. Black only needs a DRAW or WIN to win the match and advance!\n\n4. 👑 GRAND FINALS & BRACKET RESET:\n• The Winners Champion battles the Losers Champion. If the Losers Champion wins Match 1, a deciding Bracket Reset Match is immediately played for the title!\n\n📺 Video Guide on Armageddon Rules: https://www.youtube.com/watch?v=JAYrNhOG-OM\n\nMay the sharpest mind win!");
+        setBroadcastLink("/tournaments");
+        break;
+      case "knockout_rules":
+        setBroadcastTitle("⚔️ Single Knockout Format & Armageddon Rules Guide");
+        setBroadcastMessage("Dear Competitors,\n\nWelcome to the Zewail City Chess Club Knockout Championship! Please review the tournament rules:\n\n1. ⚔️ TWO-GAME MINI-MATCHES:\n• Each round is a 2-game match with alternating colors.\n• Game 1: Initial assigned colors (White vs Black).\n• Game 2: Colors are reversed (Black vs White).\n• First player to score 1.5 points advances to the next round!\n\n2. ⚡ ARMAGEDDON DECIDER (1 - 1 TIEBREAKER):\n• If the match ends tied 1 - 1, Armageddon is played with the Secret Time Bidding System!\n• Time Bidding: Both players write down the time they want for Black. The player who bids LESS TIME gets Black and plays with that exact time on their clock. The other player gets White with the standard base time.\n• Draw Odds: White MUST WIN to advance. Black only needs a DRAW or WIN to win the match and advance!\n\n📺 Video Guide on Armageddon Rules: https://www.youtube.com/watch?v=JAYrNhOG-OM\n\nMay the sharpest tactician prevail!");
+        setBroadcastLink("/tournaments");
+        break;
+      case "puzzle":
+        setBroadcastTitle("🧩 New Tactical Puzzle Challenge Live!");
+        setBroadcastMessage("Tacticians,\n\nA brand-new puzzle challenge has just gone live! Test your tactical prowess, solve the sequence under time pressure, and climb the club leaderboard.");
+        setBroadcastLink("/puzzletournaments");
+        break;
+      case "challenge":
+        setBroadcastTitle("⚔️ Campus Duel & Casual Blitz Challenge Alert");
+        setBroadcastMessage("Dear Tactician,\n\nYou have been challenged to a friendly campus chess match! Visit the Community Hub on the club website to accept or decline the duel, arrange the clock, and choose your preferred location.");
+        setBroadcastLink("/community");
+        break;
+      case "meeting":
+        setBroadcastTitle("📢 General Club Assembly & Practice Session");
+        setBroadcastMessage("Dear Club Members,\n\nWe are hosting an in-person blitz practice and club strategy assembly this week. Come meet fellow players, analyze historic Grandmaster games, and participate in casual matches!");
+        setBroadcastLink("/community");
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Dispatch Broadcast Notification & Real Email
+  const handleSendBroadcast = async (e) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+    setBroadcastSuccessInfo(null);
+
+    if (!broadcastTitle.trim() || !broadcastMessage.trim()) {
+      setErrorMessage("Please enter both an Announcement Title and Message body.");
+      return;
+    }
+
+    if (broadcastRecipientType === "specific" && !broadcastTargetEmail.trim()) {
+      setErrorMessage("Please select or enter the recipient player's email address.");
+      return;
+    }
+
+    if (!sendInApp && !sendEmailFlag) {
+      setErrorMessage("Please select at least one delivery channel (In-App Notification or Real Email).");
+      return;
+    }
+
+    const adminEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "chesszc@zewailcity.edu.eg";
+
+    setIsSendingBroadcast(true);
+    try {
+      const response = await safeFetchJson(`${API_BASE}/api/admin/broadcast-notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminEmail,
+          recipientType: broadcastRecipientType,
+          targetEmail: broadcastRecipientType === "specific" ? broadcastTargetEmail.trim() : undefined,
+          title: broadcastTitle.trim(),
+          message: broadcastMessage.trim(),
+          link: broadcastLink.trim() || "/",
+          sendInAppNotification: sendInApp,
+          sendEmailNotification: sendEmailFlag
+        })
+      });
+
+      setBroadcastSuccessInfo(response);
+      setSuccessMessage(response.message || "Notification and email dispatched successfully!");
+      fetchData();
+    } catch (err) {
+      setErrorMessage(err.message || "Failed to dispatch broadcast.");
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
+  const handleDeleteBroadcastLog = async (id) => {
+    if (!window.confirm("Delete this broadcast log entry from history?")) return;
+    try {
+      await safeFetchJson(`${API_BASE}/api/admin/broadcast-logs/${id}`, { method: "DELETE" });
+      setBroadcastLogs(prev => prev.filter(l => l._id !== id));
+      if (selectedLogPreview?._id === id) setSelectedLogPreview(null);
+    } catch (err) {
+      alert("Failed to delete log: " + err.message);
+    }
+  };
+
+  const handleReuseBroadcastLog = (log) => {
+    setBroadcastTitle(log.title || "");
+    setBroadcastMessage(log.message || "");
+    setBroadcastLink(log.link || "");
+    setBroadcastRecipientType(log.recipientType || "all");
+    if (log.recipientType === "specific" && log.targetEmail) {
+      setBroadcastTargetEmail(log.targetEmail);
+    }
+    setSendInApp(log.channels?.inApp !== false);
+    setSendEmailFlag(log.channels?.email !== false);
+    window.scrollTo({ top: 350, behavior: "smooth" });
   };
 
   // Chess editor helpers & robust FEN tools
@@ -903,6 +1075,9 @@ export default function AdminDashboard() {
             {(userRole === "admin" || userRole === "oc") && (
               <option value="manage-puzzles">🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}</option>
             )}
+            {userRole === "admin" && (
+              <option value="broadcast">📢 Email & In-App Broadcast</option>
+            )}
             <option value="inquiries">📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}</option>
           </select>
         </div>
@@ -949,6 +1124,14 @@ export default function AdminDashboard() {
               🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}
             </button>
           )}
+          {userRole === "admin" && (
+            <button
+              className={`tab-btn ${activeTab === "broadcast" ? "active" : ""}`}
+              onClick={() => setActiveTab("broadcast")}
+            >
+              📢 Broadcast & Email
+            </button>
+          )}
           <button
             className={`tab-btn ${activeTab === "inquiries" ? "active" : ""}`}
             onClick={() => setActiveTab("inquiries")}
@@ -962,7 +1145,7 @@ export default function AdminDashboard() {
         {errorMessage && <div className="alert-message error">{errorMessage}</div>}
 
         {/* Tab Contents */}
-        <div className="tab-content">
+        <div className="tab-content" key={activeTab}>
           
           {/* Tab 1: Add Tournament */}
           {activeTab === "add-tournament" && (
@@ -1071,10 +1254,10 @@ export default function AdminDashboard() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="time">Time *</label>
+                    <label htmlFor="time">⏱️ Clock &amp; Time Control *</label>
                     {/* Quick Time Preset Buttons */}
                     <div style={{ display: "flex", gap: "6px", margin: "4px 0 8px", flexWrap: "wrap" }}>
-                      {["10:00 AM", "12:00 PM", "2:00 PM", "5:00 PM", "6:30 PM", "8:00 PM"].map((tPreset) => (
+                      {["3 min Blitz", "3+2 Blitz", "5 min Blitz", "5+3 Blitz", "10 min Rapid", "10+2 Rapid", "15+10 Classical"].map((tPreset) => (
                         <button
                           key={tPreset}
                           type="button"
@@ -1100,7 +1283,7 @@ export default function AdminDashboard() {
                       name="time"
                       value={form.time}
                       onChange={handleInputChange}
-                      placeholder="e.g. 12:00 PM or 2:00 PM - 5:00 PM"
+                      placeholder="e.g. 10 min Rapid, 5+3 Blitz, 3+2 Blitz"
                       required
                     />
                   </div>
@@ -1195,7 +1378,7 @@ export default function AdminDashboard() {
               ) : (
                 <>
                   <div className="admin-table-container tournaments-desktop-table">
-                    <table className="admin-table">
+                    <table className="admin-table tournaments-table">
                       <thead>
                         <tr>
                           <th>Tournament</th>
@@ -1427,7 +1610,7 @@ export default function AdminDashboard() {
               ) : (
                 <>
                   <div className="admin-table-container tournaments-desktop-table">
-                    <table className="admin-table">
+                    <table className="admin-table applications-table">
                       <thead>
                         <tr>
                           <th>Applicant</th>
@@ -1500,83 +1683,315 @@ export default function AdminDashboard() {
           )}
 
           {/* Tab 4: Manage Users */}
-          {activeTab === "manage-users" && (
-            <div className="table-card">
-              <h2>All Registered Users</h2>
-              {users.length === 0 ? (
-                <p className="empty-message">No users found.</p>
-              ) : (
-                <>
-                  <div className="admin-table-container tournaments-desktop-table">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Email</th>
-                          <th>ID Number</th>
-                          <th>Major</th>
-                          <th>Role</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {users.map((u) => (
-                          <tr key={u._id}>
-                            <td className="strong">{u.name}</td>
-                            <td>{u.email}</td>
-                            <td>{u.idNumber || "N/A"}</td>
-                            <td>{u.major || "N/A"}</td>
-                            <td>
-                              <span className={`status-badge ${u.role === 'admin' ? 'approved' : 'pending'}`}>
-                                {u.role.toUpperCase()}
-                              </span>
-                            </td>
-                            <td>
-                              {u.role !== 'admin' ? (
+          {activeTab === "manage-users" && (() => {
+            const filteredUsers = users.filter((u) => {
+              const query = (userSearch || "").trim().toLowerCase();
+              const matchesQuery = !query ||
+                (u.name && u.name.toLowerCase().includes(query)) ||
+                (u.email && u.email.toLowerCase().includes(query)) ||
+                (u.major && u.major.toLowerCase().includes(query)) ||
+                (u.idNumber && u.idNumber.toLowerCase().includes(query));
+              const matchesRole = userRoleFilter === "all" || (u.role && u.role.toLowerCase() === userRoleFilter.toLowerCase());
+              return matchesQuery && matchesRole;
+            });
+
+            return (
+              <div className="table-card">
+                <div className="admin-user-tab-header">
+                  <div>
+                    <h2>All Registered Users ({users.length})</h2>
+                    <p className="admin-user-tab-desc">Search, filter, inspect player dossiers, and manage membership accounts.</p>
+                  </div>
+                  
+                  {/* Search and Filters Bar */}
+                  <div className="admin-user-filters-bar">
+                    <div className="admin-user-search-wrap">
+                      <Search size={16} className="admin-search-icon" />
+                      <input
+                        type="text"
+                        placeholder="Search name, email, major, ID..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="admin-user-search-input"
+                      />
+                      {userSearch && (
+                        <button 
+                          type="button" 
+                          className="admin-search-clear-btn"
+                          onClick={() => setUserSearch("")}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="admin-role-filter-wrap">
+                      <Filter size={15} className="admin-filter-icon" />
+                      <select
+                        value={userRoleFilter}
+                        onChange={(e) => setUserRoleFilter(e.target.value)}
+                        className="admin-role-filter-select"
+                      >
+                        <option value="all">All Roles ({users.length})</option>
+                        <option value="admin">Administrators ({users.filter(u => u.role === 'admin').length})</option>
+                        <option value="member">Members ({users.filter(u => u.role !== 'admin').length})</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {filteredUsers.length === 0 ? (
+                  <div className="admin-empty-users-state">
+                    <Users size={36} className="admin-empty-icon" />
+                    <p>{users.length === 0 ? "No users registered yet." : "No users match your search criteria."}</p>
+                    {userSearch && (
+                      <button 
+                        type="button" 
+                        className="admin-filter-reset-btn"
+                        onClick={() => { setUserSearch(""); setUserRoleFilter("all"); }}
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="admin-table-container tournaments-desktop-table">
+                      <table className="admin-table users-table">
+                        <thead>
+                          <tr>
+                            <th>Player / Member</th>
+                            <th>Student ID</th>
+                            <th>Major & Batch</th>
+                            <th>Ratings</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredUsers.map((u) => {
+                            const initials = (u.name || "?")
+                              .split(" ")
+                              .map(w => w[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase();
+
+                            return (
+                              <tr key={u._id}>
+                                <td className="admin-user-cell">
+                                  <div 
+                                    className="admin-user-avatar-wrap"
+                                    onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
+                                    title={`View ${u.name}'s Profile`}
+                                  >
+                                    {u.profileImage ? (
+                                      <img src={u.profileImage} alt={u.name} className="admin-user-avatar-img" />
+                                    ) : (
+                                      <span className="admin-user-avatar-initials">{initials}</span>
+                                    )}
+                                  </div>
+                                  <div className="admin-user-info-col">
+                                    <button 
+                                      type="button"
+                                      className="admin-user-name-link"
+                                      onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
+                                      title="Open Player Dossier"
+                                    >
+                                      {u.name}
+                                    </button>
+                                    <span className="admin-user-email-sub">{u.email}</span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span className="admin-id-badge">{u.idNumber || "N/A"}</span>
+                                </td>
+                                <td>
+                                  <div className="admin-major-line">
+                                    <strong>{u.major || "General"}</strong>
+                                    {u.batch && <span className="admin-batch-pill">B{u.batch}</span>}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="admin-ratings-cell">
+                                    {u.fideRating > 0 && <span className="admin-rating-chip fide">FIDE {u.fideRating}</span>}
+                                    {u.chessComRating > 0 && <span className="admin-rating-chip chesscom">C.com {u.chessComRating}</span>}
+                                    {u.lichessRating > 0 && <span className="admin-rating-chip lichess">Lichess {u.lichessRating}</span>}
+                                    {(!u.fideRating && !u.chessComRating && !u.lichessRating) && <span className="admin-rating-none">Unrated</span>}
+                                  </div>
+                                </td>
+                                <td>
+                                  <select
+                                    value={u.role || "member"}
+                                    onChange={(e) => handleDirectRoleChange(u, e.target.value)}
+                                    style={{
+                                      background: u.role === "admin" ? "rgba(243, 193, 68, 0.15)" : u.role === "oc" ? "rgba(52, 152, 219, 0.15)" : u.role === "hr" ? "rgba(46, 204, 113, 0.15)" : u.role === "media" ? "rgba(155, 89, 182, 0.15)" : u.role === "trainer" ? "rgba(230, 126, 34, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                                      color: u.role === "admin" ? "#f3c144" : u.role === "oc" ? "#3498db" : u.role === "hr" ? "#2ecc71" : u.role === "media" ? "#9b59b6" : u.role === "trainer" ? "#e67e22" : "#d0d0d0",
+                                      border: `1px solid ${u.role === "admin" ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                      borderRadius: "6px",
+                                      padding: "4px 8px",
+                                      fontSize: "0.8rem",
+                                      fontWeight: "700",
+                                      cursor: "pointer"
+                                    }}
+                                    title="Assign Executive Privileges & Authority Role (Dispatches Instant Notification & Email)"
+                                  >
+                                    <option value="member">♟️ Member</option>
+                                    <option value="admin">👑 Admin / High Board</option>
+                                    <option value="oc">🏆 OC Head</option>
+                                    <option value="hr">🤝 HR Head</option>
+                                    <option value="media">🎨 Media Head</option>
+                                    <option value="trainer">♟️ Trainer</option>
+                                    <option value="trainee">🎯 Trainee</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <div className="admin-user-actions-group">
+                                    <button
+                                      type="button"
+                                      className="admin-view-profile-btn"
+                                      onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
+                                      title={`View ${u.name}'s Profile`}
+                                    >
+                                      <Eye size={14} />
+                                      <span>Profile</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="admin-message-user-btn"
+                                      onClick={() => {
+                                        setBroadcastRecipientType("specific");
+                                        setBroadcastTargetEmail(u.email);
+                                        setActiveTab("broadcast");
+                                      }}
+                                      title={`Dispatch Notification / Email to ${u.name}`}
+                                    >
+                                      <Send size={13} />
+                                      <span>Message</span>
+                                    </button>
+                                    {u.role !== 'admin' && (
+                                      <button
+                                        className="delete-btn"
+                                        onClick={() => handleDeleteUser(u._id)}
+                                        title="Delete user account"
+                                      >
+                                        Delete
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Users Cards View */}
+                    <div className="tournaments-mobile-cards">
+                      {filteredUsers.map((u) => {
+                        const initials = (u.name || "?")
+                          .split(" ")
+                          .map(w => w[0])
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase();
+
+                        return (
+                          <div key={u._id} className="mobile-tournament-card" style={{ padding: "18px" }}>
+                            <div className="mobile-card-header" style={{ alignItems: "center" }}>
+                              <div 
+                                className="admin-mobile-user-head"
+                                onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
+                              >
+                                <div className="admin-user-avatar-wrap mobile">
+                                  {u.profileImage ? (
+                                    <img src={u.profileImage} alt={u.name} className="admin-user-avatar-img" />
+                                  ) : (
+                                    <span className="admin-user-avatar-initials">{initials}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <h3 className="mobile-card-title link">{u.name}</h3>
+                                  <div style={{ fontSize: "0.8rem", color: "#bab19c" }}>{u.email}</div>
+                                </div>
+                              </div>
+                              <select
+                                value={u.role || "member"}
+                                onChange={(e) => handleDirectRoleChange(u, e.target.value)}
+                                style={{
+                                  background: u.role === "admin" ? "rgba(243, 193, 68, 0.15)" : u.role === "oc" ? "rgba(52, 152, 219, 0.15)" : u.role === "hr" ? "rgba(46, 204, 113, 0.15)" : u.role === "media" ? "rgba(155, 89, 182, 0.15)" : u.role === "trainer" ? "rgba(230, 126, 34, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                                  color: u.role === "admin" ? "#f3c144" : u.role === "oc" ? "#3498db" : u.role === "hr" ? "#2ecc71" : u.role === "media" ? "#9b59b6" : u.role === "trainer" ? "#e67e22" : "#d0d0d0",
+                                  border: `1px solid ${u.role === "admin" ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                  borderRadius: "6px",
+                                  padding: "4px 8px",
+                                  fontSize: "0.8rem",
+                                  fontWeight: "700",
+                                  cursor: "pointer"
+                                }}
+                                title="Change Executive Role"
+                              >
+                                <option value="member">♟️ Member</option>
+                                <option value="admin">👑 Admin</option>
+                                <option value="oc">🏆 OC Head</option>
+                                <option value="hr">🤝 HR Head</option>
+                                <option value="media">🎨 Media Head</option>
+                                <option value="trainer">♟️ Trainer</option>
+                                <option value="trainee">🎯 Trainee</option>
+                              </select>
+                            </div>
+
+                            <div className="admin-mobile-user-meta">
+                              <div><strong>ID:</strong> {u.idNumber || "N/A"}</div>
+                              <div><strong>Major:</strong> {u.major || "General"} {u.batch ? `(Batch ${u.batch})` : ""}</div>
+                              {(u.fideRating > 0 || u.chessComRating > 0 || u.lichessRating > 0) && (
+                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                                  {u.fideRating > 0 && <span className="admin-rating-chip fide">FIDE {u.fideRating}</span>}
+                                  {u.chessComRating > 0 && <span className="admin-rating-chip chesscom">C.com {u.chessComRating}</span>}
+                                  {u.lichessRating > 0 && <span className="admin-rating-chip lichess">Lichess {u.lichessRating}</span>}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="admin-mobile-user-actions" style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                className="admin-view-profile-btn mobile-full-btn"
+                                onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
+                              >
+                                <Eye size={14} />
+                                <span>Profile</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-message-user-btn mobile-full-btn"
+                                onClick={() => {
+                                  setBroadcastRecipientType("specific");
+                                  setBroadcastTargetEmail(u.email);
+                                  setActiveTab("broadcast");
+                                }}
+                              >
+                                <Send size={13} />
+                                <span>Message</span>
+                              </button>
+                              {u.role !== 'admin' && (
                                 <button
-                                  className="delete-btn"
+                                  className="delete-btn mobile-full-btn"
                                   onClick={() => handleDeleteUser(u._id)}
                                 >
                                   Delete
                                 </button>
-                              ) : (
-                                <span style={{color: "#888", fontStyle: "italic"}}>Admin</span>
                               )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile Users Cards View */}
-                  <div className="tournaments-mobile-cards">
-                    {users.map((u) => (
-                      <div key={u._id} className="mobile-tournament-card" style={{ padding: "16px" }}>
-                        <div className="mobile-card-header">
-                          <h3 className="mobile-card-title">{u.name}</h3>
-                          <span className={`status-badge ${u.role === 'admin' ? 'approved' : 'pending'}`}>{u.role.toUpperCase()}</span>
-                        </div>
-                        <div style={{ fontSize: "0.85rem", color: "#bab19c", margin: "6px 0" }}>
-                          <div>Email: {u.email}</div>
-                          <div>Major: {u.major || "N/A"} | ID: {u.idNumber || "N/A"}</div>
-                        </div>
-                        {u.role !== 'admin' && (
-                          <button
-                            className="delete-btn mobile-full-btn"
-                            style={{ marginTop: "8px" }}
-                            onClick={() => handleDeleteUser(u._id)}
-                          >
-                            Delete User Account
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Tab 5: Manage Puzzles */}
           {activeTab === "manage-puzzles" && (
@@ -1607,93 +2022,95 @@ export default function AdminDashboard() {
                 ) : (
                   <>
                     {/* Desktop Table View */}
-                    <table className="admin-table tournaments-desktop-table">
-                      <thead>
-                        <tr>
-                          <th>Title</th>
-                          <th>Beginning</th>
-                          <th>Ending</th>
-                          <th>Time Limit</th>
-                          <th>Puzzles</th>
-                          <th>Players</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {puzzleTournaments.map((t) => (
-                          <tr key={t._id} style={editingPuzzleTournamentId === t._id ? { background: "rgba(243, 193, 68, 0.12)" } : {}}>
-                            <td>
-                              <strong>{t.title}</strong>
-                              {editingPuzzleTournamentId === t._id && (
-                                <span style={{ marginLeft: "8px", fontSize: "0.75rem", background: "#f3c144", color: "#111", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
-                                  EDITING
-                                </span>
-                              )}
-                            </td>
-                            <td>{t.startDate} {t.startTime ? `at ${t.startTime}` : ""}</td>
-                            <td>{t.endDate ? `${t.endDate} ${t.endTime ? `at ${t.endTime}` : ""}` : "Ongoing"}</td>
-                            <td>{t.timeLimit || 60}s / puzzle</td>
-                            <td><span className="player-count-badge">{t.puzzles ? t.puzzles.length : 0} 🧩</span></td>
-                            <td>
-                              <strong>{t.participants ? t.participants.length : 0} registered</strong>
-                              {t.participants && t.participants.length > 0 && (
-                                <div className="admin-puzzle-participants">
-                                  {t.participants.map((participant) => (
-                                    <div className="admin-puzzle-participant" key={participant.email}>
-                                      <span title={participant.email}>{participant.name}</span>
-                                      <button
-                                        type="button"
-                                        className="admin-remove-participant-btn"
-                                        onClick={() => handleRemovePuzzleParticipant(t, participant)}
-                                        title={`Remove ${participant.name}`}
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {t.leaderboard && t.leaderboard.length > 0 && (
-                                <div className="admin-puzzle-participants admin-puzzle-results">
-                                  <span className="admin-puzzle-list-label">{t.leaderboard.length} completed</span>
-                                  {t.leaderboard.map((entry) => (
-                                    <div className="admin-puzzle-participant" key={`score-${entry.email}`}>
-                                      <span title={entry.email}>{entry.name} · {entry.score} pts</span>
-                                      <button
-                                        type="button"
-                                        className="admin-remove-participant-btn"
-                                        onClick={() => handleRemovePuzzleParticipant(t, entry)}
-                                        title={`Remove ${entry.name} from this tournament`}
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                            <td>
-                              <div style={{ display: "flex", gap: "8px" }}>
-                                <button
-                                  className="view-btn"
-                                  style={{ padding: "6px 12px" }}
-                                  onClick={() => handleEditPuzzleTournament(t)}
-                                >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  className="delete-btn"
-                                  style={{ padding: "6px 12px" }}
-                                  onClick={() => handleDeletePuzzleTournament(t._id, t.title)}
-                                >
-                                  🗑️ Delete
-                                </button>
-                              </div>
-                            </td>
+                    <div className="admin-table-container tournaments-desktop-table">
+                      <table className="admin-table puzzle-tournaments-table">
+                        <thead>
+                          <tr>
+                            <th>Title</th>
+                            <th>Beginning</th>
+                            <th>Ending</th>
+                            <th>Time Limit</th>
+                            <th>Puzzles</th>
+                            <th>Players</th>
+                            <th>Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {puzzleTournaments.map((t) => (
+                            <tr key={t._id} style={editingPuzzleTournamentId === t._id ? { background: "rgba(243, 193, 68, 0.12)" } : {}}>
+                              <td>
+                                <strong>{t.title}</strong>
+                                {editingPuzzleTournamentId === t._id && (
+                                  <span style={{ marginLeft: "8px", fontSize: "0.75rem", background: "#f3c144", color: "#111", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>
+                                    EDITING
+                                  </span>
+                                )}
+                              </td>
+                              <td>{t.startDate} {t.startTime ? `at ${t.startTime}` : ""}</td>
+                              <td>{t.endDate ? `${t.endDate} ${t.endTime ? `at ${t.endTime}` : ""}` : "Ongoing"}</td>
+                              <td>{t.timeLimit || 60}s / puzzle</td>
+                              <td><span className="player-count-badge">{t.puzzles ? t.puzzles.length : 0} 🧩</span></td>
+                              <td>
+                                <strong>{t.participants ? t.participants.length : 0} registered</strong>
+                                {t.participants && t.participants.length > 0 && (
+                                  <div className="admin-puzzle-participants">
+                                    {t.participants.map((participant) => (
+                                      <div className="admin-puzzle-participant" key={participant.email}>
+                                        <span title={participant.email}>{participant.name}</span>
+                                        <button
+                                          type="button"
+                                          className="admin-remove-participant-btn"
+                                          onClick={() => handleRemovePuzzleParticipant(t, participant)}
+                                          title={`Remove ${participant.name}`}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {t.leaderboard && t.leaderboard.length > 0 && (
+                                  <div className="admin-puzzle-participants admin-puzzle-results">
+                                    <span className="admin-puzzle-list-label">{t.leaderboard.length} completed</span>
+                                    {t.leaderboard.map((entry) => (
+                                      <div className="admin-puzzle-participant" key={`score-${entry.email}`}>
+                                        <span title={entry.email}>{entry.name} · {entry.score} pts</span>
+                                        <button
+                                          type="button"
+                                          className="admin-remove-participant-btn"
+                                          onClick={() => handleRemovePuzzleParticipant(t, entry)}
+                                          title={`Remove ${entry.name}`}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                  <button
+                                    className="edit-btn"
+                                    style={{ padding: "6px 12px" }}
+                                    onClick={() => handleEditPuzzleTournament(t)}
+                                  >
+                                    ✏️ Edit
+                                  </button>
+                                  <button
+                                    className="delete-btn"
+                                    style={{ padding: "6px 12px" }}
+                                    onClick={() => handleDeletePuzzleTournament(t._id, t.title)}
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
                     {/* Mobile Cards View */}
                     <div className="tournaments-mobile-cards">
@@ -1750,7 +2167,7 @@ export default function AdminDashboard() {
                           </div>
                           <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
                             <button
-                              className="view-btn mobile-full-btn"
+                              className="edit-btn mobile-full-btn"
                               onClick={() => handleEditPuzzleTournament(t)}
                             >
                               ✏️ Edit Tournament & Puzzles
@@ -2164,6 +2581,514 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Tab: Broadcast Notification & Email Dispatch */}
+          {activeTab === "broadcast" && (
+            <div className="admin-broadcast-container">
+              <div className="form-card admin-broadcast-card">
+                <div className="admin-broadcast-header">
+                  <div>
+                    <h2>📢 Member Broadcast & Email Dispatch</h2>
+                    <p className="admin-broadcast-subtitle">
+                      Publish in-app notifications to member navigation bells and dispatch real branded emails directly from <strong style={{ color: "#f3c144" }}>chesszc@zewailcity.edu.eg</strong>.
+                    </p>
+                  </div>
+                  <span className="admin-sender-badge">
+                    <Mail size={14} />
+                    <span>Sender: chesszc@zewailcity.edu.eg</span>
+                  </span>
+                </div>
+
+                {/* Quick Announcement Templates */}
+                <div className="admin-template-shortcuts">
+                  <span className="admin-template-label">
+                    <Sparkles size={14} /> Quick Presets:
+                  </span>
+                  <div className="admin-template-btns">
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("tournament")}
+                    >
+                      🏆 Tournament Announcement
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("match")}
+                    >
+                      ⚡ Match Pairings Alert
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("swiss_rules")}
+                    >
+                      🏛️ Swiss System Rules
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("double_knockout_rules")}
+                    >
+                      ⚡ Double Knockout Rules
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("knockout_rules")}
+                    >
+                      ⚔️ Single Knockout Rules
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("puzzle")}
+                    >
+                      🧩 Puzzle Challenge Live
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("challenge")}
+                    >
+                      ⚔️ Match Challenge Invite
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill"
+                      onClick={() => handleApplyTemplate("meeting")}
+                    >
+                      📢 General Assembly / News
+                    </button>
+                  </div>
+                </div>
+
+                <div className="admin-broadcast-grid">
+                  {/* Left Column: Dispatch Form */}
+                  <form onSubmit={handleSendBroadcast} className="admin-broadcast-form">
+                    
+                    {/* Audience Selection */}
+                    <div className="form-group">
+                      <label>Target Audience *</label>
+                      <div className="admin-recipient-toggle-group">
+                        <label className={`admin-recipient-radio-card ${broadcastRecipientType === 'all' ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="recipientType"
+                            value="all"
+                            checked={broadcastRecipientType === 'all'}
+                            onChange={() => setBroadcastRecipientType('all')}
+                          />
+                          <div className="radio-card-body">
+                            <span className="radio-card-title">🌐 All Registered Members</span>
+                            <span className="radio-card-meta">Broadcasts to all {users.length} registered player accounts</span>
+                          </div>
+                        </label>
+
+                        <label className={`admin-recipient-radio-card ${broadcastRecipientType === 'specific' ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="recipientType"
+                            value="specific"
+                            checked={broadcastRecipientType === 'specific'}
+                            onChange={() => setBroadcastRecipientType('specific')}
+                          />
+                          <div className="radio-card-body">
+                            <span className="radio-card-title">👤 Specific Player</span>
+                            <span className="radio-card-meta">Send directly to one specific student or member</span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Specific Recipient Selector */}
+                    {broadcastRecipientType === "specific" && (
+                      <div className="form-group">
+                        <label htmlFor="broadcastTargetEmail">Select Member or Enter Student Email *</label>
+                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                          <select
+                            value={broadcastTargetEmail}
+                            onChange={(e) => setBroadcastTargetEmail(e.target.value)}
+                            style={{ flex: 1, minWidth: "220px" }}
+                          >
+                            <option value="">-- Choose from registered members ({users.length}) --</option>
+                            {users.map(u => (
+                              <option key={u._id} value={u.email}>
+                                {u.name} ({u.email}) {u.major ? `• ${u.major}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="email"
+                            id="broadcastTargetEmail"
+                            value={broadcastTargetEmail}
+                            onChange={(e) => setBroadcastTargetEmail(e.target.value)}
+                            placeholder="Or type custom email address..."
+                            style={{ flex: 1, minWidth: "220px" }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Announcement Subject */}
+                    <div className="form-group">
+                      <label htmlFor="broadcastTitle">Announcement Subject / Title *</label>
+                      <input
+                        type="text"
+                        id="broadcastTitle"
+                        value={broadcastTitle}
+                        onChange={(e) => setBroadcastTitle(e.target.value)}
+                        placeholder="e.g. 🏆 Spring Blitz Open - Round 1 Starts Tomorrow at 2 PM"
+                        required
+                      />
+                    </div>
+
+                    {/* Message Body */}
+                    <div className="form-group">
+                      <label htmlFor="broadcastMessage">Message Body *</label>
+                      <textarea
+                        id="broadcastMessage"
+                        value={broadcastMessage}
+                        onChange={(e) => setBroadcastMessage(e.target.value)}
+                        placeholder="Write your message here... You can include match reminders, schedules, or club updates."
+                        rows={6}
+                        required
+                        style={{ resize: "vertical", minHeight: "130px", lineHeight: "1.5" }}
+                      />
+                    </div>
+
+                    {/* Target Link */}
+                    <div className="form-group">
+                      <label htmlFor="broadcastLink">Action Button Link (Optional)</label>
+                      <input
+                        type="text"
+                        id="broadcastLink"
+                        value={broadcastLink}
+                        onChange={(e) => setBroadcastLink(e.target.value)}
+                        placeholder="e.g. /tournaments or /community or /puzzletournaments"
+                      />
+                      <small style={{ color: "#8e8677", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
+                        Clicking the email or in-app notification button will navigate members to this URL.
+                      </small>
+                    </div>
+
+                    {/* Delivery Channels */}
+                    <div className="form-group">
+                      <label>Delivery Channels</label>
+                      <div className="admin-channels-row">
+                        <label className={`admin-channel-checkbox ${sendInApp ? 'checked' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={sendInApp}
+                            onChange={(e) => setSendInApp(e.target.checked)}
+                          />
+                          <Bell size={16} className="channel-icon" />
+                          <span>
+                            <strong>In-App Notification Bell</strong>
+                            <small>Instant notification badge in member navbar</small>
+                          </span>
+                        </label>
+
+                        <label className={`admin-channel-checkbox ${sendEmailFlag ? 'checked' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={sendEmailFlag}
+                            onChange={(e) => setSendEmailFlag(e.target.checked)}
+                          />
+                          <Mail size={16} className="channel-icon" />
+                          <span>
+                            <strong>Official Email Dispatch</strong>
+                            <small>Sent from chesszc@zewailcity.edu.eg</small>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={isSendingBroadcast}
+                      className="admin-broadcast-submit-btn"
+                    >
+                      {isSendingBroadcast ? (
+                        <span>🔄 Dispatching to {broadcastRecipientType === 'all' ? `All ${users.length} Members` : 'Recipient'}...</span>
+                      ) : (
+                        <span>
+                          <Send size={18} />
+                          <span>
+                            Dispatch Announcement {broadcastRecipientType === 'all' ? `to All Members (${users.length})` : 'to Selected Player'}
+                          </span>
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Dispatch Success Info Card */}
+                    {broadcastSuccessInfo && (
+                      <div className="admin-dispatch-result-card">
+                        <div className="result-header">
+                          <CheckCircle2 size={20} color="#2ecc71" />
+                          <strong>Dispatch Successful!</strong>
+                        </div>
+                        <p>{broadcastSuccessInfo.message}</p>
+                        <div className="result-stats">
+                          <div className="result-stat-pill">
+                            <span className="stat-label">In-App Alerts:</span>
+                            <span className="stat-val">{broadcastSuccessInfo.inAppCount || 0}</span>
+                          </div>
+                          <div className="result-stat-pill">
+                            <span className="stat-label">Emails Sent:</span>
+                            <span className="stat-val">{broadcastSuccessInfo.emailSuccessCount || 0}</span>
+                          </div>
+                          <div className="result-stat-pill">
+                            <span className="stat-label">Total Recipients:</span>
+                            <span className="stat-val">{broadcastSuccessInfo.totalRecipients || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </form>
+
+                  {/* Right Column: Live Email & Notification Mockup Preview */}
+                  <div className="admin-broadcast-preview-col">
+                    <div className="admin-preview-header">
+                      <span>👁️ Live Email Mockup Preview</span>
+                      <span className="preview-tag">Branded HTML Template</span>
+                    </div>
+
+                    <div className="admin-email-mockup-frame">
+                      <div className="mockup-window-bar">
+                        <div className="mockup-dots">
+                          <span></span><span></span><span></span>
+                        </div>
+                        <div className="mockup-window-title">
+                          ✉️ {broadcastTitle || "Official Club Announcement"}
+                        </div>
+                      </div>
+
+                      <div className="mockup-email-content">
+                        <div className="mockup-email-header">
+                          <div className="mockup-logo-icon">♟️</div>
+                          <div className="mockup-logo-title">ZEWAIL CITY CHESS CLUB</div>
+                        </div>
+
+                        <div className="mockup-email-body">
+                          <h3 className="mockup-heading">
+                            {broadcastTitle || "Official Club Announcement"}
+                          </h3>
+                          
+                          <p className="mockup-salutation">
+                            Dear {broadcastRecipientType === 'specific' && broadcastTargetEmail ? (users.find(u => u.email === broadcastTargetEmail)?.name || broadcastTargetEmail.split('@')[0]) : 'Tactician'},
+                          </p>
+
+                          <div className="mockup-message-box">
+                            {broadcastMessage ? (
+                              broadcastMessage
+                            ) : (
+                              <span style={{ color: "#777", fontStyle: "italic" }}>
+                                Your message text will appear here with responsive typography and high-contrast dark-gold styling...
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mockup-btn-wrapper">
+                            <span className="mockup-cta-btn">
+                              Open ZC Chess Club →
+                            </span>
+                          </div>
+
+                          <div className="mockup-sender-footer">
+                            Dispatched by <strong>ZC Chess Club Administration</strong> (chesszc@zewailcity.edu.eg)
+                          </div>
+                        </div>
+
+                        <div className="mockup-email-footer">
+                          <p>© {new Date().getFullYear()} Zewail City Chess Club. All rights reserved.</p>
+                          <p>Zewail City of Science, Technology and Innovation • Giza, Egypt</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sent Broadcasts / Emails History Table Section */}
+                <div className="admin-broadcast-history-section" style={{ marginTop: "36px", paddingTop: "24px", borderTop: "1px solid rgba(243, 193, 68, 0.2)" }}>
+                  <div className="admin-user-tab-header">
+                    <div>
+                      <h2 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0 }}>
+                        <span>📜 Sent Announcements & Email History</span>
+                        <span className="kpi-num" style={{ fontSize: "0.95rem", padding: "2px 10px", background: "rgba(243, 193, 68, 0.15)", borderRadius: "8px", border: "1px solid rgba(243, 193, 68, 0.3)" }}>
+                          {broadcastLogs.length} Total
+                        </span>
+                      </h2>
+                      <p className="admin-user-tab-desc" style={{ marginTop: "4px" }}>
+                        Log of all broadcast announcements and real emails dispatched from <strong style={{ color: "#f3c144" }}>chesszc@zewailcity.edu.eg</strong>. Inspect delivery stats or click Reuse to quickly re-dispatch.
+                      </p>
+                    </div>
+
+                    {/* Search & Refresh */}
+                    <div className="admin-user-filters-bar">
+                      <div className="admin-user-search-wrap">
+                        <Search size={16} className="admin-search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search past emails, subjects..."
+                          value={logSearch}
+                          onChange={(e) => setLogSearch(e.target.value)}
+                          className="admin-user-search-input"
+                        />
+                        {logSearch && (
+                          <button
+                            type="button"
+                            className="admin-search-clear-btn"
+                            onClick={() => setLogSearch("")}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="tab-btn"
+                        onClick={fetchData}
+                        style={{ fontSize: "0.8rem", padding: "6px 14px", height: "38px" }}
+                      >
+                        🔄 Refresh
+                      </button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const filteredLogs = broadcastLogs.filter(l => {
+                      const q = (logSearch || "").trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        (l.title && l.title.toLowerCase().includes(q)) ||
+                        (l.message && l.message.toLowerCase().includes(q)) ||
+                        (l.targetEmail && l.targetEmail.toLowerCase().includes(q)) ||
+                        (l.adminEmail && l.adminEmail.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filteredLogs.length === 0) {
+                      return (
+                        <div className="admin-empty-users-state" style={{ padding: "40px 20px" }}>
+                          <Mail size={36} className="admin-empty-icon" />
+                          <p>{broadcastLogs.length === 0 ? "No announcements or emails dispatched yet. Send your first announcement above!" : "No logs match your search query."}</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="admin-table-container tournaments-desktop-table" style={{ marginTop: "16px" }}>
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Date & Time</th>
+                              <th>Announcement Subject</th>
+                              <th>Target Audience</th>
+                              <th>Channels</th>
+                              <th>Delivered Stats</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredLogs.map((log) => (
+                              <tr key={log._id}>
+                                <td>
+                                  <div style={{ fontSize: "0.82rem", color: "#e5ded0" }}>
+                                    <strong>{new Date(log.createdAt).toLocaleDateString()}</strong>
+                                  </div>
+                                  <span style={{ fontSize: "0.74rem", color: "#8c8577" }}>
+                                    {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ fontWeight: "700", color: "#f5edd6", fontSize: "0.92rem", marginBottom: "4px" }}>
+                                    {log.title}
+                                  </div>
+                                  <div style={{ fontSize: "0.78rem", color: "#9c9484", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {log.message}
+                                  </div>
+                                </td>
+                                <td>
+                                  {log.recipientType === "all" ? (
+                                    <span style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
+                                      🌐 All Members ({log.recipientCount || log.totalRecipients || 0})
+                                    </span>
+                                  ) : (
+                                    <div>
+                                      <span style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
+                                        👤 Direct Player
+                                      </span>
+                                      <div style={{ fontSize: "0.76rem", color: "#aaa", marginTop: "3px" }}>
+                                        {log.targetEmail || "Single User"}
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td>
+                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                    {log.channels?.inApp !== false && (
+                                      <span style={{ background: "rgba(243, 193, 68, 0.12)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                        🔔 In-App
+                                      </span>
+                                    )}
+                                    {log.channels?.email !== false && (
+                                      <span style={{ background: "rgba(46, 204, 113, 0.12)", color: "#2ecc71", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                        ✉️ Email
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ fontSize: "0.82rem", color: "#bab19c" }}>
+                                    <div>In-App: <strong style={{ color: "#f3c144" }}>{log.inAppCount || 0}</strong></div>
+                                    <div>Emails: <strong style={{ color: "#2ecc71" }}>{log.emailCount || 0}</strong></div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                    <button
+                                      type="button"
+                                      className="admin-view-profile-btn"
+                                      onClick={() => setSelectedLogPreview(log)}
+                                      title="View dispatched email & message"
+                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                    >
+                                      👁️ View
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="tab-btn"
+                                      onClick={() => handleReuseBroadcastLog(log)}
+                                      title="Copy into composer to resend or edit"
+                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                    >
+                                      🔄 Reuse
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="delete-btn"
+                                      onClick={() => handleDeleteBroadcastLog(log._id)}
+                                      title="Delete log entry"
+                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tab 5: Inquiries & Dispatches */}
           {activeTab === "inquiries" && (
             <div className="table-card">
@@ -2314,6 +3239,85 @@ export default function AdminDashboard() {
                   Application Status: {selectedApp.status}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Sent Broadcast Log Detail / Email Preview Modal */}
+        {selectedLogPreview && (
+          <div className="notif-modal-overlay" onClick={() => setSelectedLogPreview(null)}>
+            <div className="notif-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "580px" }}>
+              <div className="notif-modal-header">
+                <div className="notif-modal-type-wrap">
+                  <span className="notif-modal-icon">✉️</span>
+                  <div>
+                    <h3 className="notif-modal-title">{selectedLogPreview.title}</h3>
+                    <span className="notif-modal-time">
+                      Dispatched on {new Date(selectedLogPreview.createdAt).toLocaleString()} by {selectedLogPreview.adminEmail}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="notif-modal-close-btn"
+                  onClick={() => setSelectedLogPreview(null)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="notif-modal-body">
+                <div className="notif-modal-sender-bar">
+                  <div className="notif-modal-sender-initials">ZC</div>
+                  <div className="notif-modal-sender-info">
+                    <span className="notif-modal-sender-name">Zewail City Chess Club Administration</span>
+                    <span className="notif-modal-sender-sub">
+                      Sender: chesszc@zewailcity.edu.eg • Target: {selectedLogPreview.recipientType === 'all' ? 'All Members' : selectedLogPreview.targetEmail}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="notif-modal-message-box">
+                  {selectedLogPreview.message}
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "0.82rem", color: "#bab19c", background: "rgba(0,0,0,0.3)", padding: "10px 14px", borderRadius: "8px" }}>
+                  <div><strong>In-App Notifications:</strong> {selectedLogPreview.inAppCount || 0}</div>
+                  <div><strong>Emails Sent:</strong> {selectedLogPreview.emailCount || 0}</div>
+                  {selectedLogPreview.link && <div><strong>Target URL:</strong> {selectedLogPreview.link}</div>}
+                </div>
+              </div>
+
+              <div className="notif-modal-actions">
+                <button
+                  type="button"
+                  className="notif-modal-delete-btn"
+                  onClick={() => handleDeleteBroadcastLog(selectedLogPreview._id)}
+                >
+                  🗑️ Delete Record
+                </button>
+
+                <div className="notif-modal-right-actions">
+                  <button
+                    type="button"
+                    className="tab-btn"
+                    onClick={() => {
+                      handleReuseBroadcastLog(selectedLogPreview);
+                      setSelectedLogPreview(null);
+                    }}
+                    style={{ padding: "8px 16px", fontSize: "0.84rem" }}
+                  >
+                    🔄 Reuse in Composer
+                  </button>
+                  <button
+                    type="button"
+                    className="notif-modal-cancel-btn"
+                    onClick={() => setSelectedLogPreview(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -56,6 +56,8 @@ function App() {
         <Route path="/apply/trainer" element={<TrainerForm />} />
         <Route path="/apply/trainee" element={<TraineeForm />} />
         <Route path="/applicationtable" element={<Navigate to="/admin?tab=applications" replace />} />
+        <Route path="/createtournament" element={<Navigate to="/admin?tab=add-tournament" replace />} />
+        <Route path="/createchampionship" element={<Navigate to="/admin?tab=add-tournament" replace />} />
         <Route path="/admin" element={<Admin />} />
 
         {/* 404 Catch-all */}

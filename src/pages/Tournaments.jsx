@@ -58,9 +58,28 @@ export default function Tournaments() {
     }
 
     try {
-      const userRes = await fetch(`${API_BASE}/api/profile?email=${userEmail}`);
+      const userRes = await fetch(`${API_BASE}/api/profile?email=${encodeURIComponent(userEmail)}`);
       const userData = await userRes.json();
       const name = userData.name || userEmail.split("@")[0];
+
+      // Check if tournament is a Knockout tournament: availability is required!
+      const targetTournament = tournaments.find(t => t._id === tId);
+      const isKnockout = targetTournament?.type && (
+        targetTournament.type.toLowerCase().includes("knockout") || 
+        targetTournament.type.toLowerCase().includes("elimination") ||
+        targetTournament.type === "Single Elimination" ||
+        targetTournament.type === "Double Elimination"
+      );
+
+      if (isKnockout && (!Array.isArray(userData.availability) || userData.availability.length === 0)) {
+        const confirmGo = window.confirm(
+          "🕒 Campus Free Time Required:\n\nKnockout tournaments require players to register their weekly free hours (Sunday–Thursday) in their Profile before joining, so opponents can coordinate match times.\n\nWould you like to visit your Profile now to set your free hours?"
+        );
+        if (confirmGo) {
+          window.location.href = "/profile";
+        }
+        return;
+      }
 
       const res = await fetch(`${API_BASE}/api/tournaments/${tId}/register`, {
         method: "POST",
@@ -69,7 +88,18 @@ export default function Tournaments() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to register for tournament");
+      if (!res.ok) {
+        if (data.requiresAvailability) {
+          const confirmGo = window.confirm(
+            "🕒 Campus Free Time Required:\n\n" + data.error + "\n\nWould you like to visit your Profile now to set your free hours?"
+          );
+          if (confirmGo) {
+            window.location.href = "/profile";
+          }
+          return;
+        }
+        throw new Error(data.error || "Failed to register for tournament");
+      }
 
       alert("🎉 Successfully registered for " + (data.data?.title || "the tournament") + "!");
       fetchTournaments();
@@ -250,7 +280,7 @@ export default function Tournaments() {
                               <div className="t-meta-item">
                                 <span className="t-meta-icon">⏱️</span>
                                 <div className="t-meta-texts">
-                                  <span className="t-meta-label">Time</span>
+                                  <span className="t-meta-label">Clock</span>
                                   <span className="t-meta-val">{t.time}</span>
                                 </div>
                               </div>

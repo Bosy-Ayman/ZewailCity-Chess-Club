@@ -3,6 +3,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { safeFetchJson, safeSetLocalStorage, compressImage } from "../utils/api";
 import { getUserTournamentAchievements, getHistoricalTournamentsForUser, ALL_HISTORICAL_PLAYERS } from "../utils/tournamentWinners";
+import { findCommonFreeSlots, timeStringToMinutes, minutesToTimeString } from "../utils/availabilityMatcher";
 import { 
   Trophy, 
   Award, 
@@ -37,7 +38,8 @@ import {
   X,
   Search,
   Users,
-  Plus
+  Plus,
+  Trash2
 } from "lucide-react";
 import "./Profile.css";
 
@@ -152,6 +154,62 @@ export default function Profile() {
   const [saveSuccess, setSaveSuccess] = useState("");
   const [saveError, setSaveError] = useState("");
 
+  // Weekly Free Hours & Match Availability State
+  const [availability, setAvailability] = useState([]);
+  const [viewerAvailability, setViewerAvailability] = useState([]);
+  const [newSlotDay, setNewSlotDay] = useState("Tuesday");
+  const [newSlotFrom, setNewSlotFrom] = useState("08:00");
+  const [newSlotTo, setNewSlotTo] = useState("09:00");
+  const [isSavingAvailability, setIsSavingAvailability] = useState(false);
+  const [availSuccessMsg, setAvailSuccessMsg] = useState("");
+
+  const handleSaveAvailability = async (updatedList) => {
+    setIsSavingAvailability(true);
+    setAvailSuccessMsg("");
+    try {
+      const email = profile?.email || loggedInEmail;
+      const res = await fetch(`${API_BASE}/api/users/availability`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, availability: updatedList })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update availability");
+      setAvailability(updatedList);
+      setProfile(prev => prev ? { ...prev, availability: updatedList } : prev);
+      setAvailSuccessMsg("Weekly free hours saved & synced with tournament matchmaker!");
+      setTimeout(() => setAvailSuccessMsg(""), 4000);
+    } catch (err) {
+      alert("Error saving availability: " + err.message);
+    } finally {
+      setIsSavingAvailability(false);
+    }
+  };
+
+  const handleAddSlot = (e) => {
+    if (e) e.preventDefault();
+    if (!newSlotFrom || !newSlotTo) {
+      alert("Please specify both start and end time.");
+      return;
+    }
+    const updated = [...availability, {
+      day: newSlotDay,
+      from: newSlotFrom,
+      to: newSlotTo
+    }];
+    handleSaveAvailability(updated);
+  };
+
+  const handleRemoveSlot = (indexToRemove) => {
+    const updated = availability.filter((_, idx) => idx !== indexToRemove);
+    handleSaveAvailability(updated);
+  };
+
+  const handleQuickPreset = (day, from, to) => {
+    const updated = [...availability, { day, from, to }];
+    handleSaveAvailability(updated);
+  };
+
   useEffect(() => {
     if (!targetEmail && !queryName) {
       window.location.href = "/?login=true";
@@ -170,6 +228,7 @@ export default function Profile() {
 
       const profData = await safeFetchJson(fetchUrl);
       setProfile(profData);
+      setAvailability(profData.availability || []);
       setCheerCount(profData.cheers || 0);
       setIsFollowing(!!profData.isFollowing);
       setFollowersCount(profData.followersCount || 0);
@@ -234,6 +293,18 @@ export default function Profile() {
         setTournaments(tourData || []);
       } catch (tErr) {
         setTournaments([]);
+      }
+
+      // If viewing another tactician, fetch viewer's availability to calculate mutual free windows
+      if (!isOwnProfile && loggedInEmail) {
+        try {
+          const myAvailRes = await safeFetchJson(`${API_BASE}/api/users/${encodeURIComponent(loggedInEmail)}/availability`);
+          if (myAvailRes && Array.isArray(myAvailRes.availability)) {
+            setViewerAvailability(myAvailRes.availability);
+          }
+        } catch (e) {
+          // ignore
+        }
       }
     } catch (err) {
       if (!profile) setError(err.message);
@@ -1143,6 +1214,16 @@ export default function Profile() {
             {challenges.length > 0 && <span className="tab-badge-count gold">{challenges.length}</span>}
           </button>
 
+          <button 
+            type="button"
+            className={`dashboard-tab-btn ${activeTab === 'availability' ? 'active' : ''}`}
+            onClick={() => setActiveTab('availability')}
+          >
+            <Clock size={16} />
+            <span>Free Hours &amp; Match Schedule</span>
+            {availability.length > 0 && <span className="tab-badge-count gold">{availability.length}</span>}
+          </button>
+
           {isOwnProfile && (
             <button 
               type="button"
@@ -1183,17 +1264,6 @@ export default function Profile() {
                     <h3 className="card-title">Academic & Student Dossier</h3>
                     <p className="card-subtitle">Official university identity and member contact information</p>
                   </div>
-                  {isAdmin && (
-                    <button 
-                      type="button" 
-                      className="btn-bento-admin-edit"
-                      onClick={() => setActiveTab('admin')}
-                      title="Edit member dossier details as Administrator"
-                    >
-                      <Settings size={14} />
-                      <span>Edit Dossier</span>
-                    </button>
-                  )}
                 </div>
 
                 <div className="details-list">
@@ -1265,17 +1335,6 @@ export default function Profile() {
                     <h3 className="card-title">Chess Identity & Philosophy</h3>
                     <p className="card-subtitle">Personal playing style, repertoire, and tournament motto</p>
                   </div>
-                  {isAdmin && (
-                    <button 
-                      type="button" 
-                      className="btn-bento-admin-edit"
-                      onClick={() => setActiveTab('admin')}
-                      title="Edit chess philosophy & title as Administrator"
-                    >
-                      <Settings size={14} />
-                      <span>Edit Identity</span>
-                    </button>
-                  )}
                 </div>
 
                 <div className="details-list">
@@ -2017,118 +2076,277 @@ export default function Profile() {
         )}
 
         {/* =========================================================================
-            7. TAB CONTENT: CAMPUS CHALLENGES INBOX
+            7. TAB CONTENT: 🕒 WEEKLY FREE HOURS & MATCH AVAILABILITY
            ========================================================================= */}
-        {activeTab === 'challenges' && (
-          <div className="profile-tab-pane profile-fade-in">
-            <div className="tab-pane-header-row">
-              <div>
-                <h3 className="section-title">⚔️ Campus Match Challenges</h3>
-                <p className="section-subtitle">Direct 1-on-1 chess faceoffs requested across Zewail City campus</p>
-              </div>
-              {!isOwnProfile && (
-                <button 
-                  className="btn-primary-action"
-                  onClick={() => setChallengeModalOpen(true)}
-                >
-                  <Swords size={16} />
-                  <span>Send Challenge to {profile.name?.split(" ")[0]}</span>
-                </button>
-              )}
-            </div>
+        {activeTab === 'availability' && (() => {
+          const DAYS_LIST = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+          const mutualSlots = (!isOwnProfile && viewerAvailability.length > 0 && availability.length > 0)
+            ? findCommonFreeSlots(viewerAvailability, availability)
+            : [];
 
-            {challenges.length === 0 ? (
-              <div className="empty-state-card glass-panel">
-                <div className="empty-icon-glow">
-                  <Swords size={48} />
+          return (
+            <div className="profile-tab-pane profile-fade-in">
+              {/* Header Hero */}
+              <div className="tab-pane-header-row" style={{ marginBottom: "20px" }}>
+                <div>
+                  <h3 className="section-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <Clock size={22} className="gold" />
+                    <span>Campus Free Time &amp; Match Schedule (Sun – Thu)</span>
+                  </h3>
+                  <p className="section-subtitle">
+                    {isOwnProfile
+                      ? "Set your weekly open hours on campus (Sunday through Thursday). The tournament pairing engine automatically cross-references your availability with opponents to effortlessly schedule knockout rounds!"
+                      : `View ${profile.name}'s weekly campus availability (Sunday–Thursday) and check common free hours for scheduling casual duels or tournament matches.`}
+                  </p>
                 </div>
-                <h4>No Pending Challenges</h4>
-                <p>
-                  {isOwnProfile 
-                    ? "You have no pending match challenges in your inbox. Fellow Zewailians can challenge you directly from your profile card or the Campus Tacticians showcase!"
-                    : `${profile.name} currently has no open challenges. Be the first to challenge them to a campus faceoff!`
-                  }
-                </p>
-                {!isOwnProfile && (
-                  <button 
-                    className="btn-primary-action"
-                    onClick={() => setChallengeModalOpen(true)}
-                  >
-                    <span>Issue Challenge Now ⚔️</span>
-                  </button>
-                )}
               </div>
-            ) : (
-              <div className="challenges-inbox-grid">
-                {challenges.map((c) => (
-                  <div key={c._id} className={`challenge-inbox-card glass-panel status-${c.status}`}>
-                    <div className="challenge-card-header">
-                      <div className="challenger-info">
-                        <div className="challenger-avatar">
-                          <Swords size={18} />
-                        </div>
-                        <div>
-                          <h4 className="challenger-name">{c.fromName || c.fromEmail}</h4>
-                          <span className="challenger-email">{c.fromEmail}</span>
-                        </div>
-                      </div>
-                      <span className={`challenge-status-pill ${c.status}`}>
-                        {c.status === 'accepted' ? '✓ Accepted' : c.status === 'declined' ? '✕ Declined' : '⏳ Pending Response'}
-                      </span>
-                    </div>
 
-                    <div className="challenge-details-grid">
-                      <div className="c-detail-item">
-                        <Clock size={14} className="c-icon gold" />
-                        <span><strong>Time Control:</strong> {c.timeControl}</span>
-                      </div>
-                      <div className="c-detail-item">
-                        <Compass size={14} className="c-icon blue" />
-                        <span><strong>Campus Location:</strong> {c.location}</span>
-                      </div>
-                      <div className="c-detail-item">
-                        <Calendar size={14} className="c-icon" />
-                        <span><strong>Issued:</strong> {new Date(c.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    </div>
+              {/* Success Notification Alert */}
+              {availSuccessMsg && (
+                <div style={{ background: "rgba(46, 204, 113, 0.15)", border: "1px solid #2ecc71", color: "#2ecc71", padding: "12px 18px", borderRadius: "10px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px", fontWeight: "700", fontSize: "0.9rem" }}>
+                  <CheckCircle2 size={18} />
+                  <span>{availSuccessMsg}</span>
+                </div>
+              )}
 
-                    {c.message && (
-                      <div className="challenge-quote">
-                        "{c.message}"
-                      </div>
-                    )}
-
-                    {isOwnProfile && c.status === 'pending' && (
-                      <div className="challenge-card-actions">
-                        <button 
-                          className="btn-challenge-accept"
-                          onClick={() => handleRespondChallenge(c._id, 'accepted')}
-                        >
-                          <Check size={15} />
-                          <span>Accept Challenge</span>
-                        </button>
-                        <button 
-                          className="btn-challenge-decline"
-                          onClick={() => handleRespondChallenge(c._id, 'declined')}
-                        >
-                          <X size={15} />
-                          <span>Decline</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {c.status === 'accepted' && (
-                      <div className="challenge-notice success">
-                        <CheckCircle2 size={15} />
-                        <span>Match confirmed! Meet at <strong>{c.location}</strong> with your chess clock ready!</span>
-                      </div>
-                    )}
+              {/* MUTUAL FREE TIME OVERLAP BANNER (when viewing another profile) */}
+              {!isOwnProfile && loggedInEmail && (
+                <div style={{ background: mutualSlots.length > 0 ? "linear-gradient(135deg, rgba(243, 193, 68, 0.15), rgba(46, 204, 113, 0.15))" : "rgba(255, 255, 255, 0.04)", border: `1px solid ${mutualSlots.length > 0 ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.1)"}`, borderRadius: "14px", padding: "20px", marginBottom: "24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                    <h4 style={{ margin: 0, color: "#f3c144", fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                      🤝 Mutual Free Windows with You
+                    </h4>
+                    <span style={{ fontSize: "0.8rem", color: "#bab19c", background: "rgba(0,0,0,0.3)", padding: "4px 10px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      {mutualSlots.length} overlapping window{mutualSlots.length === 1 ? "" : "s"} found
+                    </span>
                   </div>
-                ))}
+
+                  {mutualSlots.length > 0 ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
+                      {mutualSlots.map((ms, idx) => (
+                        <div key={idx} style={{ background: "rgba(0, 0, 0, 0.4)", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "10px", padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div>
+                            <div style={{ fontWeight: "800", color: "#fff", fontSize: "0.95rem" }}>
+                              📅 {ms.day}
+                            </div>
+                            <div style={{ color: "#f3c144", fontSize: "0.85rem", fontWeight: "700", marginTop: "2px" }}>
+                              🕒 {ms.from} – {ms.to}
+                            </div>
+                          </div>
+                          <span style={{ background: "rgba(46, 204, 113, 0.15)", color: "#2ecc71", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "3px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: "700" }}>
+                            {ms.durationLabel} window
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: "#9c9484", fontSize: "0.88rem" }}>
+                      {viewerAvailability.length === 0
+                        ? "You haven't set your own weekly availability yet. Add your free hours in your profile to auto-detect matching match times!"
+                        : `No direct overlapping hours detected between your schedule and ${profile.name}'s current open slots.`}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* QUICK ADD PRESETS & SLOT CREATION (For Profile Owner) */}
+              {isOwnProfile && (
+                <div className="glass-panel" style={{ padding: "20px", borderRadius: "14px", marginBottom: "24px", border: "1px solid rgba(243, 193, 68, 0.25)" }}>
+                  <h4 style={{ margin: "0 0 8px", color: "#f3c144", fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Plus size={18} /> Add New Free Time Window
+                  </h4>
+                  <p style={{ margin: "0 0 16px", color: "#9c9484", fontSize: "0.84rem" }}>
+                    Enter the hours you are typically available on campus for chess matches and tournament rounds.
+                  </p>
+
+                  {/* 1-Click Quick Presets */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
+                    <span style={{ fontSize: "0.76rem", color: "#bab19c", fontWeight: "700" }}>⚡ Quick Presets:</span>
+                    {[
+                      { day: "Tuesday", from: "08:00", to: "09:00" },
+                      { day: "Tuesday", from: "12:00", to: "14:00" },
+                      { day: "Sunday", from: "10:00", to: "12:00" },
+                      { day: "Thursday", from: "16:00", to: "18:00" },
+                      { day: "Monday", from: "13:00", to: "15:00" }
+                    ].map((preset, pIdx) => (
+                      <button
+                        key={pIdx}
+                        type="button"
+                        onClick={() => handleQuickPreset(preset.day, preset.from, preset.to)}
+                        disabled={isSavingAvailability}
+                        style={{
+                          background: "rgba(243, 193, 68, 0.1)",
+                          color: "#f3c144",
+                          border: "1px solid rgba(243, 193, 68, 0.25)",
+                          padding: "4px 10px",
+                          borderRadius: "12px",
+                          fontSize: "0.75rem",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease"
+                        }}
+                      >
+                        + {preset.day} {minutesToTimeString(timeStringToMinutes(preset.from))}–{minutesToTimeString(timeStringToMinutes(preset.to))}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Form Inputs Grid */}
+                  <form onSubmit={handleAddSlot} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr)) auto", gap: "10px", alignItems: "flex-end" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", color: "#bab19c", fontWeight: "700", marginBottom: "4px" }}>
+                        Day of Week
+                      </label>
+                      <select
+                        value={newSlotDay}
+                        onChange={(e) => setNewSlotDay(e.target.value)}
+                        style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px 10px", borderRadius: "8px", fontSize: "0.85rem", outline: "none" }}
+                      >
+                        {DAYS_LIST.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", color: "#bab19c", fontWeight: "700", marginBottom: "4px" }}>
+                        From Time
+                      </label>
+                      <input
+                        type="time"
+                        value={newSlotFrom}
+                        onChange={(e) => setNewSlotFrom(e.target.value)}
+                        style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px 10px", borderRadius: "8px", fontSize: "0.85rem", outline: "none", boxSizing: "border-box" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", color: "#bab19c", fontWeight: "700", marginBottom: "4px" }}>
+                        To Time
+                      </label>
+                      <input
+                        type="time"
+                        value={newSlotTo}
+                        onChange={(e) => setNewSlotTo(e.target.value)}
+                        style={{ width: "100%", background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "8px 10px", borderRadius: "8px", fontSize: "0.85rem", outline: "none", boxSizing: "border-box" }}
+                      />
+                    </div>
+
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={isSavingAvailability}
+                        style={{
+                          background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 100%)",
+                          color: "#15120c",
+                          border: "none",
+                          padding: "9px 18px",
+                          borderRadius: "8px",
+                          fontWeight: "800",
+                          fontSize: "0.88rem",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                          height: "38px"
+                        }}
+                      >
+                        {isSavingAvailability ? "Saving…" : "+ Add Slot"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* CURRENT WEEKLY SCHEDULE BY DAY */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
+                {DAYS_LIST.map((day) => {
+                  const daySlots = availability.filter(s => s && s.day === day);
+                  return (
+                    <div
+                      key={day}
+                      className="glass-panel"
+                      style={{
+                        padding: "16px",
+                        borderRadius: "12px",
+                        border: daySlots.length > 0 ? "1px solid rgba(243, 193, 68, 0.3)" : "1px solid rgba(255, 255, 255, 0.06)",
+                        background: daySlots.length > 0 ? "rgba(243, 193, 68, 0.03)" : "rgba(0, 0, 0, 0.2)"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", paddingBottom: "6px" }}>
+                        <h5 style={{ margin: 0, color: daySlots.length > 0 ? "#f3c144" : "#888", fontSize: "0.95rem", fontWeight: "800" }}>
+                          📅 {day}
+                        </h5>
+                        <span style={{ fontSize: "0.72rem", color: daySlots.length > 0 ? "#2ecc71" : "#666", fontWeight: "700" }}>
+                          {daySlots.length > 0 ? `${daySlots.length} slot${daySlots.length === 1 ? "" : "s"}` : "Free hours not set"}
+                        </span>
+                      </div>
+
+                      {daySlots.length === 0 ? (
+                        <p style={{ margin: 0, color: "#666", fontSize: "0.8rem", fontStyle: "italic" }}>
+                          No availability listed
+                        </p>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {daySlots.map((slot, slotIdx) => {
+                            const globalIdx = availability.findIndex(s => s === slot);
+                            const fromFormatted = minutesToTimeString(timeStringToMinutes(slot.from));
+                            const toFormatted = minutesToTimeString(timeStringToMinutes(slot.to));
+                            const durMinutes = timeStringToMinutes(slot.to) - timeStringToMinutes(slot.from);
+                            const durLabel = durMinutes > 0 ? (durMinutes >= 60 ? `${Math.floor(durMinutes / 60)}h${durMinutes % 60 > 0 ? ` ${durMinutes % 60}m` : ""}` : `${durMinutes}m`) : "";
+
+                            return (
+                              <div
+                                key={slotIdx}
+                                style={{
+                                  background: "rgba(0, 0, 0, 0.4)",
+                                  border: "1px solid rgba(243, 193, 68, 0.18)",
+                                  borderRadius: "8px",
+                                  padding: "8px 12px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: "8px"
+                                }}
+                              >
+                                <div>
+                                  <div style={{ color: "#fff", fontWeight: "800", fontSize: "0.88rem" }}>
+                                    🕒 {fromFormatted} – {toFormatted}
+                                  </div>
+                                  <div style={{ color: "#bab19c", fontSize: "0.74rem", marginTop: "2px" }}>
+                                    {durLabel && <span style={{ color: "#f3c144", fontWeight: "700" }}>{durLabel} window</span>}
+                                  </div>
+                                </div>
+
+                                {isOwnProfile && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveSlot(globalIdx)}
+                                    title="Delete this time slot"
+                                    style={{
+                                      background: "rgba(231, 76, 60, 0.15)",
+                                      color: "#e74c3c",
+                                      border: "1px solid rgba(231, 76, 60, 0.3)",
+                                      padding: "4px 8px",
+                                      borderRadius: "6px",
+                                      cursor: "pointer",
+                                      fontSize: "0.75rem",
+                                      fontWeight: "700"
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* =========================================================================
             8. TAB CONTENT: 👑 ADMINISTRATOR COMMAND & REGISTRY

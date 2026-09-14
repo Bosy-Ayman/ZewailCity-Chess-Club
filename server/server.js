@@ -10,6 +10,12 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
+let nodemailer;
+try {
+  nodemailer = require('nodemailer');
+} catch (e) {
+  console.warn('Nodemailer not found.');
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'zcchessclub-super-secret-key-change-me';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '963065836254-h2pdhhkdgt5c9p4vim5ervkdc13iqhl9.apps.googleusercontent.com');
@@ -19,6 +25,9 @@ const isAdminEmail = (email) => {
   const e = email.toLowerCase().trim();
   return (
     e === 'admin@zcchessclub.com' ||
+    e === 'chesszc@zewailcity.edu.eg' ||
+    e.includes('chesszc') ||
+    e.includes('admin') ||
     e.includes('poussy.ayman') ||
     e.includes('bosy.ayman') ||
     e.includes('poussyayman') ||
@@ -143,7 +152,8 @@ const TournamentSchema = new mongoose.Schema({
     result: { type: String, default: 'pending' },
     bracket: { type: String, default: 'upper' },
     matchTime: { type: String, default: '' },
-    location: { type: String, default: '' }
+    location: { type: String, default: '' },
+    reminderSent15Min: { type: Boolean, default: false }
   }],
   rounds: { type: Number, default: 0 }, // Total planned rounds
   winner: { type: String, default: '' },
@@ -200,6 +210,12 @@ const UserSchema = new mongoose.Schema({
   lastSeen: { type: Date, default: Date.now },
   playstyle: { type: String, default: "" },
   linkedHistoricalName: { type: String, default: "" },
+  availability: [{
+    day: { type: String, enum: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], default: 'Sunday' },
+    from: { type: String, default: '08:00' },
+    to: { type: String, default: '10:00' },
+    note: { type: String, default: '' }
+  }],
 
   createdAt: { type: Date, default: Date.now }
 });
@@ -209,17 +225,38 @@ const User = mongoose.model('User', UserSchema, 'users');
 // --- Notification Schema & Model ---
 const NotificationSchema = new mongoose.Schema({
   recipientEmail: { type: String, required: true, index: true },
-  type: { type: String, enum: ['follow', 'tournament_join', 'tournament_start', 'system'], default: 'system' },
+  type: { type: String, enum: ['follow', 'tournament_join', 'tournament_start', 'broadcast', 'direct_message', 'system', 'winner'], default: 'system' },
   actorName: { type: String, default: '' },
   actorEmail: { type: String, default: '' },
   actorAvatar: { type: String, default: '' },
   message: { type: String, required: true },
   link: { type: String, default: '/' },
+  metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   read: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
 const Notification = mongoose.model('Notification', NotificationSchema, 'notifications');
+
+// --- Broadcast & Email Log Schema & Model ---
+const BroadcastLogSchema = new mongoose.Schema({
+  adminEmail: { type: String, required: true },
+  recipientType: { type: String, default: 'all' }, // 'all' | 'specific'
+  targetEmail: { type: String, default: '' },
+  recipientCount: { type: Number, default: 0 },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  link: { type: String, default: '/' },
+  channels: {
+    inApp: { type: Boolean, default: true },
+    email: { type: Boolean, default: true }
+  },
+  inAppCount: { type: Number, default: 0 },
+  emailCount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const BroadcastLog = mongoose.model('BroadcastLog', BroadcastLogSchema, 'broadcast_logs');
 
 // Helper: create a notification record
 async function createNotification({ recipientEmail, type, actorName, actorEmail, actorAvatar, message, link }) {
@@ -232,6 +269,730 @@ async function createNotification({ recipientEmail, type, actorName, actorEmail,
     console.error('createNotification error:', err.message);
   }
 }
+
+const generateWinnerCelebrationEmailHtml = ({
+  tournamentTitle,
+  tournamentType,
+  recipientName,
+  winnerName,
+  winnerScoreOrPoints,
+  runnerUpName,
+  runnerUpScoreOrPoints,
+  thirdPlaceName,
+  thirdPlaceScoreOrPoints,
+  actionUrl
+}) => {
+  const appBaseUrl = process.env.CLIENT_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${appBaseUrl}${actionUrl}`) : appBaseUrl;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #100e0b; color: #f5f0e6; }
+        .wrapper { max-width: 620px; margin: 20px auto; background-color: #17140e; border: 1.5px solid rgba(243, 193, 68, 0.45); border-radius: 18px; overflow: hidden; box-shadow: 0 12px 36px rgba(0,0,0,0.75); }
+        .header { background: radial-gradient(circle at 50% 0%, #2e2415 0%, #15120c 100%); padding: 32px 20px 24px; text-align: center; border-bottom: 2px solid #f3c144; }
+        .trophy-icon { font-size: 44px; line-height: 1; margin-bottom: 8px; }
+        .logo-title { color: #f3c144; font-size: 20px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin: 0; }
+        .event-badge { display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid rgba(243, 193, 68, 0.35); color: #f3c144; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 4px 14px; border-radius: 999px; margin-top: 8px; }
+        .content { padding: 32px 26px; }
+        .champ-headline { color: #ffffff; font-size: 24px; font-weight: 900; margin: 0 0 10px; text-align: center; }
+        .champ-sub { color: #bab19c; font-size: 14px; text-align: center; margin: 0 0 24px; line-height: 1.5; }
+        
+        .podium-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin: 20px 0; }
+        .place-row { border-radius: 12px; }
+        .gold-cell { background: linear-gradient(135deg, rgba(61, 48, 22, 0.9) 0%, rgba(30, 24, 14, 0.95) 100%); border: 1.5px solid #f3c144; padding: 14px 18px; border-radius: 12px; }
+        .silver-cell { background: linear-gradient(135deg, rgba(43, 46, 51, 0.8) 0%, rgba(22, 24, 27, 0.9) 100%); border: 1.5px solid rgba(209, 213, 219, 0.5); padding: 12px 18px; border-radius: 12px; }
+        .bronze-cell { background: linear-gradient(135deg, rgba(51, 35, 26, 0.8) 0%, rgba(27, 19, 14, 0.9) 100%); border: 1.5px solid rgba(205, 127, 50, 0.5); padding: 12px 18px; border-radius: 12px; }
+        
+        .cta-container { text-align: center; margin: 32px 0 12px; }
+        .cta-btn { display: inline-block; background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%); color: #12100d !important; font-weight: 900; font-size: 15px; text-decoration: none; padding: 14px 36px; border-radius: 999px; box-shadow: 0 4px 18px rgba(243, 193, 68, 0.45); }
+        .footer { padding: 22px 20px; text-align: center; background: #0f0d0a; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <div class="trophy-icon">🏆</div>
+          <h1 class="logo-title">Zewail City Chess Club</h1>
+          <span class="event-badge">${tournamentType || 'Championship Tournament'}</span>
+        </div>
+        <div class="content">
+          <h2 class="champ-headline">Official Tournament Results! 👑</h2>
+          <p class="champ-sub">
+            Dear <strong>${recipientName}</strong>, the decisive games of <strong>${tournamentTitle}</strong> have concluded. Congratulations to our podium champions!
+          </p>
+          
+          <table class="podium-table" cellpadding="0" cellspacing="0">
+            <!-- 1st Place -->
+            <tr>
+              <td class="gold-cell">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="42" valign="middle" style="font-size: 26px;">🥇</td>
+                    <td valign="middle">
+                      <div style="font-size: 18px; font-weight: 800; color: #ffffff;">${winnerName}</div>
+                      <div style="font-size: 13px; color: #f3c144; font-weight: 700; margin-top: 2px;">${winnerScoreOrPoints || 'Grand Champion'}</div>
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="background: linear-gradient(135deg, #f7ce68, #f3c144); color: #12100d; font-size: 11px; font-weight: 900; padding: 4px 12px; border-radius: 999px;">CHAMPION</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- 2nd Place -->
+            ${runnerUpName && runnerUpName !== 'BYE' && runnerUpName !== 'TBD' ? `
+            <tr>
+              <td style="height: 10px;"></td>
+            </tr>
+            <tr>
+              <td class="silver-cell">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="42" valign="middle" style="font-size: 24px;">🥈</td>
+                    <td valign="middle">
+                      <div style="font-size: 16px; font-weight: 800; color: #ffffff;">${runnerUpName}</div>
+                      <div style="font-size: 13px; color: #d1d5db; margin-top: 2px;">${runnerUpScoreOrPoints || 'Runner-Up / 2nd Place'}</div>
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="font-size: 12px; font-weight: 800; color: #d1d5db;">RUNNER-UP</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            ` : ''}
+
+            <!-- 3rd Place -->
+            ${thirdPlaceName && thirdPlaceName !== 'BYE' && thirdPlaceName !== 'TBD' ? `
+            <tr>
+              <td style="height: 10px;"></td>
+            </tr>
+            <tr>
+              <td class="bronze-cell">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="42" valign="middle" style="font-size: 24px;">🥉</td>
+                    <td valign="middle">
+                      <div style="font-size: 16px; font-weight: 800; color: #ffffff;">${thirdPlaceName}</div>
+                      <div style="font-size: 13px; color: #cd7f32; margin-top: 2px;">${thirdPlaceScoreOrPoints || '3rd Place'}</div>
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="font-size: 12px; font-weight: 800; color: #cd7f32;">3RD PLACE</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            ` : ''}
+          </table>
+
+          <p style="color: #c4bcae; font-size: 14px; line-height: 1.6; text-align: center; margin: 24px 0 16px;">
+            Thank you to all participants for competing with tactical excellence. Check out the full bracket tree, match scores, and updated ratings directly on the platform.
+          </p>
+
+          <div class="cta-container">
+            <a href="${targetUrl}" class="cta-btn">View Official Standings & Podium →</a>
+          </div>
+        </div>
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Zewail City Chess Club. All rights reserved.</p>
+          <p>Zewail City of Science, Technology and Innovation • Giza, Egypt</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Helper: Broadcast Champion / Winner Announcement & Email to all registered members
+async function broadcastWinnerNotification({
+  tournamentTitle,
+  tournamentType,
+  winnerName,
+  winnerEmail,
+  winnerAvatar,
+  winnerScoreOrPoints,
+  runnerUpName,
+  runnerUpScoreOrPoints,
+  thirdPlaceName,
+  thirdPlaceScoreOrPoints,
+  link
+}) {
+  try {
+    if (!tournamentTitle || !winnerName || winnerName === 'BYE' || winnerName === 'TBD') return;
+
+    // Resolve winner's avatar if not provided
+    let finalAvatar = winnerAvatar || '';
+    if (!finalAvatar) {
+      const winnerUser = await User.findOne({
+        $or: [
+          { name: new RegExp(`^${winnerName.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') },
+          { email: new RegExp(`^${(winnerEmail || winnerName).trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') }
+        ]
+      }).select('profileImage email');
+      if (winnerUser) {
+        if (winnerUser.profileImage) finalAvatar = winnerUser.profileImage;
+        if (!winnerEmail && winnerUser.email) winnerEmail = winnerUser.email;
+      }
+    }
+
+    // Resolve runner-up & 3rd place avatars if possible
+    let finalRunnerUpAvatar = '';
+    let finalThirdPlaceAvatar = '';
+
+    if (runnerUpName && runnerUpName !== 'BYE' && runnerUpName !== 'TBD') {
+      const runnerUser = await User.findOne({
+        name: new RegExp(`^${runnerUpName.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i')
+      }).select('profileImage');
+      if (runnerUser && runnerUser.profileImage) finalRunnerUpAvatar = runnerUser.profileImage;
+    }
+
+    if (thirdPlaceName && thirdPlaceName !== 'BYE' && thirdPlaceName !== 'TBD') {
+      const thirdUser = await User.findOne({
+        name: new RegExp(`^${thirdPlaceName.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i')
+      }).select('profileImage');
+      if (thirdUser && thirdUser.profileImage) finalThirdPlaceAvatar = thirdUser.profileImage;
+    }
+
+    const allUsers = await User.find({}, 'name email');
+    if (!allUsers || allUsers.length === 0) return;
+
+    const formatBadge = tournamentType || 'Tournament';
+    const notifMessage = `🏆 CHAMPION CROWNED: ${winnerName} won the ${tournamentTitle} (${formatBadge})! 👑`;
+    const targetLink = link || '/tournaments';
+
+    const podiumData = {
+      tournamentTitle,
+      tournamentType: formatBadge,
+      winner: {
+        name: winnerName,
+        points: winnerScoreOrPoints || 'Champion',
+        avatar: finalAvatar
+      },
+      runnerUp: (runnerUpName && runnerUpName !== 'BYE' && runnerUpName !== 'TBD') ? {
+        name: runnerUpName,
+        points: runnerUpScoreOrPoints || 'Runner-Up Finalist',
+        avatar: finalRunnerUpAvatar
+      } : null,
+      thirdPlace: (thirdPlaceName && thirdPlaceName !== 'BYE' && thirdPlaceName !== 'TBD') ? {
+        name: thirdPlaceName,
+        points: thirdPlaceScoreOrPoints || '3rd Place',
+        avatar: finalThirdPlaceAvatar
+      } : null
+    };
+
+    // 1. In-App Notifications for all users
+    const notifDocs = allUsers.map(u => ({
+      recipientEmail: u.email.toLowerCase(),
+      type: 'winner',
+      actorName: winnerName,
+      actorEmail: winnerEmail || 'chesszc@zewailcity.edu.eg',
+      actorAvatar: finalAvatar,
+      message: notifMessage,
+      link: targetLink,
+      metadata: podiumData,
+      read: false,
+      createdAt: new Date()
+    }));
+
+    if (notifDocs.length > 0) {
+      await Notification.insertMany(notifDocs);
+    }
+    console.log(`[Winner Broadcast] In-App alerts dispatched to ${notifDocs.length} tacticians!`);
+
+    // 2. Real Branded Emails for all registered users
+    for (const u of allUsers) {
+      if (!u.email) continue;
+      const html = generateWinnerCelebrationEmailHtml({
+        tournamentTitle,
+        tournamentType: formatBadge,
+        recipientName: u.name || u.email.split('@')[0],
+        winnerName,
+        winnerScoreOrPoints,
+        runnerUpName,
+        runnerUpScoreOrPoints,
+        thirdPlaceName,
+        thirdPlaceScoreOrPoints,
+        actionUrl: targetLink
+      });
+
+      sendEmail({
+        to: u.email,
+        subject: `🏆 [ZC Chess Club] Champion Crowned: ${winnerName} won ${tournamentTitle}!`,
+        html,
+        text: `🏆 CHAMPION CROWNED: ${winnerName} won ${tournamentTitle} (${formatBadge})!\n\n🥇 1st Place: ${winnerName} (${winnerScoreOrPoints || 'Champion'})\n🥈 2nd Place: ${runnerUpName || 'Finalist'}\n🥉 3rd Place: ${thirdPlaceName || '3rd Place'}\n\nView Results: http://localhost:3000${targetLink}`
+      }).catch(err => console.warn(`Email send error to ${u.email}:`, err.message));
+    }
+    console.log(`[Winner Broadcast] Dispatched podium email to ${allUsers.length} members.`);
+  } catch (err) {
+    console.warn('[Winner Broadcast Error]', err.message);
+  }
+}
+
+// --- Email Service & SMTP Transporter ---
+const getEmailTransporter = () => {
+  if (!nodemailer) return null;
+  const user = process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg';
+  const pass = process.env.SMTP_PASS;
+
+  if (!pass) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '465', 10),
+    secure: process.env.SMTP_SECURE === 'false' ? false : true,
+    auth: {
+      user: user,
+      pass: pass
+    }
+  });
+};
+
+const generateClubEmailHtml = ({ title, recipientName, message, actionLabel, actionUrl, senderName }) => {
+  const appBaseUrl = process.env.CLIENT_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${appBaseUrl}${actionUrl}`) : appBaseUrl;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #12100d; color: #f5f0e6; }
+        .wrapper { max-width: 600px; margin: 20px auto; background-color: #18150f; border: 1px solid rgba(243, 193, 68, 0.35); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+        .header { background: linear-gradient(135deg, #241f15 0%, #15120c 100%); padding: 26px; text-align: center; border-bottom: 2px solid #f3c144; }
+        .logo-text { color: #f3c144; font-size: 20px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin: 6px 0 0; }
+        .content { padding: 32px 28px; }
+        .title { color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 16px; }
+        .greeting { color: #c4bcae; font-size: 15px; margin-bottom: 14px; }
+        .message-box { background: rgba(243, 193, 68, 0.06); border: 1px solid rgba(243, 193, 68, 0.25); border-radius: 12px; padding: 20px; color: #e8e2d6; font-size: 15px; line-height: 1.65; margin: 20px 0; white-space: pre-wrap; }
+        .btn-container { text-align: center; margin: 28px 0 16px; }
+        .cta-btn { display: inline-block; background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%); color: #12100d !important; font-weight: 800; font-size: 15px; text-decoration: none; padding: 13px 32px; border-radius: 999px; box-shadow: 0 4px 16px rgba(243, 193, 68, 0.4); }
+        .footer { padding: 20px; text-align: center; background: #110f0b; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <div style="font-size: 32px; line-height: 1;">♟️</div>
+          <p class="logo-text">Zewail City Chess Club</p>
+        </div>
+        <div class="content">
+          <h1 class="title">${title || 'Official Club Announcement'}</h1>
+          <p class="greeting">Dear ${recipientName || 'Tactician'},</p>
+          <div class="message-box">${message}</div>
+          <div class="btn-container">
+            <a href="${targetUrl}" class="cta-btn">${actionLabel || 'Open ZC Chess Club →'}</a>
+          </div>
+          <p style="font-size: 13px; color: #9c9484; text-align: center; margin-top: 24px;">
+            Dispatched by <strong>${senderName || 'Club Administration'}</strong> (${process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg'})
+          </p>
+        </div>
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Zewail City Chess Club. All rights reserved.</p>
+          <p>Zewail City of Science, Technology and Innovation • Giza, Egypt</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+const sendEmail = async ({ to, subject, html, text }) => {
+  try {
+    const transporter = getEmailTransporter();
+    const fromAddress = process.env.SMTP_FROM || `"Zewail City Chess Club" <${process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg'}>`;
+    
+    if (!transporter) {
+      console.log(`[Email Service - Simulated] To: ${to} | Subject: ${subject}`);
+      return { success: true, simulated: true };
+    }
+
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to,
+      subject,
+      text: text || subject,
+      html
+    });
+
+    console.log(`[Email Service - Sent] MessageId: ${info.messageId} to: ${to}`);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Service - Error] Failed to send email to ${to}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+// Helper: Resolve player contact email and display name for alerts
+async function findPlayerContact(nameOrEmail, tournament) {
+  if (!nameOrEmail || nameOrEmail === 'BYE' || nameOrEmail === 'TBD' || nameOrEmail.startsWith('Winner of')) {
+    return null;
+  }
+  const clean = nameOrEmail.trim();
+
+  // 1. Check tournament registrations
+  if (tournament && Array.isArray(tournament.registrations)) {
+    const reg = tournament.registrations.find(r => 
+      (r.name && r.name.toLowerCase() === clean.toLowerCase()) ||
+      (r.email && r.email.toLowerCase() === clean.toLowerCase())
+    );
+    if (reg && reg.email) {
+      return { name: reg.name || clean, email: reg.email.toLowerCase() };
+    }
+  }
+
+  // 2. Query User collection
+  try {
+    const user = await User.findOne({
+      $or: [
+        { name: new RegExp(`^${clean.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') },
+        { email: new RegExp(`^${clean.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') }
+      ]
+    }).select('name email');
+
+    if (user && user.email) {
+      return { name: user.name || clean, email: user.email.toLowerCase() };
+    }
+  } catch (err) {
+    console.warn('findPlayerContact lookup error:', err.message);
+  }
+
+  if (clean.includes('@')) {
+    return { name: clean.split('@')[0], email: clean.toLowerCase() };
+  }
+
+  return null;
+}
+
+// Helper: Automatically dispatch in-app notifications and branded emails for match pairings
+async function notifyTournamentPairings(tournament, matchesList) {
+  if (!tournament || !Array.isArray(matchesList) || matchesList.length === 0) return;
+
+  const typeStr = (tournament.type || '').toLowerCase();
+  const isSwiss = typeStr.includes('swiss');
+  const isDoubleKnockout = typeStr.includes('double');
+  const isKnockout = !isSwiss && (
+    typeStr.includes('knockout') || 
+    typeStr.includes('elimination') ||
+    typeStr.includes('single') ||
+    isDoubleKnockout
+  );
+
+  let matchRuleNote = '';
+  if (isDoubleKnockout) {
+    matchRuleNote = `\n\n⚡ DOUBLE KNOCKOUT MATCH FORMAT & RULES:
+• 🛡️ Two Lives: All players begin in the Winners Bracket. A loss drops you to the Losers Bracket. You are only eliminated after suffering a 2nd match loss.
+• ⚔️ 2-Game Mini-Match: Each knockout tie consists of 2 games. Game 1 is played with the assigned colors below, and Game 2 is played immediately with REVERSED colors (White becomes Black, Black becomes White).
+• First to 1.5 points (win + draw, or 2 wins) wins the match series.
+• ⚡ Armageddon Decider (1 - 1 Tiebreaker): If the match ends tied 1 - 1, Armageddon is played with the Secret Time Bidding System: Both players write down the time they want for Black. The player who bids LESS TIME gets Black and plays with that exact time on their clock! White gets the standard base time.
+• Draw Odds: White MUST WIN to advance. Black only needs a DRAW or WIN to win the match and advance!
+• 👑 Grand Finals & Reset: The Winners Bracket Champion faces the Losers Bracket Champion. If the Losers Champion wins Match 1, a deciding Bracket Reset match is played!
+• 📺 Video Guide on Armageddon Rules: https://www.youtube.com/watch?v=JAYrNhOG-OM`;
+  } else if (isKnockout) {
+    matchRuleNote = `\n\n⚔️ SINGLE KNOCKOUT MATCH FORMAT & RULES:
+• ⚔️ 2-Game Mini-Match: Each knockout tie consists of 2 games. Game 1 is played with the assigned colors below, and Game 2 is played immediately with REVERSED colors (White becomes Black, Black becomes White).
+• First to 1.5 points (win + draw, or 2 wins) advances to the next round.
+• ⚡ Armageddon Decider (1 - 1 Tiebreaker): If the match ends tied 1 - 1, Armageddon is played with the Secret Time Bidding System: Both players write down the time they want for Black. The player who bids LESS TIME gets Black and plays with that exact time on their clock! White gets the standard base time.
+• Draw Odds: White MUST WIN to advance. Black only needs a DRAW or WIN to win the match and advance!
+• 📺 Video Guide on Armageddon Rules: https://www.youtube.com/watch?v=JAYrNhOG-OM`;
+  } else if (isSwiss) {
+    matchRuleNote = `\n\n🏛️ OFFICIAL FIDE SWISS SYSTEM FORMAT & RULES:
+• ♾️ Non-Elimination: No player is eliminated. All players participate in all scheduled rounds.
+• 🎯 Score-Group Pairings: In every round, players are paired against opponents with equal (or closest) scores. No two players meet twice.
+• ⚖️ Color Balance: White ⚪ and Black ⚫ pieces alternate each round according to FIDE pairing regulations.
+• 📊 Scoring: Win = 1.0 pt, Draw = 0.5 pt, Loss = 0.0 pt, Bye = 1.0 pt.
+• 🏆 FIDE Tiebreaks: Direct Encounter • Buchholz Cut 1 • Sonneborn-Berger Score • Most Wins.`;
+  }
+
+  for (let i = 0; i < matchesList.length; i++) {
+    const match = matchesList[i];
+    const boardNumber = i + 1;
+    const roundNumber = match.round || 1;
+    const matchTimeStr = match.matchTime ? ` at ${match.matchTime}` : '';
+    const locationStr = match.location || tournament.location || 'ZC Chess Club Lounge';
+
+    // Look up both players
+    const whitePlayer = await findPlayerContact(match.white, tournament);
+    const blackPlayer = await findPlayerContact(match.black, tournament);
+
+    // Notify White player
+    if (whitePlayer && whitePlayer.email) {
+      const oppText = blackPlayer ? blackPlayer.name : (match.black || 'TBD');
+      const msg = isKnockout
+        ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
+        : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
+
+      await createNotification({
+        recipientEmail: whitePlayer.email,
+        type: 'tournament_start',
+        actorName: 'ZC Chess Club Administration',
+        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+        message: msg,
+        link: `/tournamentdetails?id=${tournament._id}`
+      });
+
+      const emailHtml = generateClubEmailHtml({
+        title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
+        recipientName: whitePlayer.name,
+        message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: White ⚪ (Game 1)\n• Opponent: ${oppText} ⚫\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
+        actionLabel: 'View Tournament Bracket & Schedule →',
+        actionUrl: `/tournamentdetails?id=${tournament._id}`,
+        senderName: 'Tournament Arbiters & ZC Chess Club'
+      });
+
+      sendEmail({
+        to: whitePlayer.email,
+        subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
+        html: emailHtml,
+        text: `${msg}\n${matchRuleNote}`
+      }).catch(e => console.warn('Pairing email to white failed:', e.message));
+    }
+
+    // Notify Black player (if not BYE)
+    if (blackPlayer && blackPlayer.email && match.black !== 'BYE') {
+      const oppText = whitePlayer ? whitePlayer.name : (match.white || 'TBD');
+      const msg = isKnockout
+        ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
+        : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
+
+      await createNotification({
+        recipientEmail: blackPlayer.email,
+        type: 'tournament_start',
+        actorName: 'ZC Chess Club Administration',
+        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+        message: msg,
+        link: `/tournamentdetails?id=${tournament._id}`
+      });
+
+      const emailHtml = generateClubEmailHtml({
+        title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
+        recipientName: blackPlayer.name,
+        message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: Black ⚫ (Game 1)\n• Opponent: ${oppText} ⚪\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
+        actionLabel: 'View Tournament Bracket & Schedule →',
+        actionUrl: `/tournamentdetails?id=${tournament._id}`,
+        senderName: 'Tournament Arbiters & ZC Chess Club'
+      });
+
+      sendEmail({
+        to: blackPlayer.email,
+        subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
+        html: emailHtml,
+        text: `${msg}\n${matchRuleNote}`
+      }).catch(e => console.warn('Pairing email to black failed:', e.message));
+    }
+  }
+}
+
+// Helper: Parse matchTime string into a valid Date object for countdown checking
+function parseMatchDateTime(matchTimeStr, fallbackDateStr = null) {
+  if (!matchTimeStr || typeof matchTimeStr !== 'string') return null;
+  const str = matchTimeStr.trim();
+  if (!str || str === 'TBD' || str === 'Pending') return null;
+
+  const currentYear = new Date().getFullYear();
+
+  // Pattern 1: ISO or standard YYYY-MM-DD HH:MM
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Pattern 2: "Oct 4, 10:00 AM" or "Sep 15, 2:30 PM" or "Jan 1, 14:00"
+  const m = str.match(/^([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i);
+  if (m) {
+    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const monthIdx = monthNames.indexOf(m[1].toLowerCase().slice(0, 3));
+    if (monthIdx >= 0) {
+      const day = parseInt(m[2], 10);
+      let hour = 12;
+      let minute = 0;
+      if (m[3] && m[4]) {
+        hour = parseInt(m[3], 10);
+        minute = parseInt(m[4], 10);
+        const ampm = (m[5] || '').toUpperCase();
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+      }
+      return new Date(currentYear, monthIdx, day, hour, minute, 0);
+    }
+  }
+
+  // Pattern 3: Time only like "14:30" or "2:30 PM" with fallbackDateStr (e.g. tournament.startDate)
+  if (fallbackDateStr && /^\d{1,2}:\d{2}/.test(str)) {
+    const timeMatch = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const minute = parseInt(timeMatch[2], 10);
+      const ampm = (timeMatch[3] || '').toUpperCase();
+      if (ampm === 'PM' && hour < 12) hour += 12;
+      if (ampm === 'AM' && hour === 12) hour = 0;
+      const d = new Date(fallbackDateStr);
+      if (!isNaN(d.getTime())) {
+        d.setHours(hour, minute, 0, 0);
+        return d;
+      }
+    }
+  }
+
+  const directDate = new Date(str);
+  if (!isNaN(directDate.getTime())) return directDate;
+  return null;
+}
+
+// Helper: Dispatch 15-Minute Countdown Reminder Email and In-App notification
+async function send15MinuteMatchReminder(tournament, match, boardIndex = 1) {
+  if (!tournament || !match) return false;
+  if (!match.white || !match.black || match.white === 'BYE' || match.black === 'BYE' || match.white === 'TBD' || match.black === 'TBD') return false;
+
+  const typeStr = (tournament.type || '').toLowerCase();
+  const isDoubleKnockout = typeStr.includes('double');
+  const isKnockout = typeStr.includes('knockout') || typeStr.includes('elimination') || isDoubleKnockout;
+  
+  const whitePlayer = await findPlayerContact(match.white, tournament);
+  const blackPlayer = await findPlayerContact(match.black, tournament);
+
+  const boardNumber = boardIndex;
+  const roundNumber = match.round || 1;
+  const locationStr = match.location || tournament.location || 'ZC Chess Club Lounge';
+  const matchTimeStr = match.matchTime || 'Soon';
+
+  const roundName = match.bracket === 'grand_finals' ? 'Grand Finals' :
+                    match.bracket === 'lower' ? `Lower Bracket Round ${roundNumber}` :
+                    match.bracket === 'upper' ? `Upper Bracket Round ${roundNumber}` :
+                    `Round ${roundNumber}`;
+
+  let rulesQuickSummary = '';
+  if (isDoubleKnockout) {
+    rulesQuickSummary = `\n\n⚡ DOUBLE KNOCKOUT QUICK RULES:
+• 2-Game Mini-Match: Game 1 (assigned pieces), Game 2 (colors reversed). First to 1.5 pts advances.
+• ⚡ Armageddon (1-1 tie): Secret time bid for Black. Black gets draw odds (draw or win wins match). White must win.
+• 🛡️ Two Lives: Losing this match moves you to Lower Bracket. You are only eliminated on 2nd loss!`;
+  } else if (isKnockout) {
+    rulesQuickSummary = `\n\n⚔️ KNOCKOUT QUICK RULES:
+• 2-Game Mini-Match: Game 1 (assigned pieces), Game 2 (colors reversed). First to 1.5 pts advances.
+• ⚡ Armageddon (1-1 tie): Secret time bid for Black + Draw odds (White must win).`;
+  }
+
+  // Notify White player
+  if (whitePlayer && whitePlayer.email) {
+    const oppName = blackPlayer ? blackPlayer.name : (match.black || 'Opponent');
+    const msg = `⏰ 15-MINUTE MATCH ALERT: Your ${roundName} match in "${tournament.title}" starts in 15 minutes! You are White ⚪ vs ${oppName} ⚫ on Board #${boardNumber} at ${locationStr}. Please head to your board!`;
+
+    await createNotification({
+      recipientEmail: whitePlayer.email,
+      type: 'tournament_start',
+      actorName: 'Tournament Arbiters',
+      actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+      message: msg,
+      link: `/tournamentdetails?id=${tournament._id}`
+    });
+
+    const emailHtml = generateClubEmailHtml({
+      title: `⏰ 15-Minute Warning: Match Starting Soon!`,
+      recipientName: whitePlayer.name,
+      message: `Your scheduled tournament match is starting in approximately 15 minutes:\n\n• Tournament: ${tournament.title}\n• Stage: ${roundName}\n• Board: #${boardNumber}\n• Your Starting Color: White ⚪ (Game 1)\n• Opponent: ${oppName} ⚫\n• Location: ${locationStr}\n• Scheduled Time: ${matchTimeStr}${rulesQuickSummary}\n\nPlease proceed to the match board and prepare your scoresheet and student ID. Clocks will start promptly!`,
+      actionLabel: 'View Live Tournament Board →',
+      actionUrl: `/tournamentdetails?id=${tournament._id}`,
+      senderName: 'Tournament Arbiters & ZC Chess Club'
+    });
+
+    sendEmail({
+      to: whitePlayer.email,
+      subject: `[ZC Chess Club] ⏰ 15-Minute Alert: Your Match in ${tournament.title} Starts Soon!`,
+      html: emailHtml,
+      text: `${msg}${rulesQuickSummary}`
+    }).catch(e => console.warn('15-min reminder email to white failed:', e.message));
+  }
+
+  // Notify Black player
+  if (blackPlayer && blackPlayer.email) {
+    const oppName = whitePlayer ? whitePlayer.name : (match.white || 'Opponent');
+    const msg = `⏰ 15-MINUTE MATCH ALERT: Your ${roundName} match in "${tournament.title}" starts in 15 minutes! You are Black ⚫ vs ${oppName} ⚪ on Board #${boardNumber} at ${locationStr}. Please head to your board!`;
+
+    await createNotification({
+      recipientEmail: blackPlayer.email,
+      type: 'tournament_start',
+      actorName: 'Tournament Arbiters',
+      actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+      message: msg,
+      link: `/tournamentdetails?id=${tournament._id}`
+    });
+
+    const emailHtml = generateClubEmailHtml({
+      title: `⏰ 15-Minute Warning: Match Starting Soon!`,
+      recipientName: blackPlayer.name,
+      message: `Your scheduled tournament match is starting in approximately 15 minutes:\n\n• Tournament: ${tournament.title}\n• Stage: ${roundName}\n• Board: #${boardNumber}\n• Your Starting Color: Black ⚫ (Game 1)\n• Opponent: ${oppName} ⚪\n• Location: ${locationStr}\n• Scheduled Time: ${matchTimeStr}${rulesQuickSummary}\n\nPlease proceed to the match board and prepare your scoresheet and student ID. Clocks will start promptly!`,
+      actionLabel: 'View Live Tournament Board →',
+      actionUrl: `/tournamentdetails?id=${tournament._id}`,
+      senderName: 'Tournament Arbiters & ZC Chess Club'
+    });
+
+    sendEmail({
+      to: blackPlayer.email,
+      subject: `[ZC Chess Club] ⏰ 15-Minute Alert: Your Match in ${tournament.title} Starts Soon!`,
+      html: emailHtml,
+      text: `${msg}${rulesQuickSummary}`
+    }).catch(e => console.warn('15-min reminder email to black failed:', e.message));
+  }
+
+  return true;
+}
+
+// Background 15-minute match reminder worker (Runs every 60 seconds)
+async function checkAndDispatch15MinuteReminders() {
+  try {
+    const now = Date.now();
+    const tournaments = await Tournament.find({
+      status: { $in: ['Ongoing', 'Upcoming', 'Active'] }
+    });
+
+    for (const t of tournaments) {
+      if (!Array.isArray(t.matches) || t.matches.length === 0) continue;
+      let tournamentUpdated = false;
+
+      for (let i = 0; i < t.matches.length; i++) {
+        const m = t.matches[i];
+        const resStr = String(m.result || '').toLowerCase().trim();
+        const isFinished = resStr === '1-0' || resStr === '0-1' || resStr === '1/2-1/2' || resStr === '2-0' || resStr === '0-2' || resStr === '1.5-0.5' || resStr === '0.5-1.5' || resStr.includes('wins') || resStr.includes('armageddon');
+        
+        if (isFinished) continue;
+        if (!m.matchTime || m.reminderSent15Min) continue;
+        if (!m.white || !m.black || m.white === 'BYE' || m.black === 'BYE' || m.white === 'TBD' || m.black === 'TBD') continue;
+
+        const matchDate = parseMatchDateTime(m.matchTime, t.startDate);
+        if (!matchDate) continue;
+
+        const timeDiffMs = matchDate.getTime() - now;
+        // Trigger window: between 0 and 18 minutes before match start (approx 15 min)
+        if (timeDiffMs > 0 && timeDiffMs <= 18 * 60 * 1000) {
+          console.log(`[Auto-Reminder] Dispatching 15-min alert for match: ${m.white} vs ${m.black} in "${t.title}" (starts in ${Math.round(timeDiffMs / 60000)} mins)`);
+          await send15MinuteMatchReminder(t, m, i + 1);
+          m.reminderSent15Min = true;
+          tournamentUpdated = true;
+        }
+      }
+
+      if (tournamentUpdated) {
+        await t.save();
+      }
+    }
+  } catch (err) {
+    console.warn('[Auto-Reminder Error]:', err.message);
+  }
+}
+
+// Start recurring 15-min reminder checker every 60s
+setInterval(checkAndDispatch15MinuteReminders, 60 * 1000);
+// Also run once 5 seconds after server start
+setTimeout(checkAndDispatch15MinuteReminders, 5000);
 
 // --- Puzzle Tournament Schema & Model ---
 const PuzzleSchema = new mongoose.Schema({
@@ -730,6 +1491,7 @@ app.get('/api/profile', async (req, res) => {
       followingList,
       challenges: user.challenges || [],
       clubRoles: user.clubRoles || [],
+      availability: user.availability || [],
       isFollowing,
       followsViewer
     });
@@ -905,11 +1667,15 @@ app.post('/api/challenges', express.json(), async (req, res) => {
       return res.status(404).json({ error: 'Target tactician not found' });
     }
 
+    const senderDisplayName = fromName || fromEmail.split('@')[0];
+    const matchTimeControl = timeControl || '3+2 Blitz';
+    const matchLocation = location || 'Academic Building Lounge';
+
     const newChallenge = {
       fromEmail: fromEmail.trim(),
-      fromName: fromName || fromEmail.split('@')[0],
-      timeControl: timeControl || '3+2 Blitz',
-      location: location || 'Academic Building Lounge',
+      fromName: senderDisplayName,
+      timeControl: matchTimeControl,
+      location: matchLocation,
       message: message || '',
       status: 'Pending',
       createdAt: new Date()
@@ -919,6 +1685,34 @@ app.post('/api/challenges', express.json(), async (req, res) => {
       { _id: targetUser._id },
       { $push: { challenges: newChallenge } }
     );
+
+    // 🔔 1. In-App Notification for Challenged Student
+    await createNotification({
+      recipientEmail: cleanTarget,
+      type: 'system',
+      actorName: senderDisplayName,
+      actorEmail: fromEmail.trim().toLowerCase(),
+      actorAvatar: '',
+      message: `⚔️ Duel Challenge: ${senderDisplayName} challenged you to a ${matchTimeControl} match at ${matchLocation}!`,
+      link: '/profile'
+    });
+
+    // 📧 2. Instant Branded Email Invite with Accept / Respond details
+    const emailHtml = generateClubEmailHtml({
+      title: `⚔️ 1-on-1 Chess Duel Challenge!`,
+      recipientName: targetUser.name || cleanTarget.split('@')[0],
+      message: `${senderDisplayName} (${fromEmail.trim()}) has challenged you to an official 1-on-1 chess duel on campus!\n\n• Time Control: ${matchTimeControl}\n• Location: ${matchLocation}${message ? `\n• Note from ${senderDisplayName}: "${message}"` : ''}\n\nReady to battle on the 64 squares? Open your profile dashboard to accept or decline the challenge.`,
+      actionLabel: 'Accept / Decline Challenge →',
+      actionUrl: '/profile',
+      senderName: senderDisplayName
+    });
+
+    sendEmail({
+      to: cleanTarget,
+      subject: `[ZC Chess Club] ⚔️ Match Challenge from ${senderDisplayName}! (${matchTimeControl})`,
+      html: emailHtml,
+      text: `${senderDisplayName} challenged you to a ${matchTimeControl} chess match at ${matchLocation}! Visit http://localhost:3000/profile to respond.`
+    }).catch(e => console.warn('Challenge invite email error:', e.message));
 
     res.json({
       success: true,
@@ -939,10 +1733,50 @@ app.put('/api/challenges/respond', express.json(), async (req, res) => {
     }
 
     const cleanEmail = userEmail.trim().toLowerCase();
-    const result = await User.updateOne(
+    const userDoc = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    if (!userDoc) return res.status(404).json({ error: 'User not found' });
+
+    const challenge = (userDoc.challenges || []).find(c => c._id && c._id.toString() === challengeId.toString());
+
+    await User.updateOne(
       { email: new RegExp(`^${cleanEmail}$`, 'i'), "challenges._id": challengeId },
       { $set: { "challenges.$.status": status } }
     );
+
+    // 🔔 Notify challenger about the response
+    if (challenge && challenge.fromEmail) {
+      const challengerEmail = challenge.fromEmail.toLowerCase().trim();
+      const responderName = userDoc.name || cleanEmail.split('@')[0];
+      const isAccepted = status.toLowerCase() === 'accepted';
+      const statusIcon = isAccepted ? '✅' : '❌';
+      const msg = `⚔️ Challenge ${status}: ${responderName} has ${status.toLowerCase()} your ${challenge.timeControl} duel invite!`;
+
+      await createNotification({
+        recipientEmail: challengerEmail,
+        type: 'system',
+        actorName: responderName,
+        actorEmail: cleanEmail,
+        actorAvatar: userDoc.profileImage || '',
+        message: msg,
+        link: '/profile'
+      });
+
+      const emailHtml = generateClubEmailHtml({
+        title: `${statusIcon} Challenge ${status}: ${responderName}`,
+        recipientName: challenge.fromName || challengerEmail.split('@')[0],
+        message: `${responderName} (${cleanEmail}) has ${status.toLowerCase()} your challenge for a ${challenge.timeControl} match at ${challenge.location}.\n\n${isAccepted ? '🎉 Get ready for battle! Coordinate with your opponent and set up the clock.' : 'The player declined this challenge. You can challenge other tacticians in the Community Hub.'}`,
+        actionLabel: 'Open Profile & Challenges →',
+        actionUrl: '/profile',
+        senderName: 'ZC Chess Club Match Arbiter'
+      });
+
+      sendEmail({
+        to: challengerEmail,
+        subject: `[ZC Chess Club] ${statusIcon} Challenge ${status} by ${responderName}`,
+        html: emailHtml,
+        text: msg
+      }).catch(e => console.warn('Challenge response email failed:', e.message));
+    }
 
     res.json({ success: true, message: `Challenge ${status.toLowerCase()}ed successfully.` });
   } catch (err) {
@@ -1126,6 +1960,23 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     if (verified !== undefined) updateFields.verified = !!verified;
     if (profileImage !== undefined) updateFields.profileImage = profileImage;
 
+    const existingUser = await User.findOne({ email: new RegExp(`^${targetEmail.trim()}$`, 'i') });
+
+    const roleLabels = {
+      admin: '👑 High Board Executive / Administrator',
+      oc: '🏆 Organizing & Tournaments Committee Head (OC)',
+      hr: '🤝 Human Resources & Talent Committee Head (HR)',
+      media: '🎨 Media, PR & Design Committee Head',
+      trainer: '♟️ Head Chess Trainer / Master',
+      trainee: '🎯 Dedicated Training Member',
+      member: '♟️ Official Club Member'
+    };
+
+    const isRoleChanged = role !== undefined && (!existingUser || existingUser.role !== role);
+    const isClubRolesChanged = clubRoles !== undefined && Array.isArray(clubRoles) && (
+      !existingUser || JSON.stringify(existingUser.clubRoles || []) !== JSON.stringify(clubRoles)
+    );
+
     const defaultPassword = await bcrypt.hash(`guest-${Date.now()}`, 10);
     const updatedUser = await User.findOneAndUpdate(
       { email: new RegExp(`^${targetEmail.trim()}$`, 'i') },
@@ -1138,6 +1989,54 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
       },
       { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
     );
+
+    // If role or executive department roles were directly granted/changed, dispatch instant In-App Notification and Branded Email!
+    if (isRoleChanged || (isClubRolesChanged && clubRoles.length > 0)) {
+      const appointedRoleTitle = roleLabels[updatedUser.role] || `🎖️ ${String(updatedUser.role).toUpperCase()} Role`;
+      const departmentList = Array.isArray(updatedUser.clubRoles) && updatedUser.clubRoles.length > 0
+        ? updatedUser.clubRoles.map(r => `• ${r.department} — ${r.position}`).join('\n')
+        : '';
+
+      let appointmentDetails = `Dear ${updatedUser.name || 'Tactician'},\n\nYou have been officially appointed and granted executive club privileges directly by the Zewail City Chess Club Leadership.\n\n• Assigned Executive Authority: ${appointedRoleTitle}\n`;
+      
+      if (departmentList) {
+        appointmentDetails += `• Department & Position Assignments:\n${departmentList}\n`;
+      }
+      if (updatedUser.chessTitle) {
+        appointmentDetails += `• Official Chess Title: ${updatedUser.chessTitle}\n`;
+      }
+      if (updatedUser.batch) {
+        appointmentDetails += `• Academic Batch: ${updatedUser.batch}\n`;
+      }
+      appointmentDetails += `• Appointed By: ${admin.name || adminEmail} (Executive High Board)\n• Effective Status: Active & Operational ✅\n\nYour account has been granted full executive privileges corresponding to your new role. You can now access administrative controls, organize campus championships, manage committee operations, and lead club initiatives.\n\nCongratulations on your appointment, and may your leadership inspire our club!`;
+
+      // 1. Direct In-App Notification
+      await createNotification({
+        recipientEmail: updatedUser.email,
+        type: 'general',
+        actorName: admin.name || 'Executive High Board',
+        actorEmail: adminEmail,
+        message: `👑 Executive Appointment: You have been directly assigned as ${appointedRoleTitle} with updated departmental privileges by ${admin.name || 'Club Leadership'}!`,
+        link: updatedUser.role === 'admin' ? '/admin' : '/profile'
+      });
+
+      // 2. Direct Branded HTML Email
+      const emailHtml = generateClubEmailHtml({
+        title: `👑 Official Appointment: Executive Privileges & Role Assigned!`,
+        recipientName: updatedUser.name || 'Club Leader',
+        message: appointmentDetails,
+        actionLabel: updatedUser.role === 'admin' ? 'Open Executive Dashboard →' : 'View Your Member Profile →',
+        actionUrl: updatedUser.role === 'admin' ? '/admin' : '/profile',
+        senderName: 'ZC Chess Club Executive Board'
+      });
+
+      sendEmail({
+        to: updatedUser.email,
+        subject: `[ZC Chess Club] 👑 Official Appointment: Executive Privileges & Department Role Assigned`,
+        html: emailHtml,
+        text: appointmentDetails
+      }).catch(err => console.warn('Direct role appointment email error:', err.message));
+    }
 
     res.json({
       success: true,
@@ -1170,6 +2069,7 @@ const updateProfileHandler = async (req, res) => {
       bio,
       playstyle,
       linkedHistoricalName,
+      availability,
       password
     } = req.body;
 
@@ -1193,6 +2093,7 @@ const updateProfileHandler = async (req, res) => {
     if (bio !== undefined) updateFields.bio = bio;
     if (playstyle !== undefined) updateFields.playstyle = playstyle;
     if (linkedHistoricalName !== undefined) updateFields.linkedHistoricalName = linkedHistoricalName;
+    if (Array.isArray(availability)) updateFields.availability = availability;
 
     if (password && password.trim().length > 0) {
       updateFields.password = await bcrypt.hash(password.trim(), 10);
@@ -1231,7 +2132,8 @@ const updateProfileHandler = async (req, res) => {
         favOpening: user.favOpening || "",
         bio: user.bio || "",
         playstyle: user.playstyle || "",
-        linkedHistoricalName: user.linkedHistoricalName || ""
+        linkedHistoricalName: user.linkedHistoricalName || "",
+        availability: user.availability || []
       }
     });
   } catch (error) {
@@ -1243,6 +2145,47 @@ const updateProfileHandler = async (req, res) => {
 app.put('/api/profile', express.json(), updateProfileHandler);
 app.post('/api/profile', express.json(), updateProfileHandler);
 app.post('/api/profile/update', express.json(), updateProfileHandler);
+
+// GET: Fetch player availability
+app.get('/api/users/:email/availability', async (req, res) => {
+  try {
+    const cleanEmail = req.params.email.trim();
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const user = await User.findOne({ email: emailRegex }).select('name email availability');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ name: user.name, email: user.email, availability: user.availability || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch availability', details: err.message });
+  }
+});
+
+// POST & PUT: Update player availability
+const updateAvailabilityHandler = async (req, res) => {
+  try {
+    const { email, availability } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (!Array.isArray(availability)) return res.status(400).json({ error: 'Availability must be an array of time slots' });
+
+    const cleanEmail = email.trim();
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const user = await User.findOneAndUpdate(
+      { email: emailRegex },
+      { $set: { availability } },
+      { returnDocument: 'after' }
+    );
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ message: 'Availability updated successfully', availability: user.availability || [] });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update availability', details: err.message });
+  }
+};
+
+app.post('/api/users/availability', express.json(), updateAvailabilityHandler);
+app.put('/api/users/availability', express.json(), updateAvailabilityHandler);
 
 // PUT & POST: Update user profile image (base64 or URL)
 const updateProfileImageHandler = async (req, res) => {
@@ -1427,10 +2370,11 @@ app.get('/api/tournaments/:id', async (req, res) => {
         { name: { $in: nameArray } },
         { email: { $in: nameArray } }
       ]
-    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio cheers');
+    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio cheers availability');
 
     const playerAvatars = {};
     const playerProfiles = {};
+    const playersAvailability = {};
     users.forEach(u => {
       if (u.profileImage) {
         if (u.name) playerAvatars[u.name.trim()] = u.profileImage;
@@ -1451,18 +2395,70 @@ app.get('/api/tournaments/:id', async (req, res) => {
       };
       if (u.name) {
         playerProfiles[u.name.trim()] = profileData;
+        playersAvailability[u.name.trim()] = u.availability || [];
+        playersAvailability[u.name.trim().toLowerCase()] = u.availability || [];
       }
       if (u.email) {
         playerProfiles[u.email.trim().toLowerCase()] = profileData;
+        playersAvailability[u.email.trim().toLowerCase()] = u.availability || [];
       }
     });
 
     obj.playerAvatars = playerAvatars;
     obj.playerProfiles = playerProfiles;
+    obj.playersAvailability = playersAvailability;
 
     res.json(obj);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tournament details', details: error.message });
+  }
+});
+
+// GET: Dedicated endpoint for tournament player availability
+app.get('/api/tournaments/:id/players-availability', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    const playerNames = new Set();
+    const playerEmails = new Set();
+    (tournament.playersList || []).forEach(p => { if (p.name) playerNames.add(p.name.trim()); });
+    (tournament.registrations || []).forEach(r => {
+      if (r.name) playerNames.add(r.name.trim());
+      if (r.email) playerEmails.add(r.email.trim().toLowerCase());
+    });
+    (tournament.matches || []).forEach(m => {
+      if (m.white && m.white !== 'TBD' && m.white !== 'BYE') playerNames.add(m.white.trim());
+      if (m.black && m.black !== 'TBD' && m.black !== 'BYE') playerNames.add(m.black.trim());
+    });
+
+    const userQueries = [];
+    if (playerNames.size > 0) {
+      userQueries.push({ name: { $in: Array.from(playerNames) } });
+    }
+    if (playerEmails.size > 0) {
+      userQueries.push({ email: { $in: Array.from(playerEmails) } });
+    }
+
+    const users = userQueries.length > 0
+      ? await User.find({ $or: userQueries }).select('name email availability profileImage')
+      : [];
+
+    const playersAvailability = {};
+    users.forEach(u => {
+      const avail = u.availability || [];
+      if (u.name) {
+        playersAvailability[u.name.trim()] = avail;
+        playersAvailability[u.name.trim().toLowerCase()] = avail;
+      }
+      if (u.email) {
+        playersAvailability[u.email.trim().toLowerCase()] = avail;
+      }
+    });
+
+    res.json({ playersAvailability });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tournament player availability', details: err.message });
   }
 });
 
@@ -1532,20 +2528,58 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
     
-    tournament.matches.push({ 
+    const newMatch = { 
       round: Number(round), 
       white, 
       black, 
       result,
       matchTime: matchTime || "",
       location: location || ""
-    });
+    };
+    tournament.matches.push(newMatch);
     await tournament.save();
+
+    // 🔔 Automated pairing alert
+    notifyTournamentPairings(tournament, [newMatch]).catch(e => console.warn('Pairing alert error:', e.message));
+
     res.json({ message: "Match result added successfully!", data: tournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error adding match result', details: error.message });
   }
 });
+
+// Helper to determine match winner across single-game, 2-game match, and Armageddon results
+const getMatchWinner = (result, white, black) => {
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0.5-0.5") return null;
+  const res = String(result).toLowerCase().trim();
+  // White wins
+  if (
+    res === "1-0" || res === "1 - 0" ||
+    res.startsWith("1.5 - 0.5") || res.startsWith("1.5-0.5") ||
+    res.startsWith("2 - 0") || res.startsWith("2-0") ||
+    res.includes("white wins") || res.includes("white won") ||
+    res.includes("armageddon: white")
+  ) {
+    return white;
+  }
+  // Black wins
+  if (
+    res === "0-1" || res === "0 - 1" ||
+    res.startsWith("0.5 - 1.5") || res.startsWith("0.5-1.5") ||
+    res.startsWith("0 - 2") || res.startsWith("0-2") ||
+    res.includes("black wins") || res.includes("black won") ||
+    res.includes("armageddon: black")
+  ) {
+    return black;
+  }
+  return null;
+};
+
+const getMatchLoser = (result, white, black) => {
+  const winner = getMatchWinner(result, white, black);
+  if (!winner) return null;
+  return winner === white ? black : white;
+};
 
 // PUT: update an existing match result or pairing details
 app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
@@ -1581,9 +2615,7 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
         const targetMatch = nextRoundMatches[targetIdx];
 
         if (targetMatch) {
-          const winner = (match.result === "1-0" || match.result === "1 - 0") 
-            ? match.white 
-            : ((match.result === "0-1" || match.result === "0 - 1") ? match.black : null);
+          const winner = getMatchWinner(match.result, match.white, match.black);
           
           const isWhiteSlot = (mIdx % 2 === 0);
           if (winner && winner !== "BYE") {
@@ -1610,29 +2642,172 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
     if (allCompleted) {
       if (!isDoubleElim && uLast.length === 1 && (uMax > 1 || (tournament.playersList && tournament.playersList.length <= 2))) {
         const finalM = uLast[0];
-        const winner = (finalM.result === "1-0" || finalM.result === "1 - 0") ? finalM.white : ((finalM.result === "0-1" || finalM.result === "0 - 1") ? finalM.black : null);
+        const winner = getMatchWinner(finalM.result, finalM.white, finalM.black);
         if (winner && winner !== "BYE") {
           tournament.winner = winner;
           tournament.status = "Completed";
         }
       } else if (isDoubleElim) {
         if (gfrMatch && gfrMatch.result && gfrMatch.result !== "Pending") {
-          const winner = (gfrMatch.result === "1-0" || gfrMatch.result === "1 - 0") ? gfrMatch.white : gfrMatch.black;
+          const winner = getMatchWinner(gfrMatch.result, gfrMatch.white, gfrMatch.black);
           if (winner && winner !== "BYE") {
             tournament.winner = winner;
             tournament.status = "Completed";
           }
-        } else if (gfMatch && gfMatch.result && (gfMatch.result === "1-0" || gfMatch.result === "1 - 0")) {
+        } else if (gfMatch && gfMatch.result && getMatchWinner(gfMatch.result, gfMatch.white, gfMatch.black) === gfMatch.white) {
           tournament.winner = gfMatch.white;
           tournament.status = "Completed";
         }
       }
+
+      // 🏆 Dispatch Champion Alert & Emails to all members if winner is crowned
+      if (tournament.winner && tournament.winner !== "BYE" && tournament.winner !== "TBD") {
+        let runnerUp = null;
+        if (!isDoubleElim && uLast.length === 1) {
+          runnerUp = getMatchLoser(uLast[0]?.result, uLast[0]?.white, uLast[0]?.black);
+        } else if (isDoubleElim) {
+          if (gfrMatch && gfrMatch.result) runnerUp = getMatchLoser(gfrMatch.result, gfrMatch.white, gfrMatch.black);
+          else if (gfMatch && gfMatch.result) runnerUp = gfMatch.black;
+        }
+
+        broadcastWinnerNotification({
+          tournamentTitle: tournament.title,
+          tournamentType: isDoubleElim ? "Double Elimination Knockout" : "Knockout Championship",
+          winnerName: tournament.winner,
+          winnerScoreOrPoints: "Grand Finals Champion",
+          runnerUpName: runnerUp && runnerUp !== "BYE" ? runnerUp : "Finalist",
+          runnerUpScoreOrPoints: "Runner-Up Finalist",
+          thirdPlaceName: tournament.podium && tournament.podium[2]?.name ? tournament.podium[2].name : "",
+          thirdPlaceScoreOrPoints: tournament.podium && tournament.podium[2]?.points ? `${tournament.podium[2].points} pts` : "3rd Place",
+          link: `/tournamentdetails?id=${tournament._id}`
+        }).catch(e => console.warn('Knockout winner broadcast error:', e.message));
+      }
     }
 
     await tournament.save();
+
+    // 🔔 Automated pairing alert if matchTime, location, or players were modified
+    if (matchTime !== undefined || location !== undefined || white !== undefined || black !== undefined) {
+      notifyTournamentPairings(tournament, [match]).catch(e => console.warn('Pairing alert error:', e.message));
+    }
+
     res.json({ message: "Match updated successfully!", data: tournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error updating match', details: error.message });
+  }
+});
+
+// POST: Propose or Arbiter-set match schedule and dispatch alerts
+app.post('/api/tournaments/:id/matches/:matchId/schedule-notice', async (req, res) => {
+  try {
+    const { 
+      senderName, 
+      senderEmail, 
+      matchTime, 
+      isArbiterOverride, 
+      arbiterNote, 
+      targetPlayerEmail 
+    } = req.body;
+
+    if (!matchTime) {
+      return res.status(400).json({ error: "matchTime is required" });
+    }
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    const match = tournament.matches.id(req.params.matchId);
+    if (!match) return res.status(404).json({ error: "Match not found" });
+
+    match.matchTime = matchTime;
+    await tournament.save();
+
+    const p1 = match.white;
+    const p2 = match.black;
+    const appUrl = `/tournaments?id=${tournament._id}`;
+
+    // Find user docs for email & notification
+    const playerNames = [p1, p2].filter(p => p && p !== 'TBD' && p !== 'BYE');
+    const userQueryList = [{ name: { $in: playerNames } }];
+    if (senderEmail) userQueryList.push({ email: new RegExp(`^${senderEmail.trim()}$`, 'i') });
+    if (targetPlayerEmail) userQueryList.push({ email: new RegExp(`^${targetPlayerEmail.trim()}$`, 'i') });
+
+    const matchedUsers = await User.find({ $or: userQueryList });
+
+    const userEmailMap = {};
+    matchedUsers.forEach(u => {
+      if (u.name) userEmailMap[u.name.trim().toLowerCase()] = u.email;
+    });
+
+    const titlePrefix = isArbiterOverride 
+      ? `👑 Arbiter Match Order: Round ${match.round}` 
+      : `⚔️ Match Schedule Proposed: Round ${match.round}`;
+
+    const messageBody = isArbiterOverride
+      ? `👑 Official Tournament Arbiter Notice:\n\nYour Round ${match.round} match (${p1} vs ${p2}) has been officially scheduled by the Tournament Arbiter for:\n📅 ${matchTime}\nLocation: Zewail Chess Club Lounge\n${arbiterNote ? `Arbiter Note: "${arbiterNote}"\n\n` : '\n'}Both competitors must be present at the board on time.`
+      : `⚔️ Match Schedule Proposal:\n\n${senderName || 'Your opponent'} proposed playing your Round ${match.round} match on:\n📅 ${matchTime}\nLocation: Zewail Chess Club Lounge\n\nPlease check the tournament page to view or confirm.`;
+
+    const whiteEmail = userEmailMap[p1.toLowerCase()] || (p1.includes('@') ? p1 : null);
+    const blackEmail = userEmailMap[p2.toLowerCase()] || (p2.includes('@') ? p2 : null);
+
+    const recipients = Array.from(new Set([whiteEmail, blackEmail, targetPlayerEmail].filter(Boolean)));
+
+    for (const recipientEmail of recipients) {
+      await createNotification({
+        recipientEmail,
+        type: 'tournament_start',
+        actorName: isArbiterOverride ? 'Tournament Arbiter' : (senderName || 'Opponent'),
+        message: `${titlePrefix}: ${p1} vs ${p2} scheduled for ${matchTime}`,
+        link: appUrl
+      });
+
+      const emailHtml = generateClubEmailHtml({
+        title: titlePrefix,
+        recipientName: recipientEmail.split('@')[0],
+        message: messageBody,
+        actionLabel: 'View Match in Tournament Bracket →',
+        actionUrl: appUrl,
+        senderName: isArbiterOverride ? 'ZC Tournament Arbiter' : (senderName || 'ZC Chess Club')
+      });
+
+      sendEmail({
+        to: recipientEmail,
+        subject: `[ZC Chess Club] ${titlePrefix}: ${p1} vs ${p2}`,
+        html: emailHtml,
+        text: messageBody
+      }).catch(e => console.warn('Match schedule email error:', e.message));
+    }
+
+    res.json({
+      message: isArbiterOverride ? "Official schedule set & players notified" : "Schedule proposed & opponent notified",
+      matchTime: match.matchTime
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to dispatch match schedule notice", details: err.message });
+  }
+});
+
+// POST: Manually dispatch 15-minute match reminder for a specific match
+app.post('/api/tournaments/:id/matches/:matchId/send-15min-reminder', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    const matchIndex = tournament.matches.findIndex(m => String(m._id) === String(req.params.matchId));
+    if (matchIndex === -1) return res.status(404).json({ error: "Match not found" });
+
+    const match = tournament.matches[matchIndex];
+    const success = await send15MinuteMatchReminder(tournament, match, matchIndex + 1);
+    if (!success) {
+      return res.status(400).json({ error: "Cannot send reminder for TBD or BYE match" });
+    }
+
+    match.reminderSent15Min = true;
+    await tournament.save();
+
+    res.json({ message: "⏰ 15-minute game reminder dispatched successfully via Email and In-App notification!", data: match });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to dispatch reminder", details: error.message });
   }
 });
 
@@ -1862,12 +3037,16 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
     tournament.matches.push(...newMatches);
     await tournament.save();
 
+    // 🔔 Automated tournament match pairing alert dispatch
+    notifyTournamentPairings(tournament, newMatches).catch(e => console.warn('Pairing alert error:', e.message));
+
     const byeMsg = byePlayer ? ` Player "${byePlayer.name}" receives a BYE (+1 pt).` : '';
     res.json({ message: `Round ${nextRound} FIDE Swiss pairings generated successfully!${byeMsg}`, data: tournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error generating Swiss pairings', details: error.message });
   }
 });
+
 
 // Helper to generate standard tournament bracket seed pairings (1 vs 8, 4 vs 5, 2 vs 7, 3 vs 6)
 const getKnockoutSeedOrder = (size) => {
@@ -1963,13 +3142,8 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
             const feeder1 = prevMatches[i * 2];
             const feeder2 = prevMatches[i * 2 + 1];
 
-            const feeder1Winner = (feeder1.result === "1-0" || feeder1.result === "1 - 0") 
-              ? feeder1.white 
-              : ((feeder1.result === "0-1" || feeder1.result === "0 - 1") ? feeder1.black : null);
-            
-            const feeder2Winner = (feeder2.result === "1-0" || feeder2.result === "1 - 0") 
-              ? feeder2.white 
-              : ((feeder2.result === "0-1" || feeder2.result === "0 - 1") ? feeder2.black : null);
+            const feeder1Winner = getMatchWinner(feeder1.result, feeder1.white, feeder1.black);
+            const feeder2Winner = getMatchWinner(feeder2.result, feeder2.white, feeder2.black);
 
             const whiteName = (feeder1Winner && feeder1Winner !== "BYE") 
               ? feeder1Winner 
@@ -1994,6 +3168,10 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
 
       tournament.matches.push(...newMatches);
       await tournament.save();
+
+      // 🔔 Automated knockout pairing alerts
+      notifyTournamentPairings(tournament, newMatches).catch(e => console.warn('Knockout pairing alert error:', e.message));
+
       return res.json({ message: "Knockout tournament tree generated successfully!", data: tournament });
     }
 
@@ -2005,7 +3183,7 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
       const uLast = allM.filter(m => (!m.bracket || m.bracket === "upper") && m.round === uMax);
       
       if (uLast.length === 1 && uLast[0].result && uLast[0].result !== "Pending") {
-        const finalWinner = (uLast[0].result === "1-0" || uLast[0].result === "1 - 0") ? uLast[0].white : uLast[0].black;
+        const finalWinner = getMatchWinner(uLast[0].result, uLast[0].white, uLast[0].black);
         if (finalWinner && tournament.winner !== finalWinner) {
           tournament.winner = finalWinner;
           tournament.status = "Completed";
@@ -2022,7 +3200,7 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
 
         currRMatches.forEach((m, mIdx) => {
           if (m.result && m.result !== "Pending") {
-            const winner = (m.result === "1-0" || m.result === "1 - 0") ? m.white : m.black;
+            const winner = getMatchWinner(m.result, m.white, m.black);
             const targetIdx = Math.floor(mIdx / 2);
             const targetMatch = nextRMatches[targetIdx];
             if (targetMatch && winner && winner !== "BYE") {
@@ -2074,8 +3252,8 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
     const uLast = upperMatches.filter(m => m.round === uMax);
     const lLast = lowerMatches.filter(m => m.round === lMax);
 
-    const getWinners = (matches) => matches.map(m => (m.result === "1-0" || m.result === "1 - 0") ? m.white : ((m.result === "0-1" || m.result === "0 - 1") ? m.black : m.white));
-    const getLosers = (matches) => matches.map(m => (m.result === "1-0" || m.result === "1 - 0") ? m.black : ((m.result === "0-1" || m.result === "0 - 1") ? m.white : m.black));
+    const getWinners = (matches) => matches.map(m => getMatchWinner(m.result, m.white, m.black) || m.white);
+    const getLosers = (matches) => matches.map(m => getMatchLoser(m.result, m.white, m.black) || m.black);
 
     // Handle Grand Finals completion
     if (isDoubleElim && gfMatches.length > 0) {
@@ -2084,7 +3262,7 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
        }
        const gf = gfMatches[0];
        // Did the lower bracket winner (black) win?
-       if (gf.result === "0-1" || gf.result === "0 - 1") {
+       if (getMatchWinner(gf.result, gf.white, gf.black) === gf.black) {
          newMatches.push({ round: 1, white: gf.white, black: gf.black, bracket: "grand_finals_reset", result: "Pending" });
          tournament.matches.push(...newMatches);
          await tournament.save();
@@ -2201,6 +3379,10 @@ app.post('/api/tournaments/:id/generate-knockout-round', async (req, res) => {
 
     tournament.matches.push(...newMatches);
     await tournament.save();
+
+    // 🔔 Automated knockout pairing alerts
+    notifyTournamentPairings(tournament, newMatches).catch(e => console.warn('Knockout pairing alert error:', e.message));
+
     return res.json({ message: "Next Knockout round(s) generated successfully!", data: tournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error generating next Knockout round', details: error.message });
@@ -2273,7 +3455,7 @@ app.put('/api/applications/:id/status', async (req, res) => {
     // Update user role if application accepted
     if (status === 'Accepted') {
       let normalizedRole = 'member';
-      const title = updatedApp.roleTitle.toLowerCase();
+      const title = (updatedApp.roleTitle || '').toLowerCase();
       if (title.includes('oc')) normalizedRole = 'oc';
       else if (title.includes('hr')) normalizedRole = 'hr';
       else if (title.includes('media')) normalizedRole = 'media';
@@ -2284,12 +3466,49 @@ app.put('/api/applications/:id/status', async (req, res) => {
         { email: updatedApp.email },
         { role: normalizedRole }
       );
+
+      // 1-Click Direct In-App Notification to accepted member
+      await createNotification({
+        recipientEmail: updatedApp.email,
+        type: 'general',
+        actorName: 'ZC Chess Club Executive Board',
+        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+        message: `🎉 Congratulations ${updatedApp.name}! Your application for "${updatedApp.roleTitle}" (${updatedApp.department || 'General Committee'}) has been officially ACCEPTED! Welcome to the ZC Chess Club family.`,
+        link: '/profile'
+      });
+
+      // 1-Click Direct Branded Email to accepted member
+      const welcomeHtml = generateClubEmailHtml({
+        title: `🎉 Welcome to ZC Chess Club: Application Accepted!`,
+        recipientName: updatedApp.name,
+        message: `Congratulations! We are delighted to inform you that your application to join the Zewail City Chess Club has been officially approved.\n\n• Assigned Role: ${updatedApp.roleTitle}\n• Department / Committee: ${updatedApp.department || 'General Committee'}\n• Academic Batch: ${updatedApp.batch || 'ZC Student'}\n• Membership Status: Officially Accepted ✅\n\nYour account has been upgraded with official member privileges. You can now access all club resources, compete in official university championships, assist in organizing club events, and connect with your fellow tacticians!\n\nWelcome aboard, and may the sharpest mind prevail!`,
+        actionLabel: 'Visit Your Member Profile →',
+        actionUrl: '/profile',
+        senderName: 'ZC Chess Club Executive Board'
+      });
+
+      sendEmail({
+        to: updatedApp.email,
+        subject: `[ZC Chess Club] 🎉 Congratulations! Your Application for ${updatedApp.roleTitle} Has Been Accepted`,
+        html: welcomeHtml,
+        text: `Congratulations ${updatedApp.name}! Your application for ${updatedApp.roleTitle} in ${updatedApp.department || 'ZC Chess Club'} has been officially accepted. Welcome to the club!`
+      }).catch(err => console.warn('Acceptance email dispatch error:', err.message));
+
     } else if (status === 'Rejected') {
       // Revert user role back to member
       await User.findOneAndUpdate(
         { email: updatedApp.email },
         { role: 'member' }
       );
+
+      await createNotification({
+        recipientEmail: updatedApp.email,
+        type: 'general',
+        actorName: 'ZC Chess Club Administration',
+        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+        message: `Application Update: Your application for "${updatedApp.roleTitle}" was reviewed. Thank you for your interest in ZC Chess Club.`,
+        link: '/profile'
+      });
     }
     
     res.json({ message: `Application status updated to ${status}`, data: updatedApp });
@@ -2352,9 +3571,75 @@ app.put('/api/tournaments/:id', async (req, res) => {
     if (!updatedTournament) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
+
+    // 🏆 If tournament was marked Completed or winner was set, dispatch champion alert & emails
+    if (
+      (req.body.status === 'Completed' || req.body.winner) &&
+      (updatedTournament.winner || (updatedTournament.podium && updatedTournament.podium[0]?.name))
+    ) {
+      const p1 = (updatedTournament.podium && updatedTournament.podium[0]?.name) || updatedTournament.winner;
+      const p1Pts = updatedTournament.podium?.[0]?.points != null ? `${updatedTournament.podium[0].points} pts` : "1st Place (Champion)";
+      const p2 = (updatedTournament.podium && updatedTournament.podium[1]?.name) || "";
+      const p2Pts = updatedTournament.podium?.[1]?.points != null ? `${updatedTournament.podium[1].points} pts` : "Runner-Up";
+      const p3 = (updatedTournament.podium && updatedTournament.podium[2]?.name) || "";
+      const p3Pts = updatedTournament.podium?.[2]?.points != null ? `${updatedTournament.podium[2].points} pts` : "3rd Place";
+
+      if (p1 && p1 !== 'BYE' && p1 !== 'TBD') {
+        broadcastWinnerNotification({
+          tournamentTitle: updatedTournament.title,
+          tournamentType: updatedTournament.type || "Swiss Tournament",
+          winnerName: p1,
+          winnerScoreOrPoints: p1Pts,
+          runnerUpName: p2,
+          runnerUpScoreOrPoints: p2Pts,
+          thirdPlaceName: p3,
+          thirdPlaceScoreOrPoints: p3Pts,
+          link: `/tournamentdetails?id=${updatedTournament._id}`
+        }).catch(e => console.warn('Tournament status winner broadcast error:', e.message));
+      }
+    }
+
     res.json({ message: 'Tournament updated successfully!', data: updatedTournament });
   } catch (error) {
     res.status(500).json({ error: 'Server error updating tournament', details: error.message });
+  }
+});
+
+// POST: Broadcast tournament champion alert to all tacticians
+app.post('/api/tournaments/:id/broadcast-winner', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    const { winnerName, tournamentType } = req.body;
+    const finalWinner = winnerName || tournament.winner || (tournament.podium && tournament.podium[0]?.name) || (tournament.playersList && tournament.playersList[0]?.name);
+
+    if (!finalWinner || finalWinner === 'BYE' || finalWinner === 'TBD') {
+      return res.status(400).json({ error: "No winner found for this tournament yet." });
+    }
+
+    const p1 = finalWinner;
+    const p1Pts = tournament.podium?.[0]?.points != null ? `${tournament.podium[0].points} pts` : "Champion";
+    const p2 = (tournament.podium && tournament.podium[1]?.name) || "";
+    const p2Pts = tournament.podium?.[1]?.points != null ? `${tournament.podium[1].points} pts` : "Runner-Up";
+    const p3 = (tournament.podium && tournament.podium[2]?.name) || "";
+    const p3Pts = tournament.podium?.[2]?.points != null ? `${tournament.podium[2].points} pts` : "3rd Place";
+
+    await broadcastWinnerNotification({
+      tournamentTitle: tournament.title,
+      tournamentType: tournamentType || tournament.type || "Tournament",
+      winnerName: p1,
+      winnerScoreOrPoints: p1Pts,
+      runnerUpName: p2,
+      runnerUpScoreOrPoints: p2Pts,
+      thirdPlaceName: p3,
+      thirdPlaceScoreOrPoints: p3Pts,
+      link: `/tournamentdetails?id=${tournament._id}`
+    });
+
+    res.json({ success: true, message: `Champion alert for ${finalWinner} broadcast to all members!` });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to broadcast winner", details: err.message });
   }
 });
 
@@ -2387,19 +3672,38 @@ app.post('/api/tournaments/:id/register', async (req, res) => {
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     // Check if already registered
-    if (tournament.registrations.some(reg => reg.email === email)) {
+    if (tournament.registrations.some(reg => reg.email.toLowerCase() === email.toLowerCase())) {
       return res.status(400).json({ error: 'Already registered for this tournament' });
+    }
+
+    const emailRegex = new RegExp(`^${email.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const joiningUser = await User.findOne({ email: emailRegex });
+
+    // Enforce weekly free time / availability for Knockout tournaments
+    const isKnockout = tournament.type && (
+      tournament.type.toLowerCase().includes('knockout') || 
+      tournament.type.toLowerCase().includes('elimination') ||
+      tournament.type === 'Single Elimination' ||
+      tournament.type === 'Double Elimination'
+    );
+
+    if (isKnockout) {
+      if (!joiningUser || !Array.isArray(joiningUser.availability) || joiningUser.availability.length === 0) {
+        return res.status(400).json({
+          error: "Campus Free Time & Match Schedule Required: Knockout tournaments require players to register their weekly free hours (Sunday–Thursday) in their Profile before joining.",
+          requiresAvailability: true
+        });
+      }
     }
 
     // Auto-approve and add to players list immediately
     tournament.registrations.push({ email, name, status: 'Approved' });
     
     // Check if user is already in playersList (just in case)
-    const joiningUser = await User.findOne({ email });
     if (!tournament.playersList.some(p => p.name === name)) {
       tournament.playersList.push({ 
         name, 
-        rating: 1500, // Default rating 
+        rating: joiningUser?.fideRating || joiningUser?.chessComRating || 1500, // Rating from profile or default
         major: joiningUser?.major || 'N/A' 
       });
       tournament.players = tournament.playersList.length;
@@ -2501,6 +3805,174 @@ app.post('/api/notifications/mark-one-read', express.json(), async (req, res) =>
     res.status(500).json({ error: 'Failed to mark notification read', details: err.message });
   }
 });
+
+// DELETE: Delete a single notification
+app.delete('/api/notifications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    await Notification.findByIdAndDelete(id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete notification', details: err.message });
+  }
+});
+
+// POST: Admin Broadcast / Direct Notification & Email Dispatch
+app.post('/api/admin/broadcast-notification', express.json(), async (req, res) => {
+  try {
+    const { 
+      adminEmail, 
+      recipientType, 
+      targetEmail, 
+      title, 
+      message, 
+      link, 
+      sendEmailNotification, 
+      sendInAppNotification 
+    } = req.body;
+
+    // Check if email matches admin list OR exists in DB as an admin/staff user
+    let isAuthorized = isAdminEmail(adminEmail);
+    if (!isAuthorized && adminEmail) {
+      const staffUser = await User.findOne({ 
+        email: new RegExp(`^${adminEmail.trim()}$`, 'i'),
+        role: { $in: ['admin', 'oc', 'hr'] }
+      });
+      if (staffUser) isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Unauthorized. Administrator access required.' });
+    }
+
+    if (!title || !message) {
+      return res.status(400).json({ error: 'Title and message body are required.' });
+    }
+
+    let recipients = [];
+    if (recipientType === 'all') {
+      const allUsers = await User.find({}, 'name email profileImage');
+      recipients = allUsers;
+    } else if (recipientType === 'specific') {
+      if (!targetEmail) {
+        return res.status(400).json({ error: 'Target email is required for direct player message.' });
+      }
+      const user = await User.findOne({ email: targetEmail.toLowerCase().trim() });
+      if (user) {
+        recipients = [user];
+      } else {
+        recipients = [{ email: targetEmail.toLowerCase().trim(), name: targetEmail.split('@')[0] }];
+      }
+    }
+
+    if (recipients.length === 0) {
+      return res.status(400).json({ error: 'No recipients found to dispatch notification.' });
+    }
+
+    let inAppCount = 0;
+    let emailSuccessCount = 0;
+
+    // 1. In-App Notifications
+    if (sendInAppNotification !== false) {
+      const notifDocs = recipients.map(r => ({
+        recipientEmail: r.email.toLowerCase(),
+        type: 'broadcast',
+        actorName: 'ZC Chess Administration',
+        actorEmail: adminEmail,
+        message: `📢 ${title}: ${message.length > 90 ? message.substring(0, 90) + '...' : message}`,
+        link: link || '/community',
+        read: false,
+        createdAt: new Date()
+      }));
+
+      if (notifDocs.length > 0) {
+        await Notification.insertMany(notifDocs);
+        inAppCount = notifDocs.length;
+      }
+    }
+
+    // 2. Email Notifications
+    if (sendEmailNotification !== false) {
+      for (const r of recipients) {
+        const html = generateClubEmailHtml({
+          title,
+          recipientName: r.name,
+          message,
+          actionLabel: 'Open ZC Chess Club →',
+          actionUrl: link || '/',
+          senderName: 'ZC Chess Club Administration'
+        });
+
+        const mailResult = await sendEmail({
+          to: r.email,
+          subject: `[ZC Chess Club] ${title}`,
+          html,
+          text: `${title}\n\n${message}\n\nVisit: http://localhost:3000${link || '/'}`
+        });
+
+        if (mailResult.success) {
+          emailSuccessCount++;
+        }
+      }
+    }
+
+    // 3. Save to Broadcast / Sent Emails History Log
+    try {
+      await BroadcastLog.create({
+        adminEmail,
+        recipientType,
+        targetEmail: recipientType === 'specific' ? targetEmail : '',
+        recipientCount: recipients.length,
+        title,
+        message,
+        link: link || '/',
+        channels: {
+          inApp: sendInAppNotification !== false,
+          email: sendEmailNotification !== false
+        },
+        inAppCount,
+        emailCount: emailSuccessCount,
+        createdAt: new Date()
+      });
+    } catch (logErr) {
+      console.warn('Could not save BroadcastLog:', logErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Dispatched successfully to ${recipients.length} tactician(s)! (${inAppCount} in-app notification(s), ${emailSuccessCount} email(s) sent)`,
+      inAppCount,
+      emailSuccessCount,
+      totalRecipients: recipients.length
+    });
+  } catch (err) {
+    console.error('Error in broadcast-notification:', err);
+    res.status(500).json({ error: 'Failed to dispatch broadcast notification', details: err.message });
+  }
+});
+
+// GET: Fetch all sent broadcasts / dispatched emails log (staff only)
+app.get('/api/admin/broadcast-logs', async (req, res) => {
+  try {
+    const logs = await BroadcastLog.find().sort({ createdAt: -1 }).limit(100);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch broadcast logs', details: err.message });
+  }
+});
+
+// DELETE: Delete a broadcast log record
+app.delete('/api/admin/broadcast-logs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await BroadcastLog.findByIdAndDelete(id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete broadcast log', details: err.message });
+  }
+});
+
 
 // ============================================================
 // CONTACT MESSAGES / INQUIRIES
@@ -2819,9 +4291,55 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
     tournament.leaderboard.sort((a, b) => b.score - a.score);
 
     const saved = await tournament.save();
+
+    // If this player took 1st place with a top score (> 0), broadcast champion alert
+    if (tournament.leaderboard[0] && tournament.leaderboard[0].email === normalizedEmail && score > 0) {
+      broadcastWinnerNotification({
+        tournamentTitle: tournament.title,
+        tournamentType: "Puzzle Arena Challenge",
+        winnerName: displayName,
+        winnerEmail: normalizedEmail,
+        link: `/puzzles`
+      }).catch(e => console.warn('Puzzle score champion alert error:', e.message));
+    }
+
     res.json({ message: 'Score submitted successfully!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to submit score', details: error.message });
+  }
+});
+
+// POST: Broadcast puzzle arena champion alert to all tacticians
+app.post('/api/puzzle-tournaments/:id/broadcast-winner', async (req, res) => {
+  try {
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Puzzle arena not found" });
+
+    if (!tournament.leaderboard || tournament.leaderboard.length === 0) {
+      return res.status(400).json({ error: "No scores recorded on this arena leaderboard yet." });
+    }
+
+    const sorted = [...tournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const p1 = sorted[0];
+    const p2 = sorted[1];
+    const p3 = sorted[2];
+
+    await broadcastWinnerNotification({
+      tournamentTitle: tournament.title,
+      tournamentType: "Puzzle Tactics Arena",
+      winnerName: p1.name,
+      winnerEmail: p1.email,
+      winnerScoreOrPoints: `${p1.score} pts (${p1.solvedCount || 0} solved)`,
+      runnerUpName: p2 ? p2.name : '',
+      runnerUpScoreOrPoints: p2 ? `${p2.score} pts (${p2.solvedCount || 0} solved)` : '',
+      thirdPlaceName: p3 ? p3.name : '',
+      thirdPlaceScoreOrPoints: p3 ? `${p3.score} pts (${p3.solvedCount || 0} solved)` : '',
+      link: `/puzzlechallenge`
+    });
+
+    res.json({ success: true, message: `Champion alert for ${p1.name} broadcast to all members!` });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to broadcast puzzle winner", details: err.message });
   }
 });
 
@@ -2831,3 +4349,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
+
