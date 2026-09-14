@@ -180,4 +180,4 @@ MIT — see [LICENSE](./LICENSE).
 
 ## 👤 Author
 
-**Bosy Ayman** — President, Zewail City Chess Club (2023 - 2026) · [GitHub](https://github.com/Bosy-Ayman)
+**Bosy Ayman** — President, Zewail City Chess Club (2024 - 2026) · [GitHub](https://github.com/Bosy-Ayman)
