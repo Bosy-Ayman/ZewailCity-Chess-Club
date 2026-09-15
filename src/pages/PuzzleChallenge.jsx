@@ -453,7 +453,8 @@ export default function PuzzleChallenge() {
   };
 
   // Helper: Get standings dynamically based on tournament lifecycle
-  // When ongoing/live: only show participants who attempted and scored > 0
+  // When ongoing/live: show all players in the leaderboard (start-attempt no longer inserts 0-score placeholders,
+  //   so any leaderboard entry means the player actually completed the challenge)
   // When closed: include all participants (even those who scored 0 or didn't attempt)
   const getTournamentStandings = (tournament) => {
     if (!tournament) return [];
@@ -481,8 +482,10 @@ export default function PuzzleChallenge() {
       );
     }
 
-    const activeScored = rawLeaderboard.filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0);
-    return [...activeScored].sort((a, b) => (b.score || 0) - (a.score || 0));
+    // Live arena: show all leaderboard entries (even 0-score), sorted descending.
+    // Since start-attempt no longer inserts 0-score placeholders, every leaderboard
+    // entry represents a completed submission.
+    return [...rawLeaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
   const getRosterAvatar = (player) => (
@@ -916,29 +919,28 @@ export default function PuzzleChallenge() {
   const normUserEmail = (userEmail || "").trim().toLowerCase();
 
   tournaments.forEach((t) => {
-    if (t.leaderboard) {
-      const userEntry = t.leaderboard.find(
-        (entry) => entry.email && entry.email.trim().toLowerCase() === normUserEmail
-      );
-      if (userEntry) {
-        userStats.totalScore += userEntry.score || 0;
-        userStats.arenasPlayed += 1;
-        userStats.highestScore = Math.max(userStats.highestScore, userEntry.score || 0);
-        userStats.solvedTotal += userEntry.solvedCount || 0;
-      } else {
-        const inParticipants = (t.participants || []).some(
-          (p) => p.email && p.email.trim().toLowerCase() === normUserEmail
-        );
-        const localAttemptKey = `puzzle_attempted_${t._id}_${normUserEmail}`;
-        const localCompletedKey = `puzzle_completed_${t._id}_${normUserEmail}`;
-        let hasLocalFlag = false;
-        try {
-          hasLocalFlag = localStorage.getItem(localAttemptKey) === "true" || localStorage.getItem(localCompletedKey) === "true";
-        } catch (e) {}
-        if (inParticipants || hasLocalFlag) {
-          userStats.arenasPlayed += 1;
-        }
-      }
+    const userEntry = (t.leaderboard || []).find(
+      (entry) => entry.email && entry.email.trim().toLowerCase() === normUserEmail
+    );
+    const inParticipants = (t.participants || []).some(
+      (p) => p.email && p.email.trim().toLowerCase() === normUserEmail
+    );
+    const localAttemptKey = `puzzle_attempted_${t._id}_${normUserEmail}`;
+    const localCompletedKey = `puzzle_completed_${t._id}_${normUserEmail}`;
+    let hasLocalFlag = false;
+    try {
+      hasLocalFlag = localStorage.getItem(localAttemptKey) === "true" || localStorage.getItem(localCompletedKey) === "true";
+    } catch (e) {}
+
+    if (userEntry) {
+      // Player has a scored entry on the leaderboard
+      userStats.totalScore += userEntry.score || 0;
+      userStats.arenasPlayed += 1;
+      userStats.highestScore = Math.max(userStats.highestScore, userEntry.score || 0);
+      userStats.solvedTotal += userEntry.solvedCount || 0;
+    } else if (inParticipants || hasLocalFlag) {
+      // Player started the arena but hasn't submitted a score yet (or submitted 0)
+      userStats.arenasPlayed += 1;
     }
   });
 
