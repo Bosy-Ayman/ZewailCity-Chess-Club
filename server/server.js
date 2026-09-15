@@ -4346,6 +4346,7 @@ app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     tournament.participants = tournament.participants || [];
+    tournament.leaderboard = tournament.leaderboard || [];
 
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
     const displayName = (name && name.trim() && name.trim() !== 'ZC Chess Club')
@@ -4354,10 +4355,19 @@ app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
 
     if (!tournament.participants.some(p => p.email && p.email.trim().toLowerCase() === normalizedEmail)) {
       tournament.participants.push({ name: displayName, email: normalizedEmail, registeredAt: new Date() });
-      await tournament.save();
     }
 
-    res.json({ message: 'Attempt logged.', data: tournament });
+    if (!tournament.leaderboard.some(e => e.email && e.email.trim().toLowerCase() === normalizedEmail)) {
+      tournament.leaderboard.push({
+        name: displayName,
+        email: normalizedEmail,
+        score: 0,
+        solvedCount: 0
+      });
+    }
+
+    const saved = await tournament.save();
+    res.json({ message: 'Attempt logged.', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to record attempt start', details: error.message });
   }
@@ -4429,27 +4439,26 @@ app.delete('/api/puzzle-tournaments/:id', async (req, res) => {
   }
 });
 
-// POST: add a single puzzle to an existing tournament
+// POST: add a puzzle to an existing tournament
 app.post('/api/puzzle-tournaments/:id/puzzles', async (req, res) => {
   try {
     const { initialFen, mateIn, correctMoves, description } = req.body;
-    if (!initialFen || mateIn === undefined || mateIn === null || !correctMoves || correctMoves.length === 0) {
-      return res.status(400).json({ error: 'initialFen, mateIn, and correctMoves are required' });
+    if (!initialFen || !correctMoves || correctMoves.length === 0) {
+      return res.status(400).json({ error: 'initialFen and correctMoves are required' });
     }
 
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
-    const parsedMateIn = Number(mateIn);
     tournament.puzzles.push({
       initialFen,
-      mateIn: parsedMateIn,
+      mateIn: mateIn !== undefined ? mateIn : 1,
       correctMoves,
-      description: description || (parsedMateIn === 0 ? 'Find the Best Move' : `Mate in ${parsedMateIn}`)
+      description: description || ""
     });
 
     const saved = await tournament.save();
-    res.json({ message: 'Puzzle added successfully!', data: saved });
+    res.status(201).json({ message: 'Puzzle added successfully!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to add puzzle', details: error.message });
   }
@@ -4529,10 +4538,9 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
 
     const existingIndex = tournament.leaderboard.findIndex(entry => entry.email && entry.email.trim().toLowerCase() === normalizedEmail);
     if (existingIndex !== -1) {
-      return res.status(403).json({
-        error: 'You have already submitted your score for this challenge. Each player is allowed only 1 attempt.',
-        data: tournament
-      });
+      tournament.leaderboard[existingIndex].name = displayName;
+      tournament.leaderboard[existingIndex].score = Number(score) || 0;
+      tournament.leaderboard[existingIndex].solvedCount = Number(solvedCount) || 0;
     } else {
       tournament.leaderboard.push({
         name: displayName,

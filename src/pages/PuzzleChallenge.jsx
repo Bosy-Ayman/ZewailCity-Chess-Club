@@ -467,10 +467,6 @@ export default function PuzzleChallenge() {
       );
     }
 
-    const activeScored = rawLeaderboard.filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0);
-    if (activeScored.length > 0) {
-      return [...activeScored].sort((a, b) => (b.score || 0) - (a.score || 0));
-    }
     return [...rawLeaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
@@ -902,14 +898,31 @@ export default function PuzzleChallenge() {
     solvedTotal: 0
   };
 
-  tournaments.forEach(t => {
+  const normUserEmail = (userEmail || "").trim().toLowerCase();
+
+  tournaments.forEach((t) => {
     if (t.leaderboard) {
-      const userEntry = t.leaderboard.find(entry => entry.email === userEmail);
+      const userEntry = t.leaderboard.find(
+        (entry) => entry.email && entry.email.trim().toLowerCase() === normUserEmail
+      );
       if (userEntry) {
-        userStats.totalScore += userEntry.score;
+        userStats.totalScore += userEntry.score || 0;
         userStats.arenasPlayed += 1;
-        userStats.highestScore = Math.max(userStats.highestScore, userEntry.score);
+        userStats.highestScore = Math.max(userStats.highestScore, userEntry.score || 0);
         userStats.solvedTotal += userEntry.solvedCount || 0;
+      } else {
+        const inParticipants = (t.participants || []).some(
+          (p) => p.email && p.email.trim().toLowerCase() === normUserEmail
+        );
+        const localAttemptKey = `puzzle_attempted_${t._id}_${normUserEmail}`;
+        const localCompletedKey = `puzzle_completed_${t._id}_${normUserEmail}`;
+        let hasLocalFlag = false;
+        try {
+          hasLocalFlag = localStorage.getItem(localAttemptKey) === "true" || localStorage.getItem(localCompletedKey) === "true";
+        } catch (e) {}
+        if (inParticipants || hasLocalFlag) {
+          userStats.arenasPlayed += 1;
+        }
       }
     }
   });
