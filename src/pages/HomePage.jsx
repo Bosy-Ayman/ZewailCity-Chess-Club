@@ -586,7 +586,15 @@ const HomePage = () => {
       ? "🎯 Dedicated Trainee"
       : u.role === "officer"
       ? "⚡ Club Officer"
-      : (u.chessTitle || "Club Tactician");
+      : (Array.isArray(u.clubRoles) && u.clubRoles.length > 0)
+      ? `✨ ${u.clubRoles[0].position || "Staff"} (${u.clubRoles[0].department || ""})`
+      : u.chessTitle
+      ? `🎖️ ${u.chessTitle} Titleholder`
+      : u.major
+      ? `🎓 ${u.major.split(' ')[0]} ${u.batch ? `(Batch ${u.batch})` : 'Student'}`
+      : topRating > 0
+      ? `⚡ Rated Contender (${topRating} Elo)`
+      : "♟️ Club Member";
 
     const badge = u.role === "president"
       ? "👑 President"

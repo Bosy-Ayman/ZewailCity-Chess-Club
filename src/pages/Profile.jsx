@@ -797,6 +797,127 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
   const tournamentAchievements = getUserTournamentAchievements(profile, tournaments);
 
+  const getDynamicCampusStanding = () => {
+    if (!profile) return { value: "Registered", hint: "Tactician", badgeClass: "green", detailTitle: "Club Contender" };
+
+    // 1. Executive Board Roles
+    if (profile.role === 'president') {
+      return { value: "President", hint: "👑 High Board Executive", badgeClass: "gold", detailTitle: "👑 Club President & High Board" };
+    }
+    if (profile.role === 'vice_president') {
+      return { value: "Vice President", hint: "⭐ High Board Executive", badgeClass: "purple", detailTitle: "⭐ Vice President & High Board" };
+    }
+    if (profile.role === 'admin') {
+      return { value: "High Board", hint: "👑 Club Administrator", badgeClass: "gold", detailTitle: "👑 High Board Executive" };
+    }
+    if (profile.role === 'oc') {
+      return { value: "Head of OC", hint: "⚡ Tournament Organizing", badgeClass: "gold", detailTitle: "⚡ Head of Tournament Organizing Committee" };
+    }
+    if (profile.role === 'hr') {
+      return { value: "Head of HR", hint: "👥 Human Resources", badgeClass: "gold", detailTitle: "👥 Head of Human Resources" };
+    }
+    if (profile.role === 'pr') {
+      return { value: "Head of PR", hint: "📢 Public Relations", badgeClass: "gold", detailTitle: "📢 Head of Public Relations" };
+    }
+    if (profile.role === 'media') {
+      return { value: "Head of Media", hint: "🎨 Multimedia & Design", badgeClass: "gold", detailTitle: "🎨 Head of Multimedia & Design" };
+    }
+    if (profile.role === 'trainer') {
+      return { value: "Head Trainer", hint: "🎓 Training & Masterclasses", badgeClass: "gold", detailTitle: "🎓 Masterclass Head Trainer" };
+    }
+    if (profile.role === 'trainee') {
+      return { value: "Club Trainee", hint: "♟️ Trainee Pathway", badgeClass: "cyan", detailTitle: "♟️ Trainee Development Pathway" };
+    }
+
+    // 2. Department Committee Role in clubRoles array
+    if (Array.isArray(profile.clubRoles) && profile.clubRoles.length > 0) {
+      const primaryRole = profile.clubRoles[0];
+      const deptShort = (primaryRole.department || "")
+        .replace("Tournament Organizing Committee", "OC")
+        .replace("Human Resources", "HR")
+        .replace("Public Relations", "PR")
+        .replace("Multimedia & Design", "Media")
+        .replace("Training & Masterclasses", "Training");
+      return {
+        value: primaryRole.position || "Staff",
+        hint: `✨ ${deptShort}`,
+        badgeClass: "gold",
+        detailTitle: `✨ ${primaryRole.position} of ${primaryRole.department}`
+      };
+    }
+
+    // 3. Tournament Champion
+    if (tournamentAchievements?.isChampion) {
+      const topWon = tournamentAchievements.wonTournaments?.[0] || "Tournament Victor";
+      return {
+        value: "Champion 🏆",
+        hint: `🥇 ${topWon}`,
+        badgeClass: "gold",
+        detailTitle: `🏆 Tournament Champion (${topWon})`
+      };
+    }
+
+    // 4. Tournament Podium
+    if (tournamentAchievements?.isPodium) {
+      const topPodium = tournamentAchievements.podiumTournaments?.[0] || "Top 3";
+      return {
+        value: "Podium 🥈",
+        hint: `🥈 ${topPodium}`,
+        badgeClass: "cyan",
+        detailTitle: `🥈 Podium Finisher (${topPodium})`
+      };
+    }
+
+    // 5. Official Chess Title
+    if (profile.chessTitle) {
+      return {
+        value: profile.chessTitle,
+        hint: "🎖️ Official Title",
+        badgeClass: "gold",
+        detailTitle: `🎖️ ${profile.chessTitle} (Official Title)`
+      };
+    }
+
+    // 6. Active Competitor
+    if (tournaments.length > 0) {
+      return {
+        value: "Competitor",
+        hint: `⚔️ Enrolled in ${tournaments.length} Event${tournaments.length > 1 ? 's' : ''}`,
+        badgeClass: "cyan",
+        detailTitle: `⚔️ Active Competitor (${tournaments.length} Tournament${tournaments.length > 1 ? 's' : ''})`
+      };
+    }
+
+    // 7. Rated Contender
+    if (highestRating > 0) {
+      return {
+        value: "Rated Player",
+        hint: `⚡ Peak ${highestRating} Elo`,
+        badgeClass: "green",
+        detailTitle: `⚡ Rated Contender (Peak ${highestRating} Elo)`
+      };
+    }
+
+    // 8. Academic Affiliation
+    if (profile.major) {
+      return {
+        value: profile.batch ? `Batch ${profile.batch}` : "ZC Student",
+        hint: `🎓 ${profile.major.split(' ')[0]}`,
+        badgeClass: "green",
+        detailTitle: `🎓 ${profile.major} ${profile.batch ? `(Batch ${profile.batch})` : ''}`
+      };
+    }
+
+    return {
+      value: "Verified Member",
+      hint: "♟️ ZC Chess Club",
+      badgeClass: "green",
+      detailTitle: "♟️ Verified Zewail City Member"
+    };
+  };
+
+  const dynamicStanding = getDynamicCampusStanding();
+
   const renderMatches = (tournament) => {
     if (!profile) return null;
     const myMatches = tournament.matches?.filter(
@@ -949,14 +1070,17 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               {/* Player Identity Details */}
               <div className="hero-details-area">
                 <div className="hero-name-row">
+                  <h1 className="hero-player-name">{profile.name}</h1>
+                  <span className="hero-user-handle">@{profile.email ? profile.email.split("@")[0] : "tactician"}</span>
+                </div>
+
+                <div className="hero-badges-wrap">
                   {profile.chessTitle && (
-                    <span className="chess-title-badge">
-                      <Crown size={13} /> {profile.chessTitle}
+                    <span className="badge-chess-title" title={`Official FIDE Title: ${profile.chessTitle}`}>
+                      🏆 {profile.chessTitle}
                     </span>
                   )}
-                  <h1 className="hero-user-name">{profile.name || "Zewailian Member"}</h1>
-                  
-                  {/* Assigned Club Roles Badges */}
+
                   {profile.clubRoles && profile.clubRoles.length > 0 && (
                     profile.clubRoles.map((cr, idx) => (
                       <span key={idx} className="badge-club-department-role" title={`${cr.position} of ${cr.department}`}>
@@ -981,7 +1105,19 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     {profile.role === 'trainer' && <>🎓 Head of Training</>}
                     {profile.role === 'trainee' && <>♟️ Dedicated Trainee</>}
                     {profile.role === 'admin' && <>👑 High Board Executive</>}
-                    {(!profile.role || profile.role === 'member') && <>♟️ Club Tactician</>}
+                    {(!profile.role || profile.role === 'member') && (
+                      profile.chessTitle 
+                        ? <>🎖️ {profile.chessTitle}</>
+                        : tournamentAchievements.isChampion
+                        ? <>🏆 Arena Champion</>
+                        : tournamentAchievements.isPodium
+                        ? <>🥈 Podium Finisher</>
+                        : tournaments.length > 0
+                        ? <>⚔️ Tournament Contender</>
+                        : profile.major
+                        ? <>🎓 {profile.major.split(' ')[0]} Tactician</>
+                        : <>♟️ Club Contender</>
+                    )}
                   </span>
 
                   {tournamentAchievements.isChampion && (
@@ -1193,8 +1329,8 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               <div className="hero-stat-divider" />
               <div className="hero-stat-box">
                 <div className="stat-label">Campus Standing</div>
-                <div className="stat-value green">Registered</div>
-                <div className="stat-hint">{profile.role === 'admin' ? "Club Officer" : "Tactician"}</div>
+                <div className={`stat-value ${dynamicStanding.badgeClass}`}>{dynamicStanding.value}</div>
+                <div className="stat-hint" title={dynamicStanding.hint}>{dynamicStanding.hint}</div>
               </div>
             </div>
           </section>
@@ -1431,7 +1567,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   <div className="detail-item">
                     <span className="detail-label"><Shield size={14} /> Campus Standing</span>
                     <span className="detail-val">
-                      {profile?.role === 'admin' ? "👑 Club Administrator" : (profile?.verified ? "⚡ Verified Student Member" : "Club Tactician")}
+                      {dynamicStanding.detailTitle}
                     </span>
                   </div>
                   {(isOwnProfile || isAdmin) && (

@@ -1100,7 +1100,21 @@ const Community = () => {
                     </div>
                     <div className="attribute-item">
                       <span className="attr-label">Campus Role:</span>
-                      <span className="attr-val">{m.role === 'admin' ? 'Club Officer' : 'Club Tactician'}</span>
+                      <span className="attr-val">
+                        {m.role === 'president' ? '👑 Club President' :
+                         m.role === 'vice_president' ? '⭐ Vice President' :
+                         m.role === 'admin' ? '👑 High Board Executive' :
+                         m.role === 'oc' ? '⚡ Head of OC' :
+                         m.role === 'hr' ? '👥 Head of HR' :
+                         m.role === 'pr' ? '📢 Head of PR' :
+                         m.role === 'media' ? '🎨 Head of Media' :
+                         m.role === 'trainer' ? '🎓 Head Trainer' :
+                         m.role === 'trainee' ? '♟️ Club Trainee' :
+                         (Array.isArray(m.clubRoles) && m.clubRoles.length > 0) ? `✨ ${m.clubRoles[0].position || 'Staff'} (${m.clubRoles[0].department || ''})` :
+                         m.chessTitle ? `🎖️ ${m.chessTitle} Titleholder` :
+                         m.major ? `🎓 ${m.major} Student` :
+                         '♟️ Verified Member'}
+                      </span>
                     </div>
                   </div>
                 </div>

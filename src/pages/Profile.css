@@ -388,6 +388,14 @@
   color: #10b981;
 }
 
+.stat-value.cyan {
+  color: #38bdf8;
+}
+
+.stat-value.purple {
+  color: #c084fc;
+}
+
 .stat-hint {
   font-size: 0.74rem;
   color: var(--profile-text-muted);
