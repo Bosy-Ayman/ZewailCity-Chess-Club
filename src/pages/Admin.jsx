@@ -696,7 +696,8 @@ export default function AdminDashboard() {
       if (move) {
         setChessInstance(newChess);
         setActivePuzzleFen(newChess.fen());
-        setActivePuzzleMoves([...activePuzzleMoves, move.lan]);
+        const uciMove = move.lan || `${move.from}${move.to}${move.promotion || ""}`;
+        setActivePuzzleMoves([...activePuzzleMoves, uciMove]);
         return true;
       }
     } catch (err) {

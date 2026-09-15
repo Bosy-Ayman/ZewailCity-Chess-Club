@@ -683,7 +683,18 @@ export default function PuzzleChallenge() {
             try {
               const opponentMove = correctMovesList[nextMoveIdx];
               const afterOpponent = new Chess(newChess.fen());
-              const opResult = afterOpponent.move(opponentMove);
+              let opResult = null;
+              try {
+                opResult = afterOpponent.move(opponentMove);
+              } catch (e1) {
+                if (typeof opponentMove === "string" && opponentMove.length >= 4) {
+                  const from = opponentMove.slice(0, 2);
+                  const to = opponentMove.slice(2, 4);
+                  const promotion = opponentMove.length > 4 ? opponentMove[4] : "q";
+                  opResult = afterOpponent.move({ from, to, promotion });
+                }
+              }
+
               if (opResult && opResult.captured) {
                 chessAudio.playCapture();
               } else if (afterOpponent.inCheck()) {
