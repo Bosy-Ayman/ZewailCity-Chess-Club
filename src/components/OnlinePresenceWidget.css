@@ -1,0 +1,507 @@
+/* ===== Online Presence Floating Widget & Social Media Drawer ===== */
+
+/* 1. Floating Dock in Bottom-Right */
+.online-presence-dock {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 12px;
+  background: rgba(22, 19, 15, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(243, 193, 68, 0.35);
+  border-radius: 999px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(243, 193, 68, 0.15);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.online-presence-dock:hover {
+  transform: translateY(-3px) scale(1.02);
+  border-color: rgba(243, 193, 68, 0.65);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.75),
+    0 0 24px rgba(243, 193, 68, 0.3);
+  background: rgba(30, 26, 20, 0.95);
+}
+
+.online-presence-dock.active-dock {
+  border-color: var(--accent-gold, #f3c144);
+  background: rgba(32, 27, 20, 0.98);
+}
+
+/* Glowing Pulsing Green Status Indicator */
+.dock-pulse-indicator {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #2ecc71;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #2ecc71;
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(46, 204, 113, 0.6);
+  animation: rippleOnline 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+@keyframes rippleOnline {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Stacking Avatars */
+.dock-avatar-stack {
+  display: flex;
+  align-items: center;
+  margin-left: -2px;
+}
+
+.dock-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #1a1712;
+  margin-left: -8px;
+  background-color: #12100d;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease;
+}
+
+.dock-avatar:first-child {
+  margin-left: 0;
+}
+
+.online-presence-dock:hover .dock-avatar {
+  transform: translateX(1px);
+}
+
+/* Text Group */
+.dock-text-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.dock-count {
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.dock-expand-arrow {
+  font-size: 0.75rem;
+  color: #f3c144;
+  margin-left: 2px;
+  transition: transform 0.25s ease;
+}
+
+/* 2. Expanded Social Drawer Modal */
+.online-presence-drawer {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: 520px;
+  z-index: 9999;
+  background: rgba(22, 19, 14, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(243, 193, 68, 0.3);
+  border-radius: 20px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.85),
+    0 0 30px rgba(243, 193, 68, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpPresence 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUpPresence {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Drawer Header */
+.drawer-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(35, 30, 22, 0.6) 0%, transparent 100%);
+}
+
+.drawer-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2ecc71;
+  box-shadow: 0 0 6px #2ecc71;
+}
+
+.drawer-title {
+  margin: 0;
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.drawer-close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a89f91;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.drawer-close-btn:hover {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: rgba(231, 76, 60, 0.5);
+  color: #e74c3c;
+  transform: rotate(90deg);
+}
+
+.drawer-subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #a89f91;
+}
+
+.drawer-search-wrap {
+  margin-top: 10px;
+}
+
+.drawer-search-input {
+  width: 100%;
+  padding: 7px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.drawer-search-input:focus {
+  border-color: rgba(243, 193, 68, 0.5);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Drawer Body & User List */
+.drawer-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  max-height: 320px;
+  flex: 1;
+}
+
+.drawer-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+  background: rgba(243, 193, 68, 0.25);
+  border-radius: 4px;
+}
+
+.online-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.online-user-card:hover {
+  background: rgba(243, 193, 68, 0.06);
+  border-color: rgba(243, 193, 68, 0.25);
+  transform: translateX(2px);
+}
+
+.online-user-card.is-self {
+  background: rgba(243, 193, 68, 0.09);
+  border-color: rgba(243, 193, 68, 0.35);
+}
+
+.user-avatar-wrap {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+.online-user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(243, 193, 68, 0.4);
+  background-color: #1a1712;
+}
+
+.avatar-online-dot {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  width: 10px;
+  height: 10px;
+  background-color: #2ecc71;
+  border: 2px solid #16130e;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(46, 204, 113, 0.8);
+}
+
+.online-user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.online-user-name {
+  font-size: 0.86rem;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.you-pill-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  background: var(--accent-gold, #f3c144);
+  color: #111;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.user-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-role-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.user-role-pill.role-admin {
+  background: rgba(243, 193, 68, 0.15);
+  color: #f3c144;
+  border: 1px solid rgba(243, 193, 68, 0.3);
+}
+
+.user-role-pill.role-vp {
+  background: rgba(155, 89, 182, 0.15);
+  color: #bb86fc;
+  border: 1px solid rgba(155, 89, 182, 0.3);
+}
+
+.user-role-pill.role-trainer {
+  background: rgba(52, 152, 219, 0.15);
+  color: #5dade2;
+  border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.user-role-pill.role-committee {
+  background: rgba(230, 126, 34, 0.15);
+  color: #f39c12;
+  border: 1px solid rgba(230, 126, 34, 0.3);
+}
+
+.user-role-pill.role-member,
+.user-role-pill.role-guest {
+  background: rgba(255, 255, 255, 0.06);
+  color: #bab19c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-activity-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #9e9789;
+  margin-top: 1px;
+}
+
+.activity-icon {
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.activity-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 16px;
+  text-align: center;
+  color: #8c8577;
+}
+
+.drawer-empty-state p {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+}
+
+/* Drawer Footer */
+.drawer-footer {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(14, 12, 9, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-footer-note {
+  font-size: 0.7rem;
+  color: #7a7366;
+}
+
+.drawer-community-link {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #f3c144;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.drawer-community-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+  .online-presence-dock {
+    bottom: 16px;
+    right: 16px;
+    padding: 6px 12px 6px 10px;
+    gap: 8px;
+  }
+
+  .dock-avatar {
+    width: 20px;
+    height: 20px;
+    margin-left: -6px;
+  }
+
+  .dock-count {
+    font-size: 0.76rem;
+  }
+
+  .online-presence-drawer {
+    bottom: 70px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+    max-height: 70vh;
+  }
+}

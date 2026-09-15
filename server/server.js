@@ -265,6 +265,20 @@ const BroadcastLogSchema = new mongoose.Schema({
 
 const BroadcastLog = mongoose.model('BroadcastLog', BroadcastLogSchema, 'broadcast_logs');
 
+// --- Online Session & Presence Schema & Model ---
+const OnlineSessionSchema = new mongoose.Schema({
+  sessionId: { type: String, required: true, unique: true },
+  email: { type: String, default: '' },
+  name: { type: String, default: 'Tactician' },
+  role: { type: String, default: 'member' },
+  avatar: { type: String, default: '' },
+  currentPage: { type: String, default: 'Online' },
+  currentPath: { type: String, default: '/' },
+  lastSeen: { type: Date, default: Date.now, index: { expires: 300 } }
+});
+
+const OnlineSession = mongoose.model('OnlineSession', OnlineSessionSchema, 'online_sessions');
+
 // Helper: create a notification record
 async function createNotification({ recipientEmail, type, actorName, actorEmail, actorAvatar, message, link }) {
   try {
@@ -1337,6 +1351,99 @@ app.get('/api/applications', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch applications', details: error.message });
   }
 });
+
+// --- Real-time Online Presence & Heartbeat API ---
+const handleHeartbeat = async (req, res) => {
+  try {
+    const { sessionId, email, name, role, avatar, currentPage, currentPath } = req.body;
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const id = sessionId || cleanEmail || `guest_${req.ip || 'anon'}`;
+    const now = new Date();
+
+    let resolvedName = name || (cleanEmail ? cleanEmail.split('@')[0] : 'Guest Tactician');
+    let resolvedAvatar = avatar || '';
+    let resolvedRole = role || (cleanEmail ? 'member' : 'guest');
+
+    // If email provided, verify and enrich with User record if available
+    if (cleanEmail) {
+      try {
+        const u = await User.findOne({ email: cleanEmail }).select('name profileImage role');
+        if (u) {
+          if (u.name) resolvedName = u.name;
+          if (u.profileImage && !resolvedAvatar) resolvedAvatar = u.profileImage;
+          if (u.role) resolvedRole = u.role;
+          await User.updateOne({ _id: u._id }, { $set: { lastSeen: now } }).catch(() => {});
+        }
+      } catch (lookupErr) {}
+    }
+
+    await OnlineSession.findOneAndUpdate(
+      { sessionId: id },
+      {
+        $set: {
+          sessionId: id,
+          email: cleanEmail,
+          name: resolvedName,
+          role: resolvedRole,
+          avatar: resolvedAvatar,
+          currentPage: currentPage || 'Online',
+          currentPath: currentPath || '/',
+          lastSeen: now
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({ success: true, timestamp: now });
+  } catch (err) {
+    console.error('Heartbeat endpoint error:', err.message);
+    res.status(500).json({ error: 'Heartbeat error', details: err.message });
+  }
+};
+
+const handleGetOnlineUsers = async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 3 * 60 * 1000); // active within last 3 minutes
+    const rawSessions = await OnlineSession.find({ lastSeen: { $gte: cutoff } })
+      .sort({ lastSeen: -1 })
+      .limit(60)
+      .lean();
+
+    // Deduplicate in case a user has multiple tabs open
+    const seenKeys = new Set();
+    const activeUsers = [];
+
+    for (const s of rawSessions) {
+      const key = s.email ? s.email.toLowerCase() : s.sessionId;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      activeUsers.push({
+        id: s.sessionId,
+        name: s.name || 'Tactician',
+        email: s.email || '',
+        role: s.role || 'member',
+        avatar: s.avatar || '',
+        currentPage: s.currentPage || 'Online',
+        currentPath: s.currentPath || '/',
+        lastSeen: s.lastSeen
+      });
+    }
+
+    res.json({
+      count: activeUsers.length,
+      users: activeUsers
+    });
+  } catch (err) {
+    console.error('Get online users error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch online users', count: 0, users: [] });
+  }
+};
+
+app.post('/api/heartbeat', handleHeartbeat);
+app.post('/api/presence/heartbeat', handleHeartbeat);
+app.get('/api/users/online', handleGetOnlineUsers);
+app.get('/api/presence/online', handleGetOnlineUsers);
 
 // POST: Admin login
 app.post('/api/admin/login', async (req, res) => {

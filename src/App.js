@@ -24,6 +24,7 @@ import History from './pages/History';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import Community from './pages/Community';
+import OnlinePresenceWidget from './components/OnlinePresenceWidget';
 
 // API Base URL - works for both local and production
 export const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
@@ -31,6 +32,7 @@ export const API_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV ==
 function App() {
   return (
     <Router>
+      <OnlinePresenceWidget />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/community" element={<Community />} />
