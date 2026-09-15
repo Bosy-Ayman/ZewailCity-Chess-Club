@@ -46,7 +46,21 @@ app.use(cors({
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
-// Serverless-friendly database connection middleware
+// Serverless-friendly database connection manager with global promise caching
+let cachedDbPromise = null;
+
+const getMongoUri = () => {
+  return process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
+};
+
+const getMongoOptions = () => ({
+  serverSelectionTimeoutMS: 8000,
+  connectTimeoutMS: 10000,
+  tls: true,
+  tlsAllowInvalidCertificates: true,
+  maxPoolSize: 10
+});
+
 const connectDB = async (req, res, next) => {
   // Bypass database connection check for the diagnostics endpoint itself
   if (req.path.includes('db-test') || req.url.includes('db-test')) {
@@ -59,46 +73,18 @@ const connectDB = async (req, res, next) => {
   if (state === 1) {
     return next();
   }
-  
-  // 2 = connecting. Wait for it to finish.
-  if (state === 2) {
-    console.log('Database is currently connecting... awaiting connection');
-    try {
-      await new Promise((resolve, reject) => {
-        const onConnected = () => {
-          mongoose.connection.off('error', onError);
-          resolve();
-        };
-        const onError = (err) => {
-          mongoose.connection.off('connected', onConnected);
-          reject(err);
-        };
-        mongoose.connection.once('connected', onConnected);
-        mongoose.connection.once('error', onError);
-        // Timeout guard
-        setTimeout(() => {
-          mongoose.connection.off('connected', onConnected);
-          mongoose.connection.off('error', onError);
-          reject(new Error('Mongoose connection timed out (middleware wait)'));
-        }, 5000);
-      });
-      return next();
-    } catch (err) {
-      return res.status(500).json({ error: 'Database is connecting but failed', details: err.message });
-    }
-  }
 
-  // 0 = disconnected. Connect explicitly.
   try {
-    console.log('Database disconnected. Reconnecting...');
-    const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
-    await mongoose.connect(MONGO_URI, { 
-      serverSelectionTimeoutMS: 5000,
-      family: 4 // Force IPv4 resolution to prevent TLS Alert 80 errors on Node 18+ on Vercel
-    });
-    console.log('Database reconnected successfully!');
+    if (!cachedDbPromise || state === 0 || state === 3) {
+      console.log('Establishing MongoDB Atlas connection (serverless)...');
+      const uri = getMongoUri();
+      cachedDbPromise = mongoose.connect(uri, getMongoOptions());
+    }
+    await cachedDbPromise;
     next();
   } catch (err) {
+    console.error('Database connection error in middleware:', err);
+    cachedDbPromise = null;
     res.status(500).json({ error: 'Database connection failed (middleware connect)', details: err.message });
   }
 };
@@ -1052,7 +1038,16 @@ mongoose.connection.on('connected', () => console.log('Mongoose connected to DB'
 mongoose.connection.on('error', (err) => console.error('Mongoose connection error:', err));
 mongoose.connection.on('disconnected', () => console.warn('Mongoose disconnected'));
 
-// Top-level connection disabled. Mongoose connection is now handled on-demand by the connectDB middleware.
+// Initialize connection on startup
+if (mongoose.connection.readyState === 0) {
+  const uri = getMongoUri();
+  cachedDbPromise = mongoose.connect(uri, getMongoOptions()).then(async () => {
+    seedAdminUser();
+    seedPuzzleTournament();
+  }).catch(err => {
+    console.error('Initial background MongoDB connection error:', err.message);
+  });
+}
 
 async function seedAdminUser() {
   try {
@@ -1132,10 +1127,7 @@ app.get('/api/db-test', async (req, res) => {
     const testUri = 'mongodb://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@ac-nzzwvhs-shard-00-00.d7yqddz.mongodb.net:27017,ac-nzzwvhs-shard-00-01.d7yqddz.mongodb.net:27017,ac-nzzwvhs-shard-00-02.d7yqddz.mongodb.net:27017/chess_club?ssl=true&replicaSet=atlas-z4f07t-shard-0&authSource=admin&retryWrites=true&w=majority';
     
     console.log('Testing hardcoded non-SRV connection...');
-    await mongoose.connect(testUri, { 
-      serverSelectionTimeoutMS: 5000,
-      family: 4
-    });
+    await mongoose.connect(testUri, getMongoOptions());
     
     res.json({
       status: 'success',
