@@ -4494,18 +4494,18 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     const now = new Date();
+    // Append 'Z' so date+time strings are parsed as UTC (matches Vercel/server timezone)
     const startAt = tournament.startDate
-      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00`)
+      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00Z`)
       : null;
     const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
       : null;
 
-    if (startAt && now < startAt) {
-      return res.status(403).json({ error: 'This challenge has not started yet.' });
-    }
+    // NOTE: We do NOT block score submission based on start time — the client enforces
+    // timing. A hard 403 here causes silent score loss when clocks are slightly off.
     if (endAt && now > endAt) {
-      // If challenge has concluded, still allow recording score within grace period or return current data
+      // If challenge has concluded, still allow recording score within grace period
       const gracePeriodMs = 1000 * 60 * 60 * 24; // 24h grace
       if (now.getTime() - endAt.getTime() > gracePeriodMs) {
         return res.json({ message: 'This challenge is closed.', data: tournament });
