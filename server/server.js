@@ -232,7 +232,7 @@ const User = mongoose.model('User', UserSchema, 'users');
 // --- Notification Schema & Model ---
 const NotificationSchema = new mongoose.Schema({
   recipientEmail: { type: String, required: true, index: true },
-  type: { type: String, enum: ['follow', 'tournament_join', 'tournament_start', 'broadcast', 'direct_message', 'system', 'winner'], default: 'system' },
+  type: { type: String, default: 'system' },
   actorName: { type: String, default: '' },
   actorEmail: { type: String, default: '' },
   actorAvatar: { type: String, default: '' },
@@ -999,10 +999,10 @@ async function checkAndDispatch15MinuteReminders() {
   }
 }
 
-// Start recurring 15-min reminder checker only on long-running servers (not serverless functions)
-if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+// Start recurring 15-min reminder and auto-broadcast checker on long-running servers (not serverless functions)
+if (!process.env.VERCEL) {
   setInterval(checkAndDispatch15MinuteReminders, 60 * 1000);
-  setTimeout(checkAndDispatch15MinuteReminders, 5000);
+  setTimeout(checkAndDispatch15MinuteReminders, 3000);
 }
 
 // --- Puzzle Tournament Schema & Model ---
@@ -1044,21 +1044,30 @@ const PuzzleTournament = mongoose.model('PuzzleTournament', PuzzleTournamentSche
 async function broadcastPuzzleStartNotification(tournament) {
   try {
     const allUsers = await User.find({}).select('email name role profileImage');
-    const notifDocs = allUsers.map(u => ({
-      recipientEmail: u.email.toLowerCase(),
-      type: 'puzzle_start',
-      actorName: 'ZC Chess Club Tactics Arena',
-      actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
-      message: `♟️ Tactics Arena Live: "${tournament.title}" has officially begun! Solve puzzles, earn speed bonus points, and claim your spot on the leaderboard.`,
-      link: '/puzzlechallenge',
-      read: false,
-      createdAt: new Date()
-    }));
+    if (!allUsers || allUsers.length === 0) return;
 
-    if (notifDocs.length > 0) {
-      await Notification.insertMany(notifDocs);
+    // 1. In-app notifications
+    try {
+      const notifDocs = allUsers.map(u => ({
+        recipientEmail: u.email.toLowerCase(),
+        type: 'puzzle_start',
+        actorName: 'ZC Chess Club Tactics Arena',
+        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+        message: `♟️ Tactics Arena Live: "${tournament.title}" has officially begun! Solve puzzles, earn speed bonus points, and claim your spot on the leaderboard.`,
+        link: '/puzzlechallenge',
+        read: false,
+        createdAt: new Date()
+      }));
+
+      if (notifDocs.length > 0) {
+        await Notification.insertMany(notifDocs);
+        console.log(`[Puzzle Start Broadcast] In-App alerts dispatched to ${notifDocs.length} tacticians!`);
+      }
+    } catch (notifErr) {
+      console.warn('[Puzzle Start Broadcast - InApp Error]:', notifErr.message);
     }
 
+    // 2. Real Emails
     const puzzleCount = (tournament.puzzles || []).length;
     const puzzleText = `${puzzleCount} tactical puzzle${puzzleCount > 1 ? 's' : ''}`;
 
@@ -1081,7 +1090,7 @@ async function broadcastPuzzleStartNotification(tournament) {
       }).catch(e => console.warn(`Start email to ${u.email} failed:`, e.message));
     }
 
-    console.log(`[Puzzle Start Broadcast] Dispatched start alert for "${tournament.title}" to ${allUsers.length} tacticians!`);
+    console.log(`[Puzzle Start Broadcast] Dispatched start alert emails for "${tournament.title}" to ${allUsers.length} tacticians!`);
   } catch (err) {
     console.warn('[Puzzle Start Broadcast Error]:', err.message);
   }
@@ -4260,6 +4269,7 @@ app.post('/api/puzzle-tournaments', async (req, res) => {
     });
 
     const saved = await newTournament.save();
+    checkAndAutoBroadcastPuzzleTournaments().catch(err => console.warn('[Auto-Broadcast on create error]:', err.message));
     res.status(201).json({ message: 'Puzzle tournament created successfully!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create puzzle tournament', details: error.message });
@@ -4401,6 +4411,7 @@ app.put('/api/puzzle-tournaments/:id', async (req, res) => {
     if (puzzles !== undefined) tournament.puzzles = puzzles;
 
     const saved = await tournament.save();
+    checkAndAutoBroadcastPuzzleTournaments().catch(err => console.warn('[Auto-Broadcast on update error]:', err.message));
     res.json({ message: 'Puzzle tournament updated successfully!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update puzzle tournament', details: error.message });
