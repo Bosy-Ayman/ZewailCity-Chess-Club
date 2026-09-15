@@ -5,9 +5,13 @@ import "./GlobalWinnerAlert.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
-const getAlertKey = (n) => {
-  if (!n) return "";
-  return String(n._id || n.id || `${n.message}_${n.createdAt || ""}`);
+const getAlertKeys = (n) => {
+  if (!n) return [];
+  const keys = [];
+  if (n._id) keys.push(String(n._id));
+  if (n.id) keys.push(String(n.id));
+  if (n.message) keys.push(n.message.trim());
+  return keys;
 };
 
 /**
@@ -23,38 +27,45 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
     thirdPlace: null,
     avatars: {}
   });
-  const [dismissedIds, setDismissedIds] = useState(() => {
+
+  const getDismissedData = () => {
     try {
       const seen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
       const dismissed = JSON.parse(localStorage.getItem("dismissed_winner_alerts") || "[]");
-      return Array.from(new Set([...seen, ...dismissed]));
+      const dismissedUntil = parseInt(localStorage.getItem("winner_alerts_dismissed_until") || "0", 10);
+      return {
+        keys: new Set([...seen, ...dismissed]),
+        dismissedUntil
+      };
     } catch (e) {
-      return [];
+      return { keys: new Set(), dismissedUntil: 0 };
     }
-  });
+  };
+
+  const [dismissedState, setDismissedState] = useState(getDismissedData);
 
   // Find most recent un-seen / un-dismissed winner notification (within last 3 days)
   useEffect(() => {
     if (!Array.isArray(notifications) || notifications.length === 0) return;
 
-    let storedIds = new Set(dismissedIds);
-    try {
-      const seen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
-      const dismissed = JSON.parse(localStorage.getItem("dismissed_winner_alerts") || "[]");
-      seen.forEach(id => storedIds.add(id));
-      dismissed.forEach(id => storedIds.add(id));
-    } catch (e) {}
+    const { keys, dismissedUntil } = getDismissedData();
 
     const winnerNotif = notifications.find((n) => {
       if (!n) return false;
-      const key = getAlertKey(n);
-      if (!key || storedIds.has(key)) return false;
       const isWinnerType = n.type === "winner" || (n.message && (n.message.includes("CHAMPION") || n.message.includes("won the") || n.message.includes("🏆")));
       if (!isWinnerType) return false;
 
-      // Check if created within last 72h
+      const nKeys = getAlertKeys(n);
+      const isDismissedByKey = nKeys.some(k => keys.has(k));
+      if (isDismissedByKey) return false;
+
+      // Check if created before or at dismissal cutoff timestamp
       if (n.createdAt) {
-        const diffHours = (Date.now() - new Date(n.createdAt).getTime()) / (1000 * 60 * 60);
+        const notifTime = new Date(n.createdAt).getTime();
+        if (dismissedUntil && notifTime <= dismissedUntil) return false;
+
+        // Check if older than 72h
+        const diffHours = (Date.now() - notifTime) / (1000 * 60 * 60);
         if (diffHours > 72) return false;
       }
       return true;
@@ -62,21 +73,25 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
 
     if (winnerNotif) {
       setActiveAlert(winnerNotif);
-      // Mark as seen immediately in localStorage so it won't show again on subsequent app opens/reloads
-      const key = getAlertKey(winnerNotif);
-      if (key) {
-        try {
-          const currentSeen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
-          if (!currentSeen.includes(key)) {
-            currentSeen.push(key);
-            localStorage.setItem("seen_winner_alerts", JSON.stringify(currentSeen));
+      // Automatically register this alert key as seen
+      const nKeys = getAlertKeys(winnerNotif);
+      try {
+        const currentSeen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
+        let updated = false;
+        nKeys.forEach(k => {
+          if (!currentSeen.includes(k)) {
+            currentSeen.push(k);
+            updated = true;
           }
-        } catch (e) {}
-      }
+        });
+        if (updated) {
+          localStorage.setItem("seen_winner_alerts", JSON.stringify(currentSeen));
+        }
+      } catch (e) {}
     } else {
       setActiveAlert(null);
     }
-  }, [notifications, dismissedIds]);
+  }, [notifications, dismissedState]);
 
   // Load full podium data (1st, 2nd, 3rd) whenever activeAlert is set
   useEffect(() => {
@@ -129,14 +144,33 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
 
   const handleDismiss = (e) => {
     if (e) e.stopPropagation();
-    if (!activeAlert) return;
-    const key = getAlertKey(activeAlert);
-    const newDismissed = Array.from(new Set([...dismissedIds, key]));
-    setDismissedIds(newDismissed);
+    
+    // Collect all keys of ALL winner notifications currently in the feed to dismiss them all at once
+    const allWinnerKeys = [];
+    if (Array.isArray(notifications)) {
+      notifications.forEach(n => {
+        if (n && (n.type === "winner" || (n.message && (n.message.includes("CHAMPION") || n.message.includes("won the") || n.message.includes("🏆"))))) {
+          getAlertKeys(n).forEach(k => allWinnerKeys.push(k));
+        }
+      });
+    }
+    if (activeAlert) {
+      getAlertKeys(activeAlert).forEach(k => allWinnerKeys.push(k));
+    }
+
+    const now = Date.now();
     try {
-      localStorage.setItem("dismissed_winner_alerts", JSON.stringify(newDismissed));
-      localStorage.setItem("seen_winner_alerts", JSON.stringify(newDismissed));
+      const existingDismissed = JSON.parse(localStorage.getItem("dismissed_winner_alerts") || "[]");
+      const merged = Array.from(new Set([...existingDismissed, ...allWinnerKeys]));
+      localStorage.setItem("dismissed_winner_alerts", JSON.stringify(merged));
+      localStorage.setItem("seen_winner_alerts", JSON.stringify(merged));
+      localStorage.setItem("winner_alerts_dismissed_until", String(now));
     } catch (err) {}
+
+    setDismissedState({
+      keys: new Set(allWinnerKeys),
+      dismissedUntil: now
+    });
     setActiveAlert(null);
   };
 
