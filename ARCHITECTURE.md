@@ -153,7 +153,7 @@ const connectDB = async (req, res, next) => {
 | `/calendar` | `Calendar.jsx` | Interactive club schedule and event timeline |
 | `/calendaredit` | `CalendarEdit.jsx` | Admin interface for editing club calendar events |
 | `/admin` | `Admin.jsx` | Admin dashboard for users, recruitment forms, tournaments, and messages |
-| `/apply/*` | `ApplicationForm.jsx` (Variants) | Recruitment forms for HR, Multimedia, OC, Trainer, and Trainee roles |
+| `/apply/*` | `ApplicationForm.jsx` (Variants) | Recruitment forms for HR, PR, Multimedia, OC, Trainer, and Trainee roles |
 | `/history` | `History.jsx` | Club history, hall of fame, executive boards, and historical champions |
 | `/contact` | `ContactUs.jsx` | Direct contact and feedback submission form |
 

@@ -58,6 +58,16 @@ export default function ClubRoles() {
       perks: ["Leadership Experience", "Campus Network", "Recruitment Management"]
     },
     {
+      id: "pr",
+      department: "Public Relations",
+      icon: "📢",
+      title: "PR Member",
+      desc: "Drive campus outreach, secure corporate sponsorships, lead media communications, and forge strategic partnerships across universities.",
+      image: "/Images/Positions/pr.jpg",
+      path: "/apply/pr",
+      perks: ["Sponsorship Outreach", "Media Relations", "Public Speaking & Networking"]
+    },
+    {
       id: "oc",
       department: "Tournament Organizing Committee",
       icon: "♟️",
@@ -110,6 +120,7 @@ export default function ClubRoles() {
       if (appTitle && roleTitle && (appTitle.includes(roleTitle) || roleTitle.includes(appTitle))) return true;
       if (appDept && roleDept && (roleDept.includes(appDept) || appDept.includes(roleDept))) return true;
       if (role.id === "hr" && (appDept.includes("hr") || appTitle.includes("hr") || appDept.includes("human"))) return true;
+      if (role.id === "pr" && (appDept.includes("pr") || appTitle.includes("pr") || appDept.includes("public relations") || appDept.includes("relations"))) return true;
       if (role.id === "oc" && (appDept.includes("organ") || appTitle.includes("oc") || appTitle.includes("organ"))) return true;
       if (role.id === "media" && (appDept.includes("media") || appDept.includes("multi") || appTitle.includes("media"))) return true;
       if (role.id === "trainer" && appDept.includes("train") && !appDept.includes("trainee") && !appTitle.includes("trainee")) return true;

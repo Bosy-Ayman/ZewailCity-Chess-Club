@@ -17,7 +17,7 @@ const DEFAULT_AVATARS = {
   "Bosy Ayman": "/Icons/bosy.png",
   "Omar Ezz": "/Icons/omar.png",
   "Youssef Tarek": "/Icons/youssef.png",
-  "ZC Chess Club Admin": "/Icons/user.jpg"
+  "ZC Chess Club Admin": "/Icons/unknown.png"
 };
 
 const getPlayerAvatarUrl = (name, customAvatars = {}) => {
@@ -30,7 +30,6 @@ const Community = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [customAvatars, setCustomAvatars] = useState({});
-  const [communityTournaments, setCommunityTournaments] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all"); // 'all' | 'champions' | 'officers' | 'following' | 'active'
   const [sortBy, setSortBy] = useState("rating"); // 'rating' | 'cheers' | 'name'
@@ -86,11 +85,6 @@ const Community = () => {
           setCheersMap(cMap);
         }
 
-        const tournamentList = await safeFetchJson(`${API_BASE}/api/tournaments`);
-        if (Array.isArray(tournamentList)) {
-          setCommunityTournaments(tournamentList);
-        }
-
         // Fetch custom avatars
         const aData = await safeFetchJson(`${API_BASE}/api/players/avatars`);
         if (aData?.avatars) {
@@ -138,15 +132,17 @@ const Community = () => {
 
     // Category filter
     if (activeFilter === "champions") {
-      result = result.filter(u => 
-        u.isChampion ||
-        (u.chessTitle && u.chessTitle.trim().length > 0) ||
-        (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place"))) ||
-        (u.fideRating && u.fideRating > 0) ||
-        (u.chessComRating && u.chessComRating >= 1600)
-      );
+      result = result.filter(u => {
+        const top = Math.max(u.fideRating || 0, u.chessComRating || 0, u.lichessRating || 0);
+        return (
+          u.isChampion ||
+          (u.chessTitle && u.chessTitle.trim().length > 0) ||
+          (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place"))) ||
+          top >= 1800
+        );
+      });
     } else if (activeFilter === "officers") {
-      result = result.filter(u => u.role === "admin" || u.role === "officer" || u.role === "hr" || u.role === "oc");
+      result = result.filter(u => ["president", "vice_president", "admin", "oc", "hr", "pr", "media", "trainer"].includes(u.role) || (Array.isArray(u.clubRoles) && u.clubRoles.length > 0));
     } else if (activeFilter === "following") {
       result = result.filter(u => followingMap[u.email?.toLowerCase()]);
     } else if (activeFilter === "followers") {
@@ -156,14 +152,14 @@ const Community = () => {
         (u.following || []).some(e => e.toLowerCase() === loggedInEmail.toLowerCase())
       );
     } else if (activeFilter === "active") {
-      result = result.filter(u => u.fideRating > 0 || u.chessComRating > 0 || u.lichessRating > 0);
+      result = result.filter(u => (u.fideRating || 0) > 0 || (u.chessComRating || 0) > 0 || (u.lichessRating || 0) > 0);
     }
 
     // Sort
     if (sortBy === "rating") {
       result = result.sort((a, b) => {
-        const ra = a.fideRating || a.chessComRating || a.rating || 0;
-        const rb = b.fideRating || b.chessComRating || b.rating || 0;
+        const ra = Math.max(a.fideRating || 0, a.chessComRating || 0, a.lichessRating || 0);
+        const rb = Math.max(b.fideRating || 0, b.chessComRating || 0, b.lichessRating || 0);
         return rb - ra;
       });
     } else if (sortBy === "cheers") {
@@ -394,7 +390,7 @@ const Community = () => {
             <div className="user-social-left">
               <div 
                 className="user-social-avatar" 
-                style={{ backgroundImage: `url("${myProfile.profileImage || '/Icons/user.jpg'}")` }}
+                style={{ backgroundImage: `url("${myProfile.profileImage || '/Icons/unknown.png'}")` }}
               />
               <div className="user-social-info">
                 <div className="user-social-name-row">
@@ -523,15 +519,15 @@ const Community = () => {
               </div>
               <div className="spotlight-entries-row">
                 {[...users]
-                  .filter(u => (u.fideRating || u.chessComRating || u.rating || 0) > 0)
+                  .filter(u => Math.max(u.fideRating || 0, u.chessComRating || 0, u.lichessRating || 0) > 0)
                   .sort((a, b) => {
-                    const ra = a.fideRating || a.chessComRating || a.rating || 0;
-                    const rb = b.fideRating || b.chessComRating || b.rating || 0;
+                    const ra = Math.max(a.fideRating || 0, a.chessComRating || 0, a.lichessRating || 0);
+                    const rb = Math.max(b.fideRating || 0, b.chessComRating || 0, b.lichessRating || 0);
                     return rb - ra;
                   })
                   .slice(0, 4)
                   .map((member, idx) => {
-                    const rating = member.fideRating || member.chessComRating || member.rating || 0;
+                    const rating = Math.max(member.fideRating || 0, member.chessComRating || 0, member.lichessRating || 0);
                     const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
                     const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
                     return (
@@ -634,7 +630,10 @@ const Community = () => {
               {filteredUsers.map((member, idx) => {
                 const isSelf = loggedInEmail && member.email && member.email.toLowerCase() === loggedInEmail.toLowerCase();
                 const isFollowing = !!followingMap[member.email?.toLowerCase()];
-                const rating = member.fideRating || member.chessComRating || member.rating || 1500;
+                const fideRating = member.fideRating || 0;
+                const chessComRating = member.chessComRating || 0;
+                const lichessRating = member.lichessRating || 0;
+                const topRating = Math.max(fideRating, chessComRating, lichessRating);
                 const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
 
                 // Check mutual and follows-me relationships
@@ -661,7 +660,11 @@ const Community = () => {
                           className="member-avatar-img"
                           onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                         />
-                        <span className="member-rating-pill">{rating}</span>
+                        {topRating > 0 && (
+                          <span className="member-rating-pill">
+                            {topRating}
+                          </span>
+                        )}
                       </div>
 
                       <div className="member-header-meta">
@@ -677,13 +680,51 @@ const Community = () => {
                           <span className="member-badge-follows-you" title="This tactician follows you">
                             Follows You
                           </span>
+                        ) : null}
+
+                        {member.role === "president" ? (
+                          <span className="member-badge-president" title="Club President">
+                            👑 President
+                          </span>
+                        ) : member.role === "vice_president" ? (
+                          <span className="member-badge-vp" title="Vice President">
+                            ⭐ Vice President
+                          </span>
+                        ) : member.role === "admin" ? (
+                          <span className="member-badge-admin" title="High Board Executive">
+                            👑 High Board
+                          </span>
+                        ) : member.role === "oc" ? (
+                          <span className="member-badge-oc" title="Organizing Committee Head">
+                            🏆 OC Head
+                          </span>
+                        ) : member.role === "hr" ? (
+                          <span className="member-badge-hr" title="Human Resources Head">
+                            🤝 HR Head
+                          </span>
+                        ) : member.role === "pr" ? (
+                          <span className="member-badge-pr" title="Public Relations Head">
+                            📢 PR Head
+                          </span>
+                        ) : member.role === "media" ? (
+                          <span className="member-badge-media" title="Multimedia & Design Head">
+                            🎨 Media Head
+                          </span>
+                        ) : member.role === "trainer" ? (
+                          <span className="member-badge-trainer" title="Head Trainer">
+                            ♟️ Trainer
+                          </span>
+                        ) : member.role === "trainee" ? (
+                          <span className="member-badge-trainee" title="Dedicated Trainee">
+                            🎯 Trainee
+                          </span>
+                        ) : member.role === "officer" ? (
+                          <span className="member-badge-officer" title="Club Officer">
+                            ⚡ Officer
+                          </span>
                         ) : member.chessTitle ? (
                           <span className="member-badge-title">
                             <Crown size={11} /> {member.chessTitle}
-                          </span>
-                        ) : member.role === "admin" ? (
-                          <span className="member-badge-officer">
-                            👑 Club Officer
                           </span>
                         ) : (
                           <span className="member-badge-standard">
@@ -732,8 +773,26 @@ const Community = () => {
                       </div>
 
                       <p className="member-subtitle">
-                        {member.role === 'admin' ? "Club Administrator & Organizer" : (member.major ? `${member.major} • Class of ${member.batch || '2026'}` : "Zewailian Chess Tactician")}
+                        {member.role === 'president' ? "👑 Club President" : member.role === 'vice_president' ? "⭐ Vice President" : member.role === 'admin' ? "👑 Club Administrator & High Board" : member.role === 'oc' ? "🏆 OC Head" : member.role === 'hr' ? "🤝 HR Head" : member.role === 'pr' ? "📢 PR Head" : member.role === 'media' ? "🎨 Media Head" : member.role === 'trainer' ? "♟️ Head Trainer" : (member.major ? `${member.major} • Class of ${member.batch || '2026'}` : "Zewailian Chess Tactician")}
                       </p>
+
+                      {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && (
+                        <div className="member-club-roles-row">
+                          {member.clubRoles.map((cr, cIdx) => (
+                            <span key={cIdx} className="member-club-role-chip" title={`${cr.position} of ${cr.department}`}>
+                              {cr.position === "President" || cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Executive High Board", "High Board").replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {(fideRating > 0 || chessComRating > 0 || lichessRating > 0) && (
+                        <div className="member-ratings-row" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', margin: '4px 0 2px' }}>
+                          {fideRating > 0 && <span className="admin-rating-chip fide" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FIDE {fideRating}</span>}
+                          {chessComRating > 0 && <span className="admin-rating-chip chesscom" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>C.com {chessComRating}</span>}
+                          {lichessRating > 0 && <span className="admin-rating-chip lichess" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Lichess {lichessRating}</span>}
+                        </div>
+                      )}
 
                       <div className="member-opening-box">
                         <span className="op-label">Fav. Opening:</span>
@@ -955,11 +1014,11 @@ const Community = () => {
                   </div>
                   <div className="tactician-modal-hero-info">
                     <div className="tactician-modal-badge">
-                      {m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'admin' ? '👑 Club Officer' : '♟️ Club Member')}
+                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 High Board Executive' : m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '♟️ Head Trainer' : '♟️ Club Member')}
                     </div>
                     <h2 className="tactician-modal-name">{m.name || m.email?.split('@')[0]}</h2>
                     <p className="tactician-modal-title">
-                      {m.role === 'admin' ? 'Club Administrator & Organizer' : (m.major ? `${m.major} Student` : 'ZC Chess Club Tactician')}
+                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 Club Administrator & High Board' : m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '♟️ Head Trainer' : (m.major ? `${m.major} Student` : 'ZC Chess Club Tactician')}
                     </p>
 
                     {/* Email Display with Copy */}

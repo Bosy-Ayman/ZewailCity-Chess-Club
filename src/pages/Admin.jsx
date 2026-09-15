@@ -4,12 +4,38 @@ import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { Search, Users, Filter, Eye, Send, Mail, Bell, CheckCircle2, Sparkles } from "lucide-react";
+import { Search, Users, Filter, Eye, Send, Mail, Bell, CheckCircle2, Sparkles, Camera } from "lucide-react";
 import "./Admin.css";
 import { safeFetchJson, compressImage } from "../utils/api";
 
 // API Base URL - works for both local and production
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+
+// Helper function to resolve effective user role across both direct role and clubRoles
+export const getEffectiveUserRole = (user) => {
+  if (!user) return "member";
+  if (user.role && ["president", "vice_president", "oc", "hr", "pr", "media", "trainer", "trainee"].includes(user.role)) {
+    return user.role;
+  }
+  if (Array.isArray(user.clubRoles) && user.clubRoles.length > 0) {
+    if (user.clubRoles.some(r => r.department === "Executive High Board" && r.position === "President")) return "president";
+    if (user.clubRoles.some(r => r.department === "Executive High Board" && r.position === "Vice President")) return "vice_president";
+    if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee" && r.position === "Head")) return "oc";
+    if (user.clubRoles.some(r => r.department === "Human Resources" && r.position === "Head")) return "hr";
+    if (user.clubRoles.some(r => r.department === "Public Relations" && r.position === "Head")) return "pr";
+    if (user.clubRoles.some(r => r.department === "Multimedia & Design" && r.position === "Head")) return "media";
+    if (user.clubRoles.some(r => r.department === "Training & Masterclasses" && r.position === "Head")) return "trainer";
+    if (user.clubRoles.some(r => r.department === "Executive High Board")) return "president";
+    if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee")) return "oc";
+    if (user.clubRoles.some(r => r.department === "Human Resources")) return "hr";
+    if (user.clubRoles.some(r => r.department === "Public Relations")) return "pr";
+    if (user.clubRoles.some(r => r.department === "Multimedia & Design")) return "media";
+    if (user.clubRoles.some(r => r.department === "Training & Masterclasses")) return "trainer";
+    if (user.clubRoles.some(r => r.department === "Trainee Development Pathway")) return "trainee";
+  }
+  if (user.role === "admin") return "president";
+  return user.role || "member";
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -136,14 +162,11 @@ export default function AdminDashboard() {
   // Fetch tournaments and applications
   const fetchData = async () => {
     setIsLoading(true);
+    setErrorMessage("");
     try {
       // Fetch Tournaments
-      try {
-        const tourData = await safeFetchJson(`${API_BASE}/api/tournaments`);
-        if (Array.isArray(tourData)) setTournaments(tourData);
-      } catch (e) {
-        console.warn("Failed to fetch tournaments:", e.message);
-      }
+      const tData = await safeFetchJson(`${API_BASE}/api/tournaments`);
+      if (Array.isArray(tData)) setTournaments(tData);
 
       // Fetch Applications
       try {
@@ -162,7 +185,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Users
-      if (userRole === "admin") {
+      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
         try {
           const userData = await safeFetchJson(`${API_BASE}/api/users`);
           if (Array.isArray(userData)) setUsers(userData);
@@ -172,7 +195,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Inquiries / Contact Dispatches
-      if (userRole === "admin" || userRole === "oc" || userRole === "hr") {
+      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
         try {
           const inqData = await safeFetchJson(`${API_BASE}/api/contact`);
           if (Array.isArray(inqData)) setInquiries(inqData);
@@ -182,7 +205,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Dispatched Announcements & Emails History
-      if (userRole === "admin" || userRole === "oc" || userRole === "hr") {
+      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
         try {
           const logData = await safeFetchJson(`${API_BASE}/api/admin/broadcast-logs`);
           if (Array.isArray(logData)) setBroadcastLogs(logData);
@@ -206,7 +229,7 @@ export default function AdminDashboard() {
       navigate("/?login=true");
       return;
     }
-    if (userRole !== "admin" && userRole !== "oc" && userRole !== "hr") {
+    if (userRole !== "admin" && userRole !== "president" && userRole !== "vice_president" && userRole !== "oc" && userRole !== "hr") {
       navigate("/");
       return;
     }
@@ -255,6 +278,30 @@ export default function AdminDashboard() {
   const handleDirectRoleChange = async (targetUser, newRole) => {
     setErrorMessage("");
     setSuccessMessage("");
+
+    // Optimistic UI update so table and cards reflect selection instantly
+    setUsers(prev => prev.map(u => {
+      if (u.email?.toLowerCase() === targetUser.email?.toLowerCase()) {
+        const deptMap = {
+          president: [{ department: 'Executive High Board', position: 'President' }],
+          vice_president: [{ department: 'Executive High Board', position: 'Vice President' }],
+          oc: [{ department: 'Tournament Organizing Committee', position: 'Head' }],
+          hr: [{ department: 'Human Resources', position: 'Head' }],
+          pr: [{ department: 'Public Relations', position: 'Head' }],
+          media: [{ department: 'Multimedia & Design', position: 'Head' }],
+          trainer: [{ department: 'Training & Masterclasses', position: 'Head' }],
+          trainee: [{ department: 'Trainee Development Pathway', position: 'Trainee' }],
+          member: []
+        };
+        return {
+          ...u,
+          role: newRole,
+          clubRoles: deptMap[newRole] || []
+        };
+      }
+      return u;
+    }));
+
     try {
       const adminEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "chesszc@zewailcity.edu.eg";
       await safeFetchJson(`${API_BASE}/api/admin/manage-user`, {
@@ -266,10 +313,61 @@ export default function AdminDashboard() {
           role: newRole
         })
       });
+
+      // If updating the currently logged-in user, synchronize localStorage live
+      const currentEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
+      if (targetUser.email?.toLowerCase() === currentEmail.toLowerCase()) {
+        localStorage.setItem("userRole", newRole);
+        window.dispatchEvent(new Event("userRoleUpdated"));
+      }
+
       setSuccessMessage(`👑 Role updated to ${newRole.toUpperCase()} for ${targetUser.name}! Direct appointment email & in-app notification dispatched.`);
       fetchData();
     } catch (err) {
       setErrorMessage(err.message || "Failed to update user role.");
+      fetchData();
+    }
+  };
+
+  // Direct Photo Upload for any registered user (Admin authority)
+  const handleUserPhotoUpload = async (targetUser, file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be smaller than 10MB");
+      return;
+    }
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const compressedBase64 = await compressImage(file, 250, 250, 0.75);
+      
+      // Optimistic visual update
+      setUsers(prev => prev.map(u => {
+        if (u.email?.toLowerCase() === targetUser.email?.toLowerCase()) {
+          return { ...u, profileImage: compressedBase64 };
+        }
+        return u;
+      }));
+
+      await safeFetchJson(`${API_BASE}/api/profile/image`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: targetUser.email,
+          profileImage: compressedBase64
+        })
+      });
+
+      const currentEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
+      if (targetUser.email?.toLowerCase() === currentEmail.toLowerCase()) {
+        localStorage.setItem("userAvatar", compressedBase64);
+        window.dispatchEvent(new Event("userAvatarUpdated"));
+      }
+
+      setSuccessMessage(`Profile image updated for ${targetUser.name || targetUser.email}!`);
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err) {
+      setErrorMessage(err.message || "Failed to upload profile photo.");
     }
   };
 
@@ -722,7 +820,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleAddPuzzle = () => {
+  const handleAddPuzzle = async () => {
     if (activePuzzleMoves.length === 0) {
       alert("Please record the correct solution moves first!");
       return;
@@ -732,10 +830,36 @@ export default function AdminDashboard() {
       initialFen: initialPuzzleFen,
       mateIn: activePuzzleMateIn,
       correctMoves: activePuzzleMoves,
-      description: activePuzzleDesc || `Mate in ${activePuzzleMateIn}`
+      description: activePuzzleDesc || (activePuzzleMateIn === 0 ? "Find the Best Move" : `Mate in ${activePuzzleMateIn}`)
     };
     
-    setPuzzlesList([...puzzlesList, newPuzzle]);
+    // If editing an existing tournament, directly save it to the backend tournament!
+    if (editingPuzzleTournamentId) {
+      try {
+        setIsLoading(true);
+        const res = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${editingPuzzleTournamentId}/puzzles`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPuzzle)
+        });
+        
+        if (res?.data?.puzzles) {
+          setPuzzlesList(res.data.puzzles);
+        } else {
+          setPuzzlesList(prev => [...prev, newPuzzle]);
+        }
+        
+        setSuccessMessage(`✅ Puzzle successfully added to "${puzzleTitle || 'Challenge'}"!`);
+        fetchData();
+      } catch (err) {
+        setErrorMessage(err.message || "Failed to add puzzle to tournament.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setPuzzlesList([...puzzlesList, newPuzzle]);
+      setSuccessMessage("✅ Puzzle added to list! Publish the tournament when ready.");
+    }
     
     // Reset editor for next puzzle
     const defaultChess = new Chess();
@@ -748,6 +872,37 @@ export default function AdminDashboard() {
     setSelectedPiece(null);
   };
 
+  const handleRemovePuzzleFromList = async (index) => {
+    const puzzleToDelete = puzzlesList[index];
+    if (!puzzleToDelete) return;
+    
+    if (editingPuzzleTournamentId) {
+      try {
+        const puzzleIdOrIndex = puzzleToDelete._id || index;
+        await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${editingPuzzleTournamentId}/puzzles/${puzzleIdOrIndex}`, {
+          method: "DELETE"
+        });
+        setPuzzlesList(prev => prev.filter((_, i) => i !== index));
+        setSuccessMessage("Puzzle removed from tournament.");
+        fetchData();
+      } catch (err) {
+        setErrorMessage(err.message || "Failed to delete puzzle.");
+      }
+    } else {
+      setPuzzlesList(puzzlesList.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleQuickAddPuzzle = (t) => {
+    handleEditPuzzleTournament(t);
+    setTimeout(() => {
+      const editor = document.getElementById("puzzle-board-editor-anchor") || document.getElementById("puzzle-form-section");
+      if (editor) {
+        editor.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 100);
+  };
+
   const handleEditPuzzleInList = (index) => {
     const p = puzzlesList[index];
     if (!p) return;
@@ -756,7 +911,7 @@ export default function AdminDashboard() {
       setChessInstance(c);
     } catch (e) {}
     setActivePuzzleFen(p.initialFen);
-    setActivePuzzleMateIn(p.mateIn || 1);
+    setActivePuzzleMateIn(p.mateIn !== undefined && p.mateIn !== null ? p.mateIn : 1);
     setActivePuzzleMoves(p.correctMoves || []);
     setActivePuzzleDesc(p.description || "");
     setInitialPuzzleFen(p.initialFen);
@@ -857,6 +1012,38 @@ export default function AdminDashboard() {
       setSuccessMessage(`${participant.name} was removed from the tournament.`);
     } catch (err) {
       setErrorMessage(err.message || "Failed to remove participant.");
+    }
+  };
+
+  const isPuzzleChallengeFinished = (t) => {
+    if (!t || !t.endDate) return false;
+    const endStr = `${t.endDate}T${t.endTime || "23:59"}:59`;
+    const end = new Date(endStr);
+    return !isNaN(end.getTime()) && new Date() >= end;
+  };
+
+  const handleBroadcastPuzzleWinners = async (tournament) => {
+    if (!isPuzzleChallengeFinished(tournament)) {
+      alert(`⏳ This puzzle challenge is still active and in progress.\n\nOfficial tournament results and winner announcement emails/notifications can only be broadcast after the challenge deadline has passed (${tournament.endDate || "TBD"} ${tournament.endTime || ""}).`);
+      return;
+    }
+    if (!tournament.leaderboard || tournament.leaderboard.length === 0) {
+      alert("No scores recorded on this puzzle challenge yet.");
+      return;
+    }
+    const sorted = [...tournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const champ = sorted[0]?.name || "Tactician";
+    if (!window.confirm(`📢 Broadcast official Champions Podium & winner announcement for "${tournament.title}" to all club members?\n\n🥇 Champion: ${champ} (${sorted[0]?.score || 0} pts)`)) {
+      return;
+    }
+    try {
+      const res = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${tournament._id}/broadcast-winner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      setSuccessMessage(res.message || `🏆 Champions Podium announcement for "${tournament.title}" broadcast to all tacticians!`);
+    } catch (err) {
+      setErrorMessage(err.message || "Failed to broadcast puzzle champions announcement.");
     }
   };
 
@@ -1026,7 +1213,7 @@ export default function AdminDashboard() {
           <div className="admin-header-content">
             <div className="admin-header-titles">
               <span className="admin-role-badge">
-                {userRole === "admin" ? "👑 Executive Admin Portal" : userRole === "oc" ? "⚡ Organizing Committee Portal" : "📋 HR Management Portal"}
+                {userRole === "president" ? "👑 President Portal" : userRole === "vice_president" ? "⭐ Vice President Portal" : userRole === "admin" ? "👑 Executive Admin Portal" : userRole === "oc" ? "⚡ Organizing Committee Portal" : "📋 HR Management Portal"}
               </span>
               <h1 className="site-page-title">Zewail City Chess Club Dashboard</h1>
               <p>Manage club tournaments, schedule rounds, review member applications, and set up daily puzzle challenges.</p>
@@ -1041,7 +1228,7 @@ export default function AdminDashboard() {
                 <span className="kpi-num">{applications.length}</span>
                 <span className="kpi-label">Applications</span>
               </div>
-              {userRole === "admin" && (
+              {['admin', 'president', 'vice_president'].includes(userRole) && (
                 <div className="kpi-pill">
                   <span className="kpi-num">{users.length}</span>
                   <span className="kpi-label">Members</span>
@@ -1060,22 +1247,22 @@ export default function AdminDashboard() {
             value={activeTab}
             onChange={(e) => setActiveTab(e.target.value)}
           >
-            {(userRole === "admin" || userRole === "oc") && (
+            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
               <option value="add-tournament">➕ Add Tournament</option>
             )}
-            {(userRole === "admin" || userRole === "oc") && (
+            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
               <option value="tournaments-list">🏆 Manage Tournaments ({tournaments.length})</option>
             )}
-            {(userRole === "admin" || userRole === "hr") && (
+            {(['admin', 'president', 'vice_president', 'hr'].includes(userRole)) && (
               <option value="applications">📋 Club Applications ({applications.length})</option>
             )}
-            {userRole === "admin" && (
+            {['admin', 'president', 'vice_president'].includes(userRole) && (
               <option value="manage-users">👥 Manage Users ({users.length})</option>
             )}
-            {(userRole === "admin" || userRole === "oc") && (
+            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
               <option value="manage-puzzles">🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}</option>
             )}
-            {userRole === "admin" && (
+            {['admin', 'president', 'vice_president'].includes(userRole) && (
               <option value="broadcast">📢 Email & In-App Broadcast</option>
             )}
             <option value="inquiries">📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}</option>
@@ -1084,7 +1271,7 @@ export default function AdminDashboard() {
 
         {/* Desktop Tab Controls (Visible on >= 768px) */}
         <div className="admin-tabs admin-desktop-tabs">
-          {(userRole === "admin" || userRole === "oc") && (
+          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
             <button
               className={`tab-btn ${activeTab === "add-tournament" ? "active" : ""}`}
               onClick={() => setActiveTab("add-tournament")}
@@ -1092,7 +1279,7 @@ export default function AdminDashboard() {
               ➕ Add Tournament
             </button>
           )}
-          {(userRole === "admin" || userRole === "oc") && (
+          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
             <button
               className={`tab-btn ${activeTab === "tournaments-list" ? "active" : ""}`}
               onClick={() => setActiveTab("tournaments-list")}
@@ -1100,7 +1287,7 @@ export default function AdminDashboard() {
               🏆 Manage Tournaments ({tournaments.length})
             </button>
           )}
-          {(userRole === "admin" || userRole === "hr") && (
+          {(['admin', 'president', 'vice_president', 'hr'].includes(userRole)) && (
             <button
               className={`tab-btn ${activeTab === "applications" ? "active" : ""}`}
               onClick={() => setActiveTab("applications")}
@@ -1108,7 +1295,7 @@ export default function AdminDashboard() {
               📋 Club Applications ({applications.length})
             </button>
           )}
-          {userRole === "admin" && (
+          {['admin', 'president', 'vice_president'].includes(userRole) && (
             <button
               className={`tab-btn ${activeTab === "manage-users" ? "active" : ""}`}
               onClick={() => setActiveTab("manage-users")}
@@ -1116,7 +1303,7 @@ export default function AdminDashboard() {
               👥 Manage Users ({users.length})
             </button>
           )}
-          {(userRole === "admin" || userRole === "oc") && (
+          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
             <button
               className={`tab-btn ${activeTab === "manage-puzzles" ? "active" : ""}`}
               onClick={() => setActiveTab("manage-puzzles")}
@@ -1124,7 +1311,7 @@ export default function AdminDashboard() {
               🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}
             </button>
           )}
-          {userRole === "admin" && (
+          {['admin', 'president', 'vice_president'].includes(userRole) && (
             <button
               className={`tab-btn ${activeTab === "broadcast" ? "active" : ""}`}
               onClick={() => setActiveTab("broadcast")}
@@ -1691,7 +1878,11 @@ export default function AdminDashboard() {
                 (u.email && u.email.toLowerCase().includes(query)) ||
                 (u.major && u.major.toLowerCase().includes(query)) ||
                 (u.idNumber && u.idNumber.toLowerCase().includes(query));
-              const matchesRole = userRoleFilter === "all" || (u.role && u.role.toLowerCase() === userRoleFilter.toLowerCase());
+              
+              let matchesRole = true;
+              if (userRoleFilter === "all") matchesRole = true;
+              else matchesRole = getEffectiveUserRole(u) === userRoleFilter;
+
               return matchesQuery && matchesRole;
             });
 
@@ -1733,8 +1924,15 @@ export default function AdminDashboard() {
                         className="admin-role-filter-select"
                       >
                         <option value="all">All Roles ({users.length})</option>
-                        <option value="admin">Administrators ({users.filter(u => u.role === 'admin').length})</option>
-                        <option value="member">Members ({users.filter(u => u.role !== 'admin').length})</option>
+                        <option value="president">👑 Presidents ({users.filter(u => getEffectiveUserRole(u) === 'president').length})</option>
+                        <option value="vice_president">⭐ Vice Presidents ({users.filter(u => getEffectiveUserRole(u) === 'vice_president').length})</option>
+                        <option value="oc">⚡ Head of OC ({users.filter(u => getEffectiveUserRole(u) === 'oc').length})</option>
+                        <option value="hr">👥 Head of HR ({users.filter(u => getEffectiveUserRole(u) === 'hr').length})</option>
+                        <option value="pr">📢 Head of PR ({users.filter(u => getEffectiveUserRole(u) === 'pr').length})</option>
+                        <option value="media">🎨 Head of Multimedia ({users.filter(u => getEffectiveUserRole(u) === 'media').length})</option>
+                        <option value="trainer">🎓 Head of Training ({users.filter(u => getEffectiveUserRole(u) === 'trainer').length})</option>
+                        <option value="trainee">♟️ Trainees ({users.filter(u => getEffectiveUserRole(u) === 'trainee').length})</option>
+                        <option value="member">♟️ Members ({users.filter(u => getEffectiveUserRole(u) === 'member').length})</option>
                       </select>
                     </div>
                   </div>
@@ -1793,7 +1991,7 @@ export default function AdminDashboard() {
                                   </div>
                                   <div className="admin-user-info-col">
                                     <button 
-                                      type="button"
+                                      type="button" 
                                       className="admin-user-name-link"
                                       onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
                                       title="Open Player Dossier"
@@ -1822,33 +2020,56 @@ export default function AdminDashboard() {
                                 </td>
                                 <td>
                                   <select
-                                    value={u.role || "member"}
+                                    value={getEffectiveUserRole(u)}
                                     onChange={(e) => handleDirectRoleChange(u, e.target.value)}
                                     style={{
-                                      background: u.role === "admin" ? "rgba(243, 193, 68, 0.15)" : u.role === "oc" ? "rgba(52, 152, 219, 0.15)" : u.role === "hr" ? "rgba(46, 204, 113, 0.15)" : u.role === "media" ? "rgba(155, 89, 182, 0.15)" : u.role === "trainer" ? "rgba(230, 126, 34, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                                      color: u.role === "admin" ? "#f3c144" : u.role === "oc" ? "#3498db" : u.role === "hr" ? "#2ecc71" : u.role === "media" ? "#9b59b6" : u.role === "trainer" ? "#e67e22" : "#d0d0d0",
-                                      border: `1px solid ${u.role === "admin" ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                      background: getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.25)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.2)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                                      color: (getEffectiveUserRole(u) === "president" || getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "#f3c144" : getEffectiveUserRole(u) === "vice_president" ? "#c084fc" : "#d0d0d0",
+                                      border: `1px solid ${getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.6)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.5)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
                                       borderRadius: "6px",
                                       padding: "4px 8px",
                                       fontSize: "0.8rem",
                                       fontWeight: "700",
-                                      cursor: "pointer"
+                                      cursor: "pointer",
+                                      width: "100%"
                                     }}
-                                    title="Assign Executive Privileges & Authority Role (Dispatches Instant Notification & Email)"
+                                    title="Assign Executive Privileges & Specific Role"
                                   >
                                     <option value="member">♟️ Member</option>
-                                    <option value="admin">👑 Admin / High Board</option>
-                                    <option value="oc">🏆 OC Head</option>
-                                    <option value="hr">🤝 HR Head</option>
-                                    <option value="media">🎨 Media Head</option>
-                                    <option value="trainer">♟️ Trainer</option>
-                                    <option value="trainee">🎯 Trainee</option>
+                                    <option value="president">👑 President</option>
+                                    <option value="vice_president">⭐ Vice President</option>
+                                    <option value="oc">⚡ Head of OC</option>
+                                    <option value="hr">👥 Head of HR</option>
+                                    <option value="pr">📢 Head of PR</option>
+                                    <option value="media">🎨 Head of Multimedia</option>
+                                    <option value="trainer">🎓 Head of Training</option>
+                                    <option value="trainee">♟️ Trainee</option>
                                   </select>
+                                  {Array.isArray(u.clubRoles) && u.clubRoles.length > 0 && (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                                      {u.clubRoles.map((cr, cIdx) => (
+                                        <span
+                                          key={cIdx}
+                                          style={{
+                                            fontSize: "0.7rem",
+                                            background: "rgba(243, 193, 68, 0.1)",
+                                            color: "#f3c144",
+                                            padding: "2px 6px",
+                                            borderRadius: "4px",
+                                            border: "1px solid rgba(243, 193, 68, 0.25)"
+                                          }}
+                                          title={`${cr.position} of ${cr.department}`}
+                                        >
+                                          {cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </td>
                                 <td>
                                   <div className="admin-user-actions-group">
                                     <button
-                                      type="button"
+                                      type="button" 
                                       className="admin-view-profile-btn"
                                       onClick={() => navigate(`/profile?email=${encodeURIComponent(u.email)}`)}
                                       title={`View ${u.name}'s Profile`}
@@ -1856,6 +2077,24 @@ export default function AdminDashboard() {
                                       <Eye size={14} />
                                       <span>Profile</span>
                                     </button>
+                                    <label
+                                      className="admin-view-profile-btn"
+                                      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                      title={`Change ${u.name}'s Profile Photo`}
+                                    >
+                                      <Camera size={14} />
+                                      <span>Photo</span>
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ display: "none" }}
+                                        onChange={(e) => {
+                                          if (e.target.files && e.target.files[0]) {
+                                            handleUserPhotoUpload(u, e.target.files[0]);
+                                          }
+                                        }}
+                                      />
+                                    </label>
                                     <button
                                       type="button"
                                       className="admin-message-user-btn"
@@ -1864,12 +2103,12 @@ export default function AdminDashboard() {
                                         setBroadcastTargetEmail(u.email);
                                         setActiveTab("broadcast");
                                       }}
-                                      title={`Dispatch Notification / Email to ${u.name}`}
+                                      title={`Direct Message ${u.name}`}
                                     >
-                                      <Send size={13} />
-                                      <span>Message</span>
+                                      <Mail size={14} />
+                                      <span>Direct Message</span>
                                     </button>
-                                    {u.role !== 'admin' && (
+                                    {!['admin', 'president', 'vice_president'].includes(u.role) && (
                                       <button
                                         className="delete-btn"
                                         onClick={() => handleDeleteUser(u._id)}
@@ -1917,29 +2156,50 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                               <select
-                                value={u.role || "member"}
+                                value={getEffectiveUserRole(u)}
                                 onChange={(e) => handleDirectRoleChange(u, e.target.value)}
                                 style={{
-                                  background: u.role === "admin" ? "rgba(243, 193, 68, 0.15)" : u.role === "oc" ? "rgba(52, 152, 219, 0.15)" : u.role === "hr" ? "rgba(46, 204, 113, 0.15)" : u.role === "media" ? "rgba(155, 89, 182, 0.15)" : u.role === "trainer" ? "rgba(230, 126, 34, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                                  color: u.role === "admin" ? "#f3c144" : u.role === "oc" ? "#3498db" : u.role === "hr" ? "#2ecc71" : u.role === "media" ? "#9b59b6" : u.role === "trainer" ? "#e67e22" : "#d0d0d0",
-                                  border: `1px solid ${u.role === "admin" ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                  background: getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.25)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.2)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                                  color: (getEffectiveUserRole(u) === "president" || getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "#f3c144" : getEffectiveUserRole(u) === "vice_president" ? "#c084fc" : "#d0d0d0",
+                                  border: `1px solid ${getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.6)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.5)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
                                   borderRadius: "6px",
                                   padding: "4px 8px",
                                   fontSize: "0.8rem",
                                   fontWeight: "700",
                                   cursor: "pointer"
                                 }}
-                                title="Change Executive Role"
+                                title="Change Specific Role"
                               >
                                 <option value="member">♟️ Member</option>
-                                <option value="admin">👑 Admin</option>
-                                <option value="oc">🏆 OC Head</option>
-                                <option value="hr">🤝 HR Head</option>
-                                <option value="media">🎨 Media Head</option>
-                                <option value="trainer">♟️ Trainer</option>
-                                <option value="trainee">🎯 Trainee</option>
+                                <option value="president">👑 President</option>
+                                <option value="vice_president">⭐ Vice President</option>
+                                <option value="oc">⚡ Head of OC</option>
+                                <option value="hr">👥 Head of HR</option>
+                                <option value="pr">📢 Head of PR</option>
+                                <option value="media">🎨 Head of Multimedia</option>
+                                <option value="trainer">🎓 Head of Training</option>
+                                <option value="trainee">♟️ Trainee</option>
                               </select>
                             </div>
+                            {Array.isArray(u.clubRoles) && u.clubRoles.length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", margin: "6px 0 10px" }}>
+                                {u.clubRoles.map((cr, cIdx) => (
+                                  <span
+                                    key={cIdx}
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      background: "rgba(243, 193, 68, 0.1)",
+                                      color: "#f3c144",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      border: "1px solid rgba(243, 193, 68, 0.25)"
+                                    }}
+                                  >
+                                    {cr.position === "Head" ? "👑" : "✨"} {cr.position} of {cr.department}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
 
                             <div className="admin-mobile-user-meta">
                               <div><strong>ID:</strong> {u.idNumber || "N/A"}</div>
@@ -1962,6 +2222,23 @@ export default function AdminDashboard() {
                                 <Eye size={14} />
                                 <span>Profile</span>
                               </button>
+                              <label
+                                className="admin-view-profile-btn mobile-full-btn"
+                                style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                              >
+                                <Camera size={14} />
+                                <span>Photo</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  style={{ display: "none" }}
+                                  onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                      handleUserPhotoUpload(u, e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                              </label>
                               <button
                                 type="button"
                                 className="admin-message-user-btn mobile-full-btn"
@@ -2088,24 +2365,72 @@ export default function AdminDashboard() {
                                   </div>
                                 )}
                               </td>
-                              <td>
-                                <div style={{ display: "flex", gap: "8px" }}>
-                                  <button
-                                    className="edit-btn"
-                                    style={{ padding: "6px 12px" }}
-                                    onClick={() => handleEditPuzzleTournament(t)}
-                                  >
-                                    ✏️ Edit
-                                  </button>
-                                  <button
-                                    className="delete-btn"
-                                    style={{ padding: "6px 12px" }}
-                                    onClick={() => handleDeletePuzzleTournament(t._id, t.title)}
-                                  >
-                                    🗑️ Delete
-                                  </button>
-                                </div>
-                              </td>
+                                <td>
+                                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    {t.leaderboard && t.leaderboard.length > 0 && (
+                                      isPuzzleChallengeFinished(t) ? (
+                                        <button
+                                          type="button"
+                                          className="btn-status"
+                                          style={{
+                                            padding: "6px 12px",
+                                            background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                                            color: "#12100d",
+                                            border: "none",
+                                            fontWeight: "800",
+                                            borderRadius: "6px",
+                                            cursor: "pointer"
+                                          }}
+                                          onClick={() => handleBroadcastPuzzleWinners(t)}
+                                          title="Broadcast Champions Podium & In-App / Email Announcement to all members"
+                                        >
+                                          🏆 Announce
+                                        </button>
+                                      ) : (
+                                        <span
+                                          style={{
+                                            fontSize: "0.75rem",
+                                            color: "#f3c144",
+                                            background: "rgba(243, 193, 68, 0.1)",
+                                            padding: "5px 9px",
+                                            borderRadius: "6px",
+                                            border: "1px dashed rgba(243, 193, 68, 0.35)",
+                                            fontWeight: "600",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px"
+                                          }}
+                                          title="Competition is active. Official winner broadcast unlocks once deadline passes."
+                                        >
+                                          ⏳ In Progress
+                                        </span>
+                                      )
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="view-btn"
+                                      style={{ padding: "6px 12px", background: "#f3c144", color: "#111", fontWeight: "700" }}
+                                      onClick={() => handleQuickAddPuzzle(t)}
+                                      title={`Add a new puzzle directly to "${t.title}"`}
+                                    >
+                                      ➕ Add Puzzle
+                                    </button>
+                                    <button
+                                      className="edit-btn"
+                                      style={{ padding: "6px 12px" }}
+                                      onClick={() => handleEditPuzzleTournament(t)}
+                                    >
+                                      ✏️ Edit
+                                    </button>
+                                    <button
+                                      className="delete-btn"
+                                      style={{ padding: "6px 12px" }}
+                                      onClick={() => handleDeletePuzzleTournament(t._id, t.title)}
+                                    >
+                                      🗑️ Delete
+                                    </button>
+                                  </div>
+                                </td>
                             </tr>
                           ))}
                         </tbody>
@@ -2165,7 +2490,48 @@ export default function AdminDashboard() {
                               </div>
                             )}
                           </div>
-                          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                          <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                            {t.leaderboard && t.leaderboard.length > 0 && (
+                              isPuzzleChallengeFinished(t) ? (
+                                <button
+                                  type="button"
+                                  className="btn-status mobile-full-btn"
+                                  style={{
+                                    background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                                    color: "#12100d",
+                                    border: "none",
+                                    fontWeight: "800"
+                                  }}
+                                  onClick={() => handleBroadcastPuzzleWinners(t)}
+                                >
+                                  🏆 Announce Podium
+                                </button>
+                              ) : (
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    textAlign: "center",
+                                    fontSize: "0.8rem",
+                                    color: "#f3c144",
+                                    background: "rgba(243, 193, 68, 0.1)",
+                                    padding: "6px 10px",
+                                    borderRadius: "6px",
+                                    border: "1px dashed rgba(243, 193, 68, 0.35)",
+                                    fontWeight: "600"
+                                  }}
+                                >
+                                  ⏳ In Progress (Results broadcast unlocks after deadline)
+                                </div>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              className="view-btn mobile-full-btn"
+                              style={{ background: "#f3c144", color: "#111", fontWeight: "700" }}
+                              onClick={() => handleQuickAddPuzzle(t)}
+                            >
+                              ➕ Add Puzzle
+                            </button>
                             <button
                               className="edit-btn mobile-full-btn"
                               onClick={() => handleEditPuzzleTournament(t)}
@@ -2296,7 +2662,7 @@ export default function AdminDashboard() {
                         <div key={index} className="puzzle-item-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#17140f", border: "1px solid rgba(243, 193, 68, 0.2)", borderRadius: "10px", padding: "12px 16px" }}>
                           <div className="puzzle-item-info" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                             <span className="puzzle-item-title" style={{ color: "#fff", fontWeight: "bold" }}>
-                              Puzzle #{index + 1} - Mate in {p.mateIn}
+                              Puzzle #{index + 1} - {p.mateIn === 0 ? "Find the Best Move" : `Mate in ${p.mateIn}`}
                             </span>
                             <span className="puzzle-item-desc" style={{ color: "#caba91", fontSize: "0.85rem" }}>
                               {p.description || "Solve the tactic"}
@@ -2318,7 +2684,7 @@ export default function AdminDashboard() {
                               type="button"
                               className="delete-btn"
                               style={{ cursor: "pointer", padding: "8px 14px", minWidth: "auto", borderRadius: "8px" }}
-                              onClick={() => setPuzzlesList(puzzlesList.filter((_, i) => i !== index))}
+                              onClick={() => handleRemovePuzzleFromList(index)}
                             >
                               🗑️ Remove
                             </button>
@@ -2329,9 +2695,9 @@ export default function AdminDashboard() {
                   )}
 
                   {/* Interactive Position Setup & Move Recorder */}
-                  <div className="puzzle-editor-card">
+                  <div className="puzzle-editor-card" id="puzzle-board-editor-anchor">
                     <h3 style={{ margin: "0 0 14px 0", color: "#f3c144" }}>
-                      ♟️ Add a New Puzzle to this Tournament
+                      {editingPuzzleTournamentId ? `♟️ Add a New Puzzle to "${puzzleTitle || 'Challenge'}"` : "♟️ Add a New Puzzle to this Tournament"}
                     </h3>
 
                     <div className="puzzle-dashboard-grid">
@@ -2487,15 +2853,23 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="form-group">
-                          <label>Mate In *</label>
+                          <label>Objective / Mate In *</label>
                           <select
                             value={activePuzzleMateIn}
-                            onChange={(e) => setActivePuzzleMateIn(parseInt(e.target.value) || 1)}
+                            onChange={(e) => setActivePuzzleMateIn(parseInt(e.target.value, 10))}
                             disabled={!setupMode}
                           >
-                            <option value="1">Mate in 1</option>
-                            <option value="2">Mate in 2</option>
-                            <option value="3">Mate in 3</option>
+                            <option value="0">🎯 Find the Best Move (Tactical / Advantage)</option>
+                            <option value="1">⚡ Mate in 1</option>
+                            <option value="2">⚡ Mate in 2</option>
+                            <option value="3">⚡ Mate in 3</option>
+                            <option value="4">⚡ Mate in 4</option>
+                            <option value="5">⚡ Mate in 5</option>
+                            <option value="6">⚡ Mate in 6</option>
+                            <option value="7">⚡ Mate in 7</option>
+                            <option value="8">⚡ Mate in 8</option>
+                            <option value="9">⚡ Mate in 9</option>
+                            <option value="10">⚡ Mate in 10</option>
                           </select>
                         </div>
 
@@ -2560,7 +2934,7 @@ export default function AdminDashboard() {
                                 style={{ width: "100%", background: "#2ecc71", color: "white", borderColor: "#2ecc71", padding: "12px", fontSize: "0.95rem", fontWeight: "bold" }}
                                 onClick={handleAddPuzzle}
                               >
-                                ✅ Add Puzzle to Tournament List
+                                {editingPuzzleTournamentId ? `✅ Add & Save Puzzle to "${puzzleTitle || 'Challenge'}"` : "✅ Add Puzzle to Tournament List"}
                               </button>
                             </div>
                           )}
@@ -2574,7 +2948,7 @@ export default function AdminDashboard() {
                     className="signup-btn"
                     style={{ width: "100%", marginTop: "10px", height: "50px", fontSize: "1.1rem", fontWeight: "bold" }}
                   >
-                    {editingPuzzleTournamentId ? "💾 Save & Update Puzzle Challenge" : "🚀 Publish Puzzle Tournament"}
+                    {editingPuzzleTournamentId ? "💾 Save & Update Challenge Dates / Settings" : "🚀 Publish Puzzle Tournament"}
                   </button>
                 </form>
               </div>

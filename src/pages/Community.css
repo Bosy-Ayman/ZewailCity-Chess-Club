@@ -836,6 +836,98 @@
   border-radius: 999px;
 }
 
+.member-badge-president {
+  background: linear-gradient(135deg, rgba(243, 193, 68, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.7);
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.member-badge-vp {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.6);
+  color: #c084fc;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}
+
+.member-badge-admin {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-oc {
+  background: rgba(52, 152, 219, 0.2);
+  border: 1px solid rgba(52, 152, 219, 0.5);
+  color: #60a5fa;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-hr {
+  background: rgba(46, 204, 113, 0.2);
+  border: 1px solid rgba(46, 204, 113, 0.5);
+  color: #4ade80;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-pr {
+  background: rgba(230, 126, 34, 0.2);
+  border: 1px solid rgba(230, 126, 34, 0.5);
+  color: #fb923c;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-media {
+  background: rgba(155, 89, 182, 0.2);
+  border: 1px solid rgba(155, 89, 182, 0.5);
+  color: #c084fc;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-trainer {
+  background: rgba(241, 196, 15, 0.2);
+  border: 1px solid rgba(241, 196, 15, 0.5);
+  color: #facc15;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.member-badge-trainee {
+  background: rgba(26, 188, 156, 0.2);
+  border: 1px solid rgba(26, 188, 156, 0.5);
+  color: #2dd4bf;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
 .member-badge-officer {
   background: rgba(168, 85, 247, 0.2);
   border: 1px solid rgba(168, 85, 247, 0.4);
@@ -854,6 +946,23 @@
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 999px;
+}
+
+.member-club-roles-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 10px;
+}
+
+.member-club-role-chip {
+  font-size: 0.7rem;
+  background: rgba(243, 193, 68, 0.12);
+  color: #f3c144;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(243, 193, 68, 0.25);
+  font-weight: 600;
 }
 
 .member-email-copy-chip {

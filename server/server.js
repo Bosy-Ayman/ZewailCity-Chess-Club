@@ -1005,7 +1005,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
 // --- Puzzle Tournament Schema & Model ---
 const PuzzleSchema = new mongoose.Schema({
   initialFen: { type: String, required: true },
-  mateIn: { type: Number, required: true, enum: [1, 2, 3] },
+  mateIn: { type: Number, required: true, min: 0, max: 10, default: 1 },
   correctMoves: [{ type: String, required: true }],
   description: { type: String, default: "" }
 });
@@ -1952,7 +1952,7 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     }
 
     const admin = await User.findOne({ email: new RegExp(`^${adminEmail.trim()}$`, 'i') });
-    const isAuthorized = (admin && admin.role === 'admin') || isAdminEmail(adminEmail);
+    const isAuthorized = (admin && ['admin', 'president', 'vice_president'].includes(admin.role)) || isAdminEmail(adminEmail);
     if (!isAuthorized) {
       return res.status(403).json({ error: 'Unauthorized. Administrator access required.' });
     }
@@ -1982,18 +1982,63 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     const existingUser = await User.findOne({ email: new RegExp(`^${targetEmail.trim()}$`, 'i') });
 
     const roleLabels = {
+      president: '👑 President / Club Leader',
+      vice_president: '⭐ Vice President / Deputy Club Leader',
       admin: '👑 High Board Executive / Administrator',
-      oc: '🏆 Organizing & Tournaments Committee Head (OC)',
-      hr: '🤝 Human Resources & Talent Committee Head (HR)',
-      media: '🎨 Media, PR & Design Committee Head',
-      trainer: '♟️ Head Chess Trainer / Master',
-      trainee: '🎯 Dedicated Training Member',
+      oc: '⚡ Head of Tournament Organizing Committee (OC)',
+      hr: '👥 Head of Human Resources (HR)',
+      pr: '📢 Head of Public Relations (PR)',
+      media: '🎨 Head of Multimedia & Design',
+      trainer: '🎓 Head of Training & Masterclasses',
+      trainee: '♟️ Dedicated Club Trainee',
       member: '♟️ Official Club Member'
     };
 
-    const isRoleChanged = role !== undefined && (!existingUser || existingUser.role !== role);
-    const isClubRolesChanged = clubRoles !== undefined && Array.isArray(clubRoles) && (
-      !existingUser || JSON.stringify(existingUser.clubRoles || []) !== JSON.stringify(clubRoles)
+    // Two-way synchronization between role and clubRoles
+    if (role !== undefined && clubRoles === undefined) {
+      updateFields.role = role;
+      const deptMap = {
+        president: [{ department: 'Executive High Board', position: 'President', assignedAt: new Date().toISOString() }],
+        vice_president: [{ department: 'Executive High Board', position: 'Vice President', assignedAt: new Date().toISOString() }],
+        admin: [{ department: 'Executive High Board', position: 'President', assignedAt: new Date().toISOString() }],
+        oc: [{ department: 'Tournament Organizing Committee', position: 'Head', assignedAt: new Date().toISOString() }],
+        hr: [{ department: 'Human Resources', position: 'Head', assignedAt: new Date().toISOString() }],
+        pr: [{ department: 'Public Relations', position: 'Head', assignedAt: new Date().toISOString() }],
+        media: [{ department: 'Multimedia & Design', position: 'Head', assignedAt: new Date().toISOString() }],
+        trainer: [{ department: 'Training & Masterclasses', position: 'Head', assignedAt: new Date().toISOString() }],
+        trainee: [{ department: 'Trainee Development Pathway', position: 'Trainee', assignedAt: new Date().toISOString() }],
+        member: []
+      };
+      if (deptMap[role] !== undefined) {
+        updateFields.clubRoles = deptMap[role];
+      }
+    } else if (clubRoles !== undefined && Array.isArray(clubRoles)) {
+      updateFields.clubRoles = clubRoles;
+      
+      // Auto-derive synchronized authority role from assigned positions
+      let derivedRole = 'member';
+      if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'President')) derivedRole = 'president';
+      else if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'Vice President')) derivedRole = 'vice_president';
+      else if (clubRoles.some(r => r.department === 'Tournament Organizing Committee' && r.position === 'Head')) derivedRole = 'oc';
+      else if (clubRoles.some(r => r.department === 'Human Resources' && r.position === 'Head')) derivedRole = 'hr';
+      else if (clubRoles.some(r => r.department === 'Public Relations' && r.position === 'Head')) derivedRole = 'pr';
+      else if (clubRoles.some(r => r.department === 'Multimedia & Design' && r.position === 'Head')) derivedRole = 'media';
+      else if (clubRoles.some(r => r.department === 'Training & Masterclasses' && r.position === 'Head')) derivedRole = 'trainer';
+      else if (clubRoles.some(r => r.department === 'Executive High Board')) derivedRole = 'president';
+      else if (clubRoles.some(r => r.department === 'Tournament Organizing Committee')) derivedRole = 'oc';
+      else if (clubRoles.some(r => r.department === 'Human Resources')) derivedRole = 'hr';
+      else if (clubRoles.some(r => r.department === 'Public Relations')) derivedRole = 'pr';
+      else if (clubRoles.some(r => r.department === 'Multimedia & Design')) derivedRole = 'media';
+      else if (clubRoles.some(r => r.department === 'Training & Masterclasses')) derivedRole = 'trainer';
+      else if (clubRoles.some(r => r.department === 'Trainee Development Pathway')) derivedRole = 'trainee';
+      else if (role && role !== 'member') derivedRole = role;
+
+      updateFields.role = derivedRole;
+    }
+
+    const isRoleChanged = role !== undefined && (!existingUser || existingUser.role !== (updateFields.role || role));
+    const isClubRolesChanged = (clubRoles !== undefined || updateFields.clubRoles !== undefined) && (
+      !existingUser || JSON.stringify(existingUser.clubRoles || []) !== JSON.stringify(updateFields.clubRoles || clubRoles || [])
     );
 
     const defaultPassword = await bcrypt.hash(`guest-${Date.now()}`, 10);
@@ -2010,7 +2055,7 @@ app.put('/api/admin/manage-user', express.json(), async (req, res) => {
     );
 
     // If role or executive department roles were directly granted/changed, dispatch instant In-App Notification and Branded Email!
-    if (isRoleChanged || (isClubRolesChanged && clubRoles.length > 0)) {
+    if (isRoleChanged || (isClubRolesChanged && (updatedUser.clubRoles || []).length > 0)) {
       const appointedRoleTitle = roleLabels[updatedUser.role] || `🎖️ ${String(updatedUser.role).toUpperCase()} Role`;
       const departmentList = Array.isArray(updatedUser.clubRoles) && updatedUser.clubRoles.length > 0
         ? updatedUser.clubRoles.map(r => `• ${r.department} — ${r.position}`).join('\n')
@@ -2269,7 +2314,7 @@ app.get('/api/users', async (req, res) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-        if (decoded && (decoded.role === 'admin' || isAdminEmail(decoded.email))) {
+        if (decoded && (['admin', 'president', 'vice_president'].includes(decoded.role) || isAdminEmail(decoded.email))) {
           isAdmin = true;
         }
       } catch (e) {}
@@ -3859,7 +3904,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
     if (!isAuthorized && adminEmail) {
       const staffUser = await User.findOne({ 
         email: new RegExp(`^${adminEmail.trim()}$`, 'i'),
-        role: { $in: ['admin', 'oc', 'hr'] }
+        role: { $in: ['admin', 'president', 'vice_president', 'oc', 'hr', 'pr', 'media'] }
       });
       if (staffUser) isAuthorized = true;
     }
@@ -4020,7 +4065,7 @@ app.post('/api/contact', express.json(), async (req, res) => {
 
     // Notify admins / staff
     try {
-      const admins = await User.find({ role: { $in: ['admin', 'oc', 'hr'] } });
+      const admins = await User.find({ role: { $in: ['admin', 'president', 'vice_president', 'oc', 'hr', 'pr', 'media'] } });
       for (const admin of admins) {
         await createNotification({
           recipientEmail: admin.email,
@@ -4227,18 +4272,19 @@ app.delete('/api/puzzle-tournaments/:id', async (req, res) => {
 app.post('/api/puzzle-tournaments/:id/puzzles', async (req, res) => {
   try {
     const { initialFen, mateIn, correctMoves, description } = req.body;
-    if (!initialFen || !mateIn || !correctMoves || correctMoves.length === 0) {
+    if (!initialFen || mateIn === undefined || mateIn === null || !correctMoves || correctMoves.length === 0) {
       return res.status(400).json({ error: 'initialFen, mateIn, and correctMoves are required' });
     }
 
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
+    const parsedMateIn = Number(mateIn);
     tournament.puzzles.push({
       initialFen,
-      mateIn,
+      mateIn: parsedMateIn,
       correctMoves,
-      description: description || `Mate in ${mateIn}`
+      description: description || (parsedMateIn === 0 ? 'Find the Best Move' : `Mate in ${parsedMateIn}`)
     });
 
     const saved = await tournament.save();
@@ -4299,7 +4345,11 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
       return res.status(403).json({ error: 'This challenge has not started yet.' });
     }
     if (endAt && now > endAt) {
-      return res.status(403).json({ error: 'This challenge is closed.' });
+      // If challenge has concluded, still allow recording score within grace period or return current data
+      const gracePeriodMs = 1000 * 60 * 60 * 24; // 24h grace
+      if (now.getTime() - endAt.getTime() > gracePeriodMs) {
+        return res.json({ message: 'This challenge is closed.', data: tournament });
+      }
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -4336,28 +4386,33 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
 
     const saved = await tournament.save();
 
-    // If this player took 1st place with a top score (> 0), broadcast champion alert
-    if (tournament.leaderboard[0] && tournament.leaderboard[0].email === normalizedEmail && score > 0) {
-      broadcastWinnerNotification({
-        tournamentTitle: tournament.title,
-        tournamentType: "Puzzle Arena Challenge",
-        winnerName: displayName,
-        winnerEmail: normalizedEmail,
-        link: `/puzzles`
-      }).catch(e => console.warn('Puzzle score champion alert error:', e.message));
-    }
-
     res.json({ message: 'Score submitted successfully!', data: saved });
   } catch (error) {
     res.status(500).json({ error: 'Failed to submit score', details: error.message });
   }
 });
 
-// POST: Broadcast puzzle arena champion alert to all tacticians
+// POST: Broadcast puzzle arena champion alert to all tacticians (only after challenge deadline passed)
 app.post('/api/puzzle-tournaments/:id/broadcast-winner', async (req, res) => {
   try {
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Puzzle arena not found" });
+
+    // Validate that the puzzle challenge is finished (closed - deadline passed)
+    const now = new Date();
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      : null;
+
+    if (!endAt) {
+      return res.status(400).json({ error: "This challenge does not have an end deadline configured and cannot be officially closed yet." });
+    }
+
+    if (now < endAt) {
+      return res.status(400).json({
+        error: `Cannot broadcast official results until the puzzle challenge is finished (deadline: ${tournament.endDate} ${tournament.endTime || '23:59'}).`
+      });
+    }
 
     if (!tournament.leaderboard || tournament.leaderboard.length === 0) {
       return res.status(400).json({ error: "No scores recorded on this arena leaderboard yet." });

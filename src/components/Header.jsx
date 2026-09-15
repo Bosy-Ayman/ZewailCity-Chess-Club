@@ -285,6 +285,10 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
             setUserName(data.name);
             safeSetLocalStorage("userName", data.name);
           }
+          if (data.role) {
+            setUserRole(data.role);
+            safeSetLocalStorage("userRole", data.role);
+          }
         }
       } catch (err) {
         // Ignore background sync errors
@@ -301,10 +305,13 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
       setUserAvatar(updatedAvatar);
       const updatedName = localStorage.getItem("userName");
       if (updatedName) setUserName(updatedName);
+      const updatedRole = localStorage.getItem("userRole");
+      if (updatedRole) setUserRole(updatedRole);
     };
 
     window.addEventListener("userAvatarUpdated", handleAvatarUpdate);
     window.addEventListener("userNameUpdated", handleAvatarUpdate);
+    window.addEventListener("userRoleUpdated", handleAvatarUpdate);
     window.addEventListener("storage", handleAvatarUpdate);
 
     const params = new URLSearchParams(window.location.search);
@@ -321,6 +328,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
       return () => {
         window.removeEventListener("userAvatarUpdated", handleAvatarUpdate);
         window.removeEventListener("userNameUpdated", handleAvatarUpdate);
+        window.removeEventListener("userRoleUpdated", handleAvatarUpdate);
         window.removeEventListener("storage", handleAvatarUpdate);
         clearInterval(pollInterval);
       };
@@ -329,6 +337,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
     return () => {
       window.removeEventListener("userAvatarUpdated", handleAvatarUpdate);
       window.removeEventListener("userNameUpdated", handleAvatarUpdate);
+      window.removeEventListener("userRoleUpdated", handleAvatarUpdate);
       window.removeEventListener("storage", handleAvatarUpdate);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -515,7 +524,11 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="user-menu-avatar-initials">{getInitials(userName || userEmail)}</span>
               )}
               <span className="user-menu-text">{userName || userEmail.split('@')[0]}</span>
-              {(userRole === 'admin' || userEmail?.toLowerCase() === 'admin@zcchessclub.com') ? (
+              {userRole === 'president' ? (
+                <span className="user-role-badge admin">👑 President</span>
+              ) : userRole === 'vice_president' ? (
+                <span className="user-role-badge" style={{ background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.4)" }}>⭐ Vice President</span>
+              ) : (userRole === 'admin' || userEmail?.toLowerCase() === 'admin@zcchessclub.com') ? (
                 <span className="user-role-badge admin">👑 Admin</span>
               ) : (
                 userRole && <span className="user-role-badge">{userRole}</span>
@@ -695,8 +708,8 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="drawer-link-icon">📬</span> Contact Us
               </Link>
 
-              {/* Management section for admins/hr/oc */}
-              {(userRole === 'admin' || userRole === 'hr' || userRole === 'oc') && (
+              {/* Management section for admins/presidents/vps/hr/oc */}
+              {(['admin', 'president', 'vice_president', 'hr', 'oc'].includes(userRole)) && (
                 <>
                   <div className="drawer-section-label" style={{ marginTop: "12px" }}>Management</div>
                   <Link to="/admin" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
@@ -705,7 +718,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 </>
               )}
 
-              {userRole === 'admin' && (
+              {['admin', 'president', 'vice_president'].includes(userRole) && (
                 <>
                   <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">➕</span> Add Tournament

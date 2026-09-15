@@ -55,7 +55,7 @@ This is the Zewail City Chess Club's all-in-one platform: members sign up, build
 - Archive/history of past events and tournaments
 
 ### 📝 Recruitment & Applications
-- Public application forms for joining club departments: **HR, Multimedia, Organizing Committee, Trainer, Trainee**
+- Public application forms for joining club departments: **HR, PR, Multimedia, Organizing Committee, Trainer, Trainee**
 - Admin applications table with accept/reject status management
 
 ### 🛠 Admin Dashboard

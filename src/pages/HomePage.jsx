@@ -134,7 +134,7 @@ const HomePage = () => {
       categoryLabel: "Join Us",
       title: "Club Applications Now Open",
       description:
-        "We are recruiting for the Organizing Committee, HR, Multimedia, and Training departments. Apply before spots fill up!",
+        "We are recruiting for the Organizing Committee, HR, PR, Multimedia, and Training departments. Apply before spots fill up!",
       date: "Aug 25, 2026",
       image: null,
       link: "/clubroles",
@@ -563,22 +563,60 @@ const HomePage = () => {
     const lichessRating = u.lichessRating || 0;
     const topRating = Math.max(fideRating, chessComRating, lichessRating);
 
-    const title = u.chessTitle || (u.role === "admin" ? "Chief Club Administrator" : (u.role === "hr" ? "HR & Operations Lead" : (u.role === "oc" ? "Organizing Committee" : "Club Tactician")));
-    const category = (u.role === "admin" || u.role === "hr" || u.role === "oc") ? "leaders" : (topRating >= 1800 ? "champions" : "competitors");
-    const badge = u.chessTitle 
+    const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer"].includes(u.role);
+    const category = isLeader ? "leaders" : (topRating >= 1800 ? "champions" : "competitors");
+
+    const title = u.role === "president"
+      ? "👑 Club President"
+      : u.role === "vice_president"
+      ? "⭐ Vice President"
+      : u.role === "admin"
+      ? "👑 High Board Executive"
+      : u.role === "hr"
+      ? "🤝 HR & Talent Lead"
+      : u.role === "pr"
+      ? "📢 PR & Outreach Lead"
+      : u.role === "oc"
+      ? "🏆 Organizing Committee Lead"
+      : u.role === "media"
+      ? "🎨 Multimedia & Design Lead"
+      : u.role === "trainer"
+      ? "♟️ Head Trainer"
+      : u.role === "trainee"
+      ? "🎯 Dedicated Trainee"
+      : u.role === "officer"
+      ? "⚡ Club Officer"
+      : (u.chessTitle || "Club Tactician");
+
+    const badge = u.role === "president"
+      ? "👑 President"
+      : u.role === "vice_president"
+      ? "⭐ Vice President"
+      : u.role === "admin" 
+      ? "👑 High Board" 
+      : u.role === "oc"
+      ? "🏆 OC Head"
+      : u.role === "hr" 
+      ? "🤝 HR Head" 
+      : u.role === "pr"
+      ? "📢 PR Head"
+      : u.role === "media"
+      ? "🎨 Media Head"
+      : u.role === "trainer"
+      ? "♟️ Head Trainer"
+      : u.role === "trainee"
+      ? "🎯 Trainee"
+      : u.role === "officer"
+      ? "⚡ Officer"
+      : u.chessTitle 
       ? `👑 ${u.chessTitle}` 
-      : (u.role === "admin" 
-          ? "👑 Club Leadership" 
-          : (u.role === "hr" 
-              ? "📋 Executive Board" 
-              : (u.role === "oc" 
-                  ? "⚡ Organizing Committee" 
-                  : (topRating > 0 ? `⚡ ${topRating} Elo` : "♟️ Verified Member"))));
+      : (topRating > 0 ? `⚡ ${topRating} Elo` : "♟️ Club Member");
 
     return {
       name: u.name || emailKey.split("@")[0],
       email: u.email,
       role: u.role || "member",
+      clubRoles: u.clubRoles || [],
       title,
       category,
       badge,
@@ -1468,14 +1506,18 @@ const HomePage = () => {
                         className="tactician-avatar-img"
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                       />
-                      <span className="tactician-rating-badge">{player.topRating > 0 ? player.topRating : (player.chessTitle || "ZC")}</span>
+                      {player.topRating > 0 && (
+                        <span className="tactician-rating-badge">{player.topRating}</span>
+                      )}
                     </div>
 
                     <div className="tactician-header-meta">
                       {isSelf ? (
                         <span className="tactician-badge-pill self-pill">✨ You</span>
                       ) : (
-                        <span className="tactician-badge-pill">{player.badge}</span>
+                        <span className={`tactician-badge-pill ${player.role === 'president' ? 'president' : player.role === 'vice_president' ? 'vice-president' : player.role === 'admin' ? 'admin' : ''}`}>
+                          {player.badge}
+                        </span>
                       )}
                       {player.email && (
                         <span 
@@ -1507,6 +1549,24 @@ const HomePage = () => {
                     </div>
                     <p className="tactician-title">{player.title}</p>
                     <span className="tactician-major-tag">{player.major}</span>
+
+                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && (
+                      <div className="tactician-club-roles-row">
+                        {player.clubRoles.map((cr, cIdx) => (
+                          <span key={cIdx} className="tactician-club-role-chip" title={`${cr.position} of ${cr.department}`}>
+                            {cr.position === "President" || cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Executive High Board", "High Board").replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {(player.fideRating > 0 || player.chessComRating > 0 || player.lichessRating > 0) && (
+                      <div className="tactician-ratings-row" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', margin: '4px 0 2px' }}>
+                        {player.fideRating > 0 && <span className="admin-rating-chip fide" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FIDE {player.fideRating}</span>}
+                        {player.chessComRating > 0 && <span className="admin-rating-chip chesscom" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>C.com {player.chessComRating}</span>}
+                        {player.lichessRating > 0 && <span className="admin-rating-chip lichess" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Lichess {player.lichessRating}</span>}
+                      </div>
+                    )}
 
                     <div className="tactician-opening-box">
                       <span className="opening-label">Fav. Opening:</span>

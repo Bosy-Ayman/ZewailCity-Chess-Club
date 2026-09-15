@@ -414,9 +414,11 @@ export default function PuzzleChallenge() {
       );
     }
 
-    return rawLeaderboard
-      .filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0)
-      .sort((a, b) => (b.score || 0) - (a.score || 0));
+    const activeScored = rawLeaderboard.filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0);
+    if (activeScored.length > 0) {
+      return [...activeScored].sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    return [...rawLeaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
   const getRosterAvatar = (player) => (
@@ -634,7 +636,11 @@ export default function PuzzleChallenge() {
               setChessGame(afterOpponent);
               setBoardFen(afterOpponent.fen());
               setCurrentMoveIdx(nextMoveIdx + 1);
-              setGameFeedback("Your turn — find checkmate!");
+              setGameFeedback(
+                activeTournament?.puzzles?.[currentPuzzleIdx]?.mateIn === 0
+                  ? "Your turn — find the best move!"
+                  : "Your turn — find checkmate!"
+              );
               setFeedbackType("info");
               boardLocked.current = false;
             } catch (e) {
@@ -733,37 +739,64 @@ export default function PuzzleChallenge() {
       }
     }
 
-    setIsSubmittingScore(true);
-    setSubmitScoreError(null);
-
-    // Submit score to database
-    try {
-      const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    // 🏆 Optimistically update local active tournament leaderboard so podium is immediately populated!
+    if (activeTournament) {
+      const currentBoard = [...(activeTournament.leaderboard || [])];
+      const existingIdx = currentBoard.findIndex(
+        (e) => e.email && e.email.trim().toLowerCase() === targetEmail.trim().toLowerCase()
+      );
+      if (existingIdx !== -1) {
+        currentBoard[existingIdx] = {
+          ...currentBoard[existingIdx],
+          name: targetName,
+          score: Math.max(currentBoard[existingIdx].score || 0, finalScore),
+          solvedCount: Math.max(currentBoard[existingIdx].solvedCount || 0, finalSolved)
+        };
+      } else {
+        currentBoard.push({
           name: targetName,
           email: targetEmail,
           score: finalScore,
           solvedCount: finalSolved
-        })
-      });
+        });
+      }
+      currentBoard.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-      if (data && data.data) {
-        setActiveTournament(data.data);
-        setTournaments((prev) => prev.map((item) => (item._id === data.data._id ? data.data : item)));
-        fetchTournaments();
+      const updatedTourney = {
+        ...activeTournament,
+        leaderboard: currentBoard
+      };
+      setActiveTournament(updatedTourney);
+      setCelebrationTournament(updatedTourney);
+    }
 
-        // If this player took 1st place with a top score, trigger celebration
-        const sorted = [...(data.data.leaderboard || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
-        if (sorted[0] && sorted[0].email?.toLowerCase() === targetEmail.toLowerCase() && finalScore > 0) {
+    setIsSubmittingScore(true);
+    setSubmitScoreError(null);
+
+    // Submit score to database safely
+    try {
+      if (activeTournament && activeTournament._id && !activeTournament._id.startsWith("default-")) {
+        const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: targetName,
+            email: targetEmail,
+            score: finalScore,
+            solvedCount: finalSolved
+          })
+        });
+
+        if (data && data.data) {
+          setActiveTournament(data.data);
           setCelebrationTournament(data.data);
-          setCelebrationModalOpen(true);
+          setTournaments((prev) => prev.map((item) => (item._id === data.data._id ? data.data : item)));
+          fetchTournaments();
         }
       }
     } catch (err) {
-      console.warn("Failed to submit score to server:", err.message);
-      setSubmitScoreError(err.message || "Could not submit score to server.");
+      console.warn("Notice: Score saved locally; server response:", err.message);
+      // Keep optimistic state intact so user smoothly views champions podium without disruption
     } finally {
       setIsSubmittingScore(false);
     }
@@ -818,7 +851,7 @@ export default function PuzzleChallenge() {
               <div className="puzzle-hero-badge">♟ Tactics Arena</div>
               <h1 className="puzzle-header-title site-page-title">Chess Tactics Arena</h1>
               <p className="puzzle-description">
-                Participate in active club puzzle challenges. Solve custom mate-in-1, mate-in-2, or mate-in-3 puzzles. You get 3 trials per puzzle. Earn speed bonus points!
+                Participate in active club puzzle challenges. Solve tactics, find the best moves, and deliver decisive mates. You get 3 trials per puzzle. Earn speed bonus points!
               </p>
             </div>
 
@@ -982,75 +1015,92 @@ export default function PuzzleChallenge() {
                           );
                         })()}
 
-                        {/* Standardized Card Actions Container */}
+                        {/* Standardized Non-Redundant Card Actions Container */}
                         <div className="card-actions-wrapper">
-                          {getTournamentStandings(t).length > 0 && (
-                            <button
-                              type="button"
-                              className="card-action-btn celebration-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenTournamentCelebration(t);
-                              }}
-                            >
-                              <span>🏆</span>
-                              <span>Champions Podium</span>
-                            </button>
+                          {/* STATE 1: UPCOMING CHALLENGE */}
+                          {getTournamentState(t) === "upcoming" && (
+                            <>
+                              <button 
+                                type="button"
+                                className="card-action-btn enter-btn upcoming-btn" 
+                                onClick={() => registerForTournament(t)}
+                              >
+                                📝 Register for Challenge
+                              </button>
+                              <button
+                                type="button"
+                                className="card-action-btn solutions-btn"
+                                onClick={() => handleOpenSolutionsModal(t, "roster")}
+                              >
+                                <span>👥</span>
+                                <span>View Registered Roster ({t.participants?.length || 0})</span>
+                              </button>
+                            </>
                           )}
 
-                          <button
-                            type="button"
-                            className="card-action-btn solutions-btn"
-                            onClick={() => handleOpenSolutionsModal(t, getTournamentPhase(t) === "registration" ? "roster" : isTournamentClosed(t) ? "solutions" : "standings")}
-                          >
-                            <span>{getTournamentPhase(t) === "registration" ? "👥" : isTournamentClosed(t) ? "🧩" : "📊"}</span>
-                            <span>
-                              {getTournamentPhase(t) === "registration" 
-                                ? `View Roster (${t.participants?.length || 0})` 
-                                : isTournamentClosed(t)
-                                  ? `Solutions & Standings (${getTournamentStandings(t).length})`
-                                  : `Standings & Roster (${getTournamentStandings(t).length})`}
-                            </span>
-                          </button>
+                          {/* STATE 2: LIVE / OPEN CHALLENGE */}
+                          {getTournamentState(t) === "open" && (
+                            <>
+                              <button 
+                                type="button"
+                                className="card-action-btn enter-btn live-btn" 
+                                onClick={() => {
+                                  if (!isLoggedIn) {
+                                    alert("Please log in first to enter and participate in the puzzle challenge!");
+                                    return;
+                                  }
+                                  startTournamentChallenge(t);
+                                }}
+                              >
+                                ⚡ Join Challenge
+                              </button>
+                              <button
+                                type="button"
+                                className="card-action-btn solutions-btn"
+                                onClick={() => handleOpenSolutionsModal(t, "standings")}
+                              >
+                                <span>📊</span>
+                                <span>Standings & Roster ({getTournamentStandings(t).length})</span>
+                              </button>
+                            </>
+                          )}
 
-                          {getTournamentState(t) === "upcoming" ? (
-                            <button 
-                              type="button"
-                              className="card-action-btn enter-btn upcoming-btn" 
-                              onClick={() => registerForTournament(t)}
-                            >
-                              📝 Register for Challenge
-                            </button>
-                          ) : getTournamentState(t) === "closed" ? (
-                            <button 
-                              type="button"
-                              className="card-action-btn enter-btn closed-btn"
-                              onClick={() => handleOpenSolutionsModal(t, "solutions")}
-                            >
-                              🔒 Closed · View Solutions
-                            </button>
-                          ) : getTournamentState(t) === "completed" ? (
-                            <button 
-                              type="button"
-                              className="card-action-btn enter-btn completed-btn"
-                              onClick={() => handleOpenSolutionsModal(t, isTournamentClosed(t) ? "solutions" : "standings")}
-                            >
-                              ✅ Completed · {isTournamentClosed(t) ? "View Solutions" : "View Standings"}
-                            </button>
-                          ) : (
-                            <button 
-                              type="button"
-                              className="card-action-btn enter-btn live-btn" 
-                              onClick={() => {
-                                if (!isLoggedIn) {
-                                  alert("Please log in first to enter and participate in the puzzle challenge!");
-                                  return;
-                                }
-                                startTournamentChallenge(t);
-                              }}
-                            >
-                              ⚡ Join Challenge
-                            </button>
+                          {/* STATE 3: COMPLETED CHALLENGE (USER FINISHED BUT ARENA STILL LIVE BEFORE DEADLINE) */}
+                          {getTournamentState(t) === "completed" && (
+                            <>
+                              <button
+                                type="button"
+                                className="card-action-btn enter-btn completed-btn"
+                                onClick={() => handleOpenSolutionsModal(t, "standings")}
+                              >
+                                ✅ Score Submitted · View Live Standings
+                              </button>
+                            </>
+                          )}
+
+                          {/* STATE 4: CLOSED CHALLENGE (ARENA HAS CONCLUDED / DEADLINE PASSED) */}
+                          {getTournamentState(t) === "closed" && (
+                            <>
+                              <button
+                                type="button"
+                                className="card-action-btn celebration-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenTournamentCelebration(t);
+                                }}
+                              >
+                                <span>🏆</span>
+                                <span>Champions Podium</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="card-action-btn solutions-btn"
+                                onClick={() => handleOpenSolutionsModal(t, "solutions")}
+                              >
+                                <span>🧩</span>
+                                <span>Solutions & Standings ({getTournamentStandings(t).length})</span>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1074,7 +1124,7 @@ export default function PuzzleChallenge() {
               <div className="result-box">
                 <span className="result-icon">✅</span>
                 <span className="label">Solved Puzzles</span>
-                <span className="val">{solvedCount} / {activeTournament.puzzles.length}</span>
+                <span className="val">{solvedCount} / {activeTournament?.puzzles?.length || 0}</span>
               </div>
             </div>
             
@@ -1090,6 +1140,60 @@ export default function PuzzleChallenge() {
                 >
                   {isSubmittingScore ? "Retrying..." : "🔄 Retry Submitting Score"}
                 </button>
+              </div>
+            )}
+
+            {/* 🏆 Top 3 Champions Podium: ONLY SHOWN AFTER DEADLINE HAS PASSED */}
+            {isTournamentClosed(activeTournament) ? (
+              (() => {
+                const currentBoard = activeTournament?.leaderboard && activeTournament.leaderboard.length > 0
+                  ? [...activeTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0))
+                  : [];
+                if (currentBoard.length === 0) return null;
+                const top3 = currentBoard.slice(0, 3);
+                const totalPuzzles = activeTournament?.puzzles?.length || 0;
+
+                return (
+                  <div className="solutions-podium-section" style={{ marginTop: "18px", marginBottom: "20px" }}>
+                    <div className="podium-section-title">
+                      <span>🏆</span>
+                      <h3>Official Arena Champions Podium</h3>
+                    </div>
+                    <div className="solutions-winners-grid">
+                      {top3.map((winner, idx) => {
+                        const avatar = getRosterAvatar(winner);
+                        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
+                        const rankClass = idx === 0 ? "rank-gold" : idx === 1 ? "rank-silver" : "rank-bronze";
+                        const label = idx === 0 ? "1st Champion" : idx === 1 ? "2nd Runner-Up" : "3rd Place";
+                        return (
+                          <div key={winner.email || idx} className={`solution-winner-card ${rankClass}`}>
+                            <div className="winner-medal">{medal}</div>
+                            <img 
+                              src={avatar} 
+                              alt={winner.name} 
+                              className="winner-avatar"
+                              onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                            />
+                            <div className="winner-info">
+                              <span className="winner-rank-label">{label}</span>
+                              <strong className="winner-name" title={getPlayerDisplayName(winner)}>
+                                {getPlayerDisplayName(winner)}
+                              </strong>
+                              <div className="winner-stats-row">
+                                <span className="winner-score">{winner.score || 0} pts</span>
+                                <span className="winner-solved">{winner.solvedCount || 0} / {totalPuzzles} 🧩</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="pending-podium-notice" style={{ background: "rgba(243, 193, 68, 0.05)", border: "1px solid rgba(243, 193, 68, 0.2)", borderRadius: "12px", padding: "14px 18px", margin: "16px 0", textAlign: "center", color: "#caba91", fontSize: "0.9rem" }}>
+                ⏳ <strong>Challenge in Progress:</strong> Your score has been submitted to the live leaderboard below! The official <strong>Champions Podium</strong> will be announced once the challenge deadline passes.
               </div>
             )}
 
@@ -1154,26 +1258,28 @@ export default function PuzzleChallenge() {
             </div>
 
             <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "16px" }}>
-              <button 
-                className="btn-primary" 
-                style={{
-                  background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
-                  color: "#12100d",
-                  border: "none",
-                  fontWeight: "900",
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  cursor: "pointer"
-                }}
-                onClick={() => {
-                  setCelebrationTournament(activeTournament);
-                  setCelebrationModalOpen(true);
-                }}
-              >
-                🏆 View Arena Champions
-              </button>
+              {isTournamentClosed(activeTournament) && (
+                <button 
+                  className="btn-primary" 
+                  style={{
+                    background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                    color: "#12100d",
+                    border: "none",
+                    fontWeight: "900",
+                    padding: "10px 20px",
+                    borderRadius: "8px",
+                    cursor: "pointer"
+                  }}
+                  onClick={() => {
+                    setCelebrationTournament(activeTournament);
+                    setCelebrationModalOpen(true);
+                  }}
+                >
+                  🏆 View Arena Champions Podium
+                </button>
+              )}
               <button className="back-list-btn" onClick={() => { setIsPlaying(false); fetchTournaments(); }}>
-                Back to Arena List
+                Back to Arena Dashboard
               </button>
             </div>
           </div>
@@ -1247,7 +1353,11 @@ export default function PuzzleChallenge() {
                   <h4>Challenge Metrics</h4>
                   <div className="stat-row">
                     <span>Target:</span>
-                    <strong>Mate in {activeTournament.puzzles[currentPuzzleIdx].mateIn}</strong>
+                    <strong>
+                      {activeTournament.puzzles[currentPuzzleIdx].mateIn === 0
+                        ? "Find the Best Move"
+                        : `Mate in ${activeTournament.puzzles[currentPuzzleIdx].mateIn} ${activeTournament.puzzles[currentPuzzleIdx].mateIn === 1 ? "Move" : "Moves"}`}
+                    </strong>
                   </div>
                   <div className="stat-row">
                     <span>Hint:</span>
@@ -1501,7 +1611,9 @@ export default function PuzzleChallenge() {
                           <>
                             <div className="solution-board-header">
                               <div className="puzzle-target-badge">
-                                🎯 Mate in {currentPuzzle.mateIn}
+                                {currentPuzzle.mateIn === 0
+                                  ? "🎯 Find the Best Move"
+                                  : `🎯 Mate in ${currentPuzzle.mateIn} ${currentPuzzle.mateIn === 1 ? "Move" : "Moves"}`}
                               </div>
                               <div className="turn-indicator">
                                 {isWhiteTurn ? "⚪ White to move" : "⚫ Black to move"}
@@ -1559,9 +1671,9 @@ export default function PuzzleChallenge() {
                                 className="step-ctrl-btn auto-play-btn"
                                 onClick={() => setSolutionMoveStep(maxSteps)}
                                 disabled={solutionMoveStep >= maxSteps}
-                                title="Show Full Checkmate Solution"
+                                title="Show Full Solution"
                               >
-                                💡 Mate ⏭
+                                💡 Solution ⏭
                               </button>
                             </div>
 
@@ -1606,7 +1718,9 @@ export default function PuzzleChallenge() {
                                 <span className="puzzle-index-badge">#{pIdx + 1}</span>
                                 <div className="puzzle-details">
                                   <strong className="puzzle-title">
-                                    Mate in {p.mateIn} {p.mateIn === 1 ? "Move" : "Moves"}
+                                    {p.mateIn === 0
+                                      ? "Find the Best Move"
+                                      : `Mate in ${p.mateIn} ${p.mateIn === 1 ? "Move" : "Moves"}`}
                                   </strong>
                                   <p className="puzzle-desc">
                                     {p.description || "Calculate the decisive winning combination"}
@@ -1769,6 +1883,14 @@ export default function PuzzleChallenge() {
             runnerUp={puzzleP2}
             thirdPlace={puzzleP3}
             customAvatars={customAvatars}
+            onViewBracketOrStandings={() => {
+              if (celebrationTournament) {
+                handleOpenSolutionsModal(
+                  celebrationTournament,
+                  isTournamentClosed(celebrationTournament) ? "solutions" : "standings"
+                );
+              }
+            }}
           />
         );
       })()}

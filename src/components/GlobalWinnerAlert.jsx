@@ -5,9 +5,14 @@ import "./GlobalWinnerAlert.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
+const getAlertKey = (n) => {
+  if (!n) return "";
+  return String(n._id || n.id || `${n.message}_${n.createdAt || ""}`);
+};
+
 /**
  * Floating Global Winner Alert Toast / Banner
- * Appears when any new winner announcement arrives or is broadcasted.
+ * Appears only ONCE per new winner announcement across app sessions.
  */
 export default function GlobalWinnerAlert({ notifications = [], customAvatars = {} }) {
   const [activeAlert, setActiveAlert] = useState(null);
@@ -20,18 +25,30 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
   });
   const [dismissedIds, setDismissedIds] = useState(() => {
     try {
-      return JSON.parse(sessionStorage.getItem("dismissed_winner_alerts") || "[]");
+      const seen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
+      const dismissed = JSON.parse(localStorage.getItem("dismissed_winner_alerts") || "[]");
+      return Array.from(new Set([...seen, ...dismissed]));
     } catch (e) {
       return [];
     }
   });
 
-  // Find most recent un-dismissed winner notification (within last 3 days)
+  // Find most recent un-seen / un-dismissed winner notification (within last 3 days)
   useEffect(() => {
     if (!Array.isArray(notifications) || notifications.length === 0) return;
 
+    let storedIds = new Set(dismissedIds);
+    try {
+      const seen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
+      const dismissed = JSON.parse(localStorage.getItem("dismissed_winner_alerts") || "[]");
+      seen.forEach(id => storedIds.add(id));
+      dismissed.forEach(id => storedIds.add(id));
+    } catch (e) {}
+
     const winnerNotif = notifications.find((n) => {
-      if (!n || dismissedIds.includes(n._id)) return false;
+      if (!n) return false;
+      const key = getAlertKey(n);
+      if (!key || storedIds.has(key)) return false;
       const isWinnerType = n.type === "winner" || (n.message && (n.message.includes("CHAMPION") || n.message.includes("won the") || n.message.includes("🏆")));
       if (!isWinnerType) return false;
 
@@ -45,6 +62,17 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
 
     if (winnerNotif) {
       setActiveAlert(winnerNotif);
+      // Mark as seen immediately in localStorage so it won't show again on subsequent app opens/reloads
+      const key = getAlertKey(winnerNotif);
+      if (key) {
+        try {
+          const currentSeen = JSON.parse(localStorage.getItem("seen_winner_alerts") || "[]");
+          if (!currentSeen.includes(key)) {
+            currentSeen.push(key);
+            localStorage.setItem("seen_winner_alerts", JSON.stringify(currentSeen));
+          }
+        } catch (e) {}
+      }
     } else {
       setActiveAlert(null);
     }
@@ -102,10 +130,12 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
   const handleDismiss = (e) => {
     if (e) e.stopPropagation();
     if (!activeAlert) return;
-    const newDismissed = [...dismissedIds, activeAlert._id];
+    const key = getAlertKey(activeAlert);
+    const newDismissed = Array.from(new Set([...dismissedIds, key]));
     setDismissedIds(newDismissed);
     try {
-      sessionStorage.setItem("dismissed_winner_alerts", JSON.stringify(newDismissed));
+      localStorage.setItem("dismissed_winner_alerts", JSON.stringify(newDismissed));
+      localStorage.setItem("seen_winner_alerts", JSON.stringify(newDismissed));
     } catch (err) {}
     setActiveAlert(null);
   };
@@ -188,7 +218,10 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
       {modalOpen && (
         <WinnerCelebrationModal
           isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
+          onClose={() => {
+            setModalOpen(false);
+            handleDismiss();
+          }}
           tournamentTitle={tournamentTitle}
           tournamentType={tournamentType}
           winner={podiumDetails.winner || { name: winnerName, points: "Champion", avatar: avatarUrl }}

@@ -3277,6 +3277,46 @@
   max-width: 100%;
 }
 
+.tactician-badge-pill.president {
+  background: linear-gradient(135deg, rgba(243, 193, 68, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.7);
+  color: #fbbf24;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.tactician-badge-pill.vice-president {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.6);
+  color: #c084fc;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}
+
+.tactician-badge-pill.admin {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  font-weight: 800;
+}
+
+.tactician-club-roles-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 10px;
+}
+
+.tactician-club-role-chip {
+  font-size: 0.7rem;
+  background: rgba(243, 193, 68, 0.12);
+  color: #f3c144;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(243, 193, 68, 0.25);
+  font-weight: 600;
+}
+
 .tactician-email-chip {
   display: inline-flex;
   align-items: center;

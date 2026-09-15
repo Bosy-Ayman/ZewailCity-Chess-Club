@@ -45,6 +45,27 @@ import "./Profile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
+export const deriveAuthorityRoleFromClubRoles = (clubRoles, fallbackRole = 'member') => {
+  if (Array.isArray(clubRoles) && clubRoles.length > 0) {
+    if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'President')) return 'president';
+    if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'Vice President')) return 'vice_president';
+    if (clubRoles.some(r => r.department === 'Tournament Organizing Committee' && r.position === 'Head')) return 'oc';
+    if (clubRoles.some(r => r.department === 'Human Resources' && r.position === 'Head')) return 'hr';
+    if (clubRoles.some(r => r.department === 'Public Relations' && r.position === 'Head')) return 'pr';
+    if (clubRoles.some(r => r.department === 'Multimedia & Design' && r.position === 'Head')) return 'media';
+    if (clubRoles.some(r => r.department === 'Training & Masterclasses' && r.position === 'Head')) return 'trainer';
+    if (clubRoles.some(r => r.department === 'Executive High Board')) return 'president';
+    if (clubRoles.some(r => r.department === 'Tournament Organizing Committee')) return 'oc';
+    if (clubRoles.some(r => r.department === 'Human Resources')) return 'hr';
+    if (clubRoles.some(r => r.department === 'Public Relations')) return 'pr';
+    if (clubRoles.some(r => r.department === 'Multimedia & Design')) return 'media';
+    if (clubRoles.some(r => r.department === 'Training & Masterclasses')) return 'trainer';
+    if (clubRoles.some(r => r.department === 'Trainee Development Pathway')) return 'trainee';
+  }
+  if (fallbackRole === 'admin') return 'president';
+  return fallbackRole || 'member';
+};
+
 export default function Profile() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -106,6 +127,55 @@ export default function Profile() {
   const [cheered, setCheered] = useState(false);
   const [cheerCount, setCheerCount] = useState(0);
 
+const DEPARTMENT_POSITIONS = {
+  "Executive High Board": [
+    { value: "President", label: "👑 President (Club Leader)" },
+    { value: "Vice President", label: "⭐ Vice President (Deputy Club Leader)" }
+  ],
+  "Human Resources": [
+    { value: "Head", label: "👑 Head of HR (Department Leader)" },
+    { value: "Member", label: "✨ HR Member (Committee Member)" }
+  ],
+  "Public Relations": [
+    { value: "Head", label: "👑 Head of PR (Department Leader)" },
+    { value: "Member", label: "✨ PR Member (Committee Member)" }
+  ],
+  "Tournament Organizing Committee": [
+    { value: "Head", label: "👑 Head of OC (Department Leader)" },
+    { value: "Member", label: "✨ OC Member (Committee Member)" }
+  ],
+  "Multimedia & Design": [
+    { value: "Head", label: "👑 Head of Multimedia (Department Leader)" },
+    { value: "Member", label: "✨ Multimedia Member (Committee Member)" }
+  ],
+  "Training & Masterclasses": [
+    { value: "Head", label: "👑 Head of Training (Department Leader)" },
+    { value: "Member", label: "✨ Trainer Member (Committee Member)" }
+  ],
+  "Trainee Development Pathway": [
+    { value: "Trainee", label: "♟️ Dedicated Trainee" }
+  ]
+};
+
+const deriveAuthorityRoleFromClubRoles = (roles) => {
+  if (!Array.isArray(roles) || roles.length === 0) return "member";
+  if (roles.some(r => r.department === "Executive High Board" && r.position === "President")) return "president";
+  if (roles.some(r => r.department === "Executive High Board" && r.position === "Vice President")) return "vice_president";
+  if (roles.some(r => r.department === "Human Resources" && r.position === "Head")) return "hr";
+  if (roles.some(r => r.department === "Public Relations" && r.position === "Head")) return "pr";
+  if (roles.some(r => r.department === "Tournament Organizing Committee" && r.position === "Head")) return "oc";
+  if (roles.some(r => r.department === "Multimedia & Design" && r.position === "Head")) return "media";
+  if (roles.some(r => r.department === "Training & Masterclasses" && r.position === "Head")) return "trainer";
+  if (roles.some(r => r.department === "Executive High Board")) return "president";
+  if (roles.some(r => r.department === "Human Resources")) return "hr";
+  if (roles.some(r => r.department === "Public Relations")) return "pr";
+  if (roles.some(r => r.department === "Tournament Organizing Committee")) return "oc";
+  if (roles.some(r => r.department === "Multimedia & Design")) return "media";
+  if (roles.some(r => r.department === "Training & Masterclasses")) return "trainer";
+  if (roles.some(r => r.department === "Trainee Development Pathway")) return "trainee";
+  return "member";
+};
+
   // Admin Management State
   const [adminRoleForm, setAdminRoleForm] = useState({
     name: "",
@@ -125,8 +195,8 @@ export default function Profile() {
     role: "member",
     clubRoles: []
   });
-  const [newRoleDept, setNewRoleDept] = useState("Human Resources");
-  const [newRolePos, setNewRolePos] = useState("Head");
+  const [newRoleDept, setNewRoleDept] = useState("Executive High Board");
+  const [newRolePos, setNewRolePos] = useState("President");
   const [adminSaveSuccess, setAdminSaveSuccess] = useState("");
   const [adminSaveError, setAdminSaveError] = useState("");
 
@@ -227,7 +297,14 @@ export default function Profile() {
         : `${API_BASE}/api/profile?name=${encodeURIComponent(queryName)}&viewerEmail=${encodeURIComponent(loggedInEmail)}`;
 
       const profData = await safeFetchJson(fetchUrl);
-      setProfile(profData);
+      if (!profData) return;
+
+      const effectiveLoadedRole = deriveAuthorityRoleFromClubRoles(profData.clubRoles, profData.role);
+
+      setProfile({
+        ...profData,
+        role: effectiveLoadedRole
+      });
       setAvailability(profData.availability || []);
       setCheerCount(profData.cheers || 0);
       setIsFollowing(!!profData.isFollowing);
@@ -251,11 +328,13 @@ export default function Profile() {
         favOpening: profData.favOpening || "",
         chessTitle: profData.chessTitle || "",
         bio: profData.bio || "",
-        role: profData.role || "member",
+        role: effectiveLoadedRole,
         clubRoles: Array.isArray(profData.clubRoles) ? profData.clubRoles : []
       });
 
       if (isOwnProfile && profData) {
+        safeSetLocalStorage("userRole", effectiveLoadedRole);
+        window.dispatchEvent(new Event("userRoleUpdated"));
         setSettingsForm({
           name: profData.name || "",
           phone: profData.phone || "",
@@ -357,23 +436,31 @@ export default function Profile() {
 
     try {
       const compressedBase64 = await compressImage(file, 250, 250, 0.75);
+      const targetUserEmail = profile?.email || queryEmail || loggedInEmail;
 
-      // Instant 0ms visual update in local state & cache
+      // Instant 0ms visual update in local state
       setProfile(prev => ({ ...prev, profileImage: compressedBase64 }));
-      safeSetLocalStorage("userAvatar", compressedBase64);
-      window.dispatchEvent(new Event("userAvatarUpdated"));
+      setAdminRoleForm(prev => ({ ...prev, profileImage: compressedBase64 }));
+
+      if (isOwnProfile) {
+        safeSetLocalStorage("userAvatar", compressedBase64);
+        window.dispatchEvent(new Event("userAvatarUpdated"));
+      }
 
       // Background DB sync
       try {
         const data = await safeFetchJson(`${API_BASE}/api/profile/image`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: profile?.email || loggedInEmail, profileImage: compressedBase64 })
+          body: JSON.stringify({ email: targetUserEmail, profileImage: compressedBase64 })
         });
         if (data?.profileImage) {
           setProfile(prev => ({ ...prev, profileImage: data.profileImage }));
-          safeSetLocalStorage("userAvatar", data.profileImage);
-          window.dispatchEvent(new Event("userAvatarUpdated"));
+          setAdminRoleForm(prev => ({ ...prev, profileImage: data.profileImage }));
+          if (isOwnProfile) {
+            safeSetLocalStorage("userAvatar", data.profileImage);
+            window.dispatchEvent(new Event("userAvatarUpdated"));
+          }
         }
       } catch (saveErr) {
         console.warn("Background profile image save warning:", saveErr.message);
@@ -593,6 +680,14 @@ export default function Profile() {
     }
   };
 
+  const handleDeptChange = (dept) => {
+    setNewRoleDept(dept);
+    const available = DEPARTMENT_POSITIONS[dept] || [];
+    if (available.length > 0) {
+      setNewRolePos(available[0].value);
+    }
+  };
+
   const handleAddClubRole = () => {
     if (!newRoleDept || !newRolePos) return;
     setAdminRoleForm(prev => {
@@ -600,18 +695,27 @@ export default function Profile() {
       if (existing.some(r => r.department === newRoleDept && r.position === newRolePos)) {
         return prev;
       }
+      const updatedRoles = [...existing, { department: newRoleDept, position: newRolePos, assignedAt: new Date().toISOString() }];
+      const newAuthorityRole = deriveAuthorityRoleFromClubRoles(updatedRoles);
+
       return {
         ...prev,
-        clubRoles: [...existing, { department: newRoleDept, position: newRolePos, assignedAt: new Date().toISOString() }]
+        role: newAuthorityRole,
+        clubRoles: updatedRoles
       };
     });
   };
 
   const handleRemoveClubRole = (indexToRemove) => {
-    setAdminRoleForm(prev => ({
-      ...prev,
-      clubRoles: (prev.clubRoles || []).filter((_, idx) => idx !== indexToRemove)
-    }));
+    setAdminRoleForm(prev => {
+      const updatedRoles = (prev.clubRoles || []).filter((_, idx) => idx !== indexToRemove);
+      const newAuthorityRole = deriveAuthorityRoleFromClubRoles(updatedRoles);
+      return {
+        ...prev,
+        role: newAuthorityRole,
+        clubRoles: updatedRoles
+      };
+    });
   };
 
   const handleAdminSaveUser = async (e) => {
@@ -640,11 +744,27 @@ export default function Profile() {
           ...adminRoleForm
         })
       });
-      setAdminSaveSuccess(res.message);
+
+      const effectiveSavedRole = (adminRoleForm.clubRoles && adminRoleForm.clubRoles.length > 0)
+        ? deriveAuthorityRoleFromClubRoles(adminRoleForm.clubRoles)
+        : (adminRoleForm.role === 'admin' ? 'president' : (adminRoleForm.role || 'member'));
+
+      setAdminSaveSuccess(res.message || "Player dossier and privileges updated successfully!");
       setProfile(prev => ({
         ...prev,
-        ...adminRoleForm
+        ...adminRoleForm,
+        role: effectiveSavedRole
       }));
+      setAdminRoleForm(prev => ({
+        ...prev,
+        role: effectiveSavedRole
+      }));
+
+      // If editing current user, sync localStorage and broadcast update
+      if (isOwnProfile || (effectiveTargetEmail && loggedInEmail && effectiveTargetEmail.toLowerCase() === loggedInEmail.toLowerCase())) {
+        safeSetLocalStorage("userRole", effectiveSavedRole);
+        window.dispatchEvent(new Event("userRoleUpdated"));
+      }
     } catch (err) {
       setAdminSaveError(err.message);
     }
@@ -790,26 +910,31 @@ export default function Profile() {
               {/* Avatar Area */}
               <div className="hero-avatar-area">
                 <div className="avatar-ring-container">
-                  {isOwnProfile ? (
-                    <label htmlFor="profileImageUpload" className="profile-image-upload-label" title="Click to upload profile photo">
+                  {(isOwnProfile || isAdmin) ? (
+                    <label 
+                      htmlFor="profileImageUpload" 
+                      className="profile-image-upload-label" 
+                      title={isAdmin && !isOwnProfile ? `Change ${profile.name || 'Member'}'s Profile Picture (Admin Mode)` : "Click to upload profile photo"}
+                      style={{ cursor: "pointer" }}
+                    >
                       <div 
                         className="profile-user-img" 
-                        style={{ backgroundImage: `url("${profile.profileImage || '/Icons/user.jpg'}")` }}
+                        style={{ backgroundImage: `url("${profile.profileImage || '/Icons/unknown.png'}")` }}
                       >
                         <div className="profile-img-overlay">
                           <Camera size={26} />
-                          <span>Change Photo</span>
+                          <span>{isAdmin && !isOwnProfile ? "Change Member Photo" : "Change Photo"}</span>
                         </div>
                       </div>
                     </label>
                   ) : (
                     <div 
                       className="profile-user-img" 
-                      style={{ backgroundImage: `url("${profile.profileImage || '/Icons/user.jpg'}")` }}
+                      style={{ backgroundImage: `url("${profile.profileImage || '/Icons/unknown.png'}")` }}
                     />
                   )}
                   <div className="avatar-status-dot" title="Active ZC Member" />
-                  {isOwnProfile && (
+                  {(isOwnProfile || isAdmin) && (
                     <input 
                       type="file" 
                       id="profileImageUpload" 
@@ -835,7 +960,7 @@ export default function Profile() {
                   {profile.clubRoles && profile.clubRoles.length > 0 && (
                     profile.clubRoles.map((cr, idx) => (
                       <span key={idx} className="badge-club-department-role" title={`${cr.position} of ${cr.department}`}>
-                        👑 {cr.position} of {cr.department}
+                        {cr.position === 'President' ? '👑' : cr.position === 'Vice President' ? '⭐' : cr.position === 'Head' ? '👑' : '✨'} {cr.position} of {cr.department}
                       </span>
                     ))
                   )}
@@ -846,12 +971,17 @@ export default function Profile() {
                     </span>
                   )}
 
-                  <span className={`hero-role-badge ${profile.role === 'admin' ? 'admin' : ''}`}>
-                    {profile.role === 'admin' ? (
-                      <>👑 Officer / Admin</>
-                    ) : (
-                      <>⚡ Club Member</>
-                    )}
+                  <span className={`hero-role-badge ${profile.role || 'member'}`}>
+                    {profile.role === 'president' && <>👑 Club President</>}
+                    {profile.role === 'vice_president' && <>⭐ Vice President</>}
+                    {profile.role === 'oc' && <>⚡ Head of OC</>}
+                    {profile.role === 'hr' && <>👥 Head of HR</>}
+                    {profile.role === 'pr' && <>📢 Head of PR</>}
+                    {profile.role === 'media' && <>🎨 Head of Multimedia</>}
+                    {profile.role === 'trainer' && <>🎓 Head of Training</>}
+                    {profile.role === 'trainee' && <>♟️ Dedicated Trainee</>}
+                    {profile.role === 'admin' && <>👑 High Board Executive</>}
+                    {(!profile.role || profile.role === 'member') && <>♟️ Club Tactician</>}
                   </span>
 
                   {tournamentAchievements.isChampion && (
@@ -2398,6 +2528,74 @@ export default function Profile() {
 
               {/* Privilege & Dossier Editor Form */}
               <form onSubmit={handleAdminSaveUser} className="admin-control-form">
+                {/* Section 0: Member Profile Picture */}
+                <div className="admin-section-header">
+                  <Camera size={18} className="section-icon gold" />
+                  <h4>Member Profile Picture & Avatar</h4>
+                </div>
+
+                <div className="admin-photo-mgmt-card" style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '16px', background: 'rgba(243, 193, 68, 0.05)', border: '1px solid rgba(243, 193, 68, 0.2)', borderRadius: '12px', marginBottom: '20px' }}>
+                  <div 
+                    style={{ 
+                      width: '72px', 
+                      height: '72px', 
+                      borderRadius: '50%', 
+                      backgroundImage: `url("${profile.profileImage || adminRoleForm.profileImage || '/Icons/unknown.png'}")`, 
+                      backgroundSize: 'cover', 
+                      backgroundPosition: 'center', 
+                      border: '2px solid #f3c144',
+                      flexShrink: 0
+                    }} 
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '700', color: '#f8fafc', marginBottom: '4px' }}>
+                      {profile.profileImage ? "Custom Profile Photo Active" : "Default Avatar (No Custom Image)"}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '10px' }}>
+                      Admins have executive authority to upload, replace, or reset this player's profile image.
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <label 
+                        className="btn-modal-action primary" 
+                        style={{ padding: '6px 14px', fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Camera size={15} />
+                        <span>Upload / Replace Photo</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          style={{ display: 'none' }} 
+                          onChange={handleImageUpload} 
+                        />
+                      </label>
+                      {profile.profileImage && (
+                        <button
+                          type="button"
+                          className="btn-modal-action secondary"
+                          style={{ padding: '6px 14px', fontSize: '0.85rem', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                          onClick={async () => {
+                            if (window.confirm("Remove this player's custom profile picture?")) {
+                              try {
+                                setProfile(prev => ({ ...prev, profileImage: "" }));
+                                setAdminRoleForm(prev => ({ ...prev, profileImage: "" }));
+                                await safeFetchJson(`${API_BASE}/api/profile/image`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ email: profile.email, profileImage: "" })
+                                });
+                              } catch (e) {
+                                alert("Failed to remove photo: " + e.message);
+                              }
+                            }
+                          }}
+                        >
+                          Remove Photo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Section 1: Academic & Personal Dossier */}
                 <div className="admin-section-header">
                   <User size={18} className="section-icon gold" />
@@ -2591,45 +2789,44 @@ export default function Profile() {
                   </div>
                 </div>
 
-                {/* Section 4: Club Authority & Department Roles */}
+                {/* Section 4: Unified Club Leadership & Department Roles */}
                 <div className="admin-section-header" style={{ marginTop: '24px' }}>
                   <Shield size={18} className="section-icon red" />
-                  <h4>Executive Privileges & Department Assignments</h4>
+                  <h4>Club Leadership & Department Roles</h4>
                 </div>
 
                 <div className="admin-form-grid">
-                  <div className="form-group full-width">
-                    <label>Club Authority Role</label>
-                    <select 
-                      value={adminRoleForm.role}
-                      onChange={(e) => setAdminRoleForm(prev => ({ ...prev, role: e.target.value }))}
-                      className="admin-select"
-                    >
-                      <option value="member">Club Member (Standard Tactician)</option>
-                      <option value="officer">Club Officer (Event Coordinator)</option>
-                      <option value="admin">Administrator / Executive Officer</option>
-                    </select>
-                    <span className="form-hint">Grants permissions to manage tournaments and view club dossiers.</span>
-                  </div>
-
-                  {/* Direct Club Department Role Assignment */}
                   <div className="form-group full-width admin-club-roles-section">
-                    <label>Club Department Roles (Executive & Member Positions)</label>
-                    <span className="form-hint">Directly set or change this person's role (Head or Member) for any club department.</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                      <label style={{ margin: 0, fontWeight: 700, color: "#fff" }}>Official Assigned Positions</label>
+                      <span className={`hero-role-badge ${adminRoleForm.role || 'member'}`} style={{ fontSize: "0.74rem", padding: "3px 12px" }}>
+                        {adminRoleForm.role === 'president' ? '👑 President Level' :
+                         adminRoleForm.role === 'vice_president' ? '⭐ Vice President Level' :
+                         adminRoleForm.role === 'oc' ? '⚡ Head of OC / OC Level' :
+                         adminRoleForm.role === 'hr' ? '👥 Head of HR / HR Level' :
+                         adminRoleForm.role === 'pr' ? '📢 Head of PR / PR Level' :
+                         adminRoleForm.role === 'media' ? '🎨 Head of Multimedia Level' :
+                         adminRoleForm.role === 'trainer' ? '🎓 Head of Training Level' :
+                         adminRoleForm.role === 'trainee' ? '♟️ Dedicated Trainee Level' :
+                         adminRoleForm.role === 'admin' ? '👑 High Board Executive Level' :
+                         '♟️ Standard Member Level'}
+                      </span>
+                    </div>
+                    <span className="form-hint">Assign specific leadership or committee positions. System authority & administrative privileges automatically synchronize with the assigned positions.</span>
                     
                     {/* Active Club Roles List */}
                     <div className="admin-roles-list">
                       {(adminRoleForm.clubRoles || []).length === 0 ? (
-                        <div className="admin-no-roles">No club department roles assigned yet.</div>
+                        <div className="admin-no-roles">No department positions assigned (Standard Member).</div>
                       ) : (
                         (adminRoleForm.clubRoles || []).map((r, idx) => (
                           <div key={idx} className="admin-role-tag">
-                            <span className="role-tag-text">👑 <strong>{r.position}</strong> of {r.department}</span>
+                            <span className="role-tag-text">{r.position === 'President' || r.position === 'Head' ? '👑' : r.position === 'Vice President' ? '⭐' : '✨'} <strong>{r.position}</strong> of {r.department}</span>
                             <button 
                               type="button" 
                               className="btn-remove-role" 
                               onClick={() => handleRemoveClubRole(idx)}
-                              title="Remove Role"
+                              title="Remove Position"
                             >
                               <X size={14} />
                             </button>
@@ -2642,10 +2839,12 @@ export default function Profile() {
                     <div className="admin-add-role-row">
                       <select 
                         value={newRoleDept} 
-                        onChange={(e) => setNewRoleDept(e.target.value)}
+                        onChange={(e) => handleDeptChange(e.target.value)}
                         className="admin-select role-dept-select"
                       >
+                        <option value="Executive High Board">Executive High Board (President / Vice President)</option>
                         <option value="Human Resources">Human Resources (HR)</option>
+                        <option value="Public Relations">Public Relations (PR)</option>
                         <option value="Tournament Organizing Committee">Tournament Organizing Committee (OC)</option>
                         <option value="Multimedia & Design">Multimedia & Design (Media)</option>
                         <option value="Training & Masterclasses">Training & Masterclasses (Trainer)</option>
@@ -2657,8 +2856,11 @@ export default function Profile() {
                         onChange={(e) => setNewRolePos(e.target.value)}
                         className="admin-select role-pos-select"
                       >
-                        <option value="Head">Head (Department Leader)</option>
-                        <option value="Member">Member (Team Member)</option>
+                        {(DEPARTMENT_POSITIONS[newRoleDept] || []).map((pos) => (
+                          <option key={pos.value} value={pos.value}>
+                            {pos.label}
+                          </option>
+                        ))}
                       </select>
 
                       <button 
@@ -2667,7 +2869,7 @@ export default function Profile() {
                         onClick={handleAddClubRole}
                       >
                         <Plus size={16} />
-                        <span>Add Role</span>
+                        <span>Add Position</span>
                       </button>
                     </div>
                   </div>
@@ -2913,7 +3115,7 @@ export default function Profile() {
                       <div key={member.email || i} className="network-member-row">
                         <div className="net-member-info">
                           <img 
-                            src={member.profileImage || "/Icons/user.jpg"} 
+                            src={member.profileImage || "/Icons/unknown.png"} 
                             alt={member.name}
                             className="net-member-avatar"
                             onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
@@ -2928,6 +3130,14 @@ export default function Profile() {
                               ) : theyFollowMe ? (
                                 <span className="net-follows-you-tag">Follows You</span>
                               ) : null}
+                              {member.role === 'president' && <span className="net-role-tag president">👑 President</span>}
+                              {member.role === 'vice_president' && <span className="net-role-tag vp">⭐ VP</span>}
+                              {member.role === 'admin' && <span className="net-role-tag admin">👑 Admin</span>}
+                              {member.role === 'oc' && <span className="net-role-tag oc">🏆 OC</span>}
+                              {member.role === 'hr' && <span className="net-role-tag hr">🤝 HR</span>}
+                              {member.role === 'pr' && <span className="net-role-tag pr">📢 PR</span>}
+                              {member.role === 'media' && <span className="net-role-tag media">🎨 Media</span>}
+                              {member.role === 'trainer' && <span className="net-role-tag trainer">♟️ Trainer</span>}
                               {member.chessTitle && (
                                 <span className="net-title-tag">{member.chessTitle}</span>
                               )}
@@ -2945,6 +3155,15 @@ export default function Profile() {
                                 </>
                               )}
                             </div>
+                            {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && (
+                              <div className="net-club-roles-mini-row" style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "3px" }}>
+                                {member.clubRoles.map((cr, crIdx) => (
+                                  <span key={crIdx} style={{ fontSize: "0.68rem", background: "rgba(243, 193, 68, 0.1)", color: "#f3c144", padding: "1px 5px", borderRadius: "3px", border: "1px solid rgba(243, 193, 68, 0.25)" }}>
+                                    {cr.position === "President" || cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Executive High Board", "High Board").replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
 

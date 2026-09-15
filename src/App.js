@@ -18,6 +18,7 @@ import HRForm from './pages/HRForm';
 import OCMemberForm from './pages/OCMemberForm';
 import TrainerForm from './pages/TrainerForm';
 import TraineeForm from './pages/TraineeForm';
+import PRForm from './pages/PRForm';
 import Admin from './pages/Admin';
 import History from './pages/History';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -52,6 +53,7 @@ function App() {
         {/* Application Forms */}
         <Route path="/apply/multimedia" element={<MultimediaForm />} />
         <Route path="/apply/hr" element={<HRForm />} />
+        <Route path="/apply/pr" element={<PRForm />} />
         <Route path="/apply/oc-member" element={<OCMemberForm />} />
         <Route path="/apply/trainer" element={<TrainerForm />} />
         <Route path="/apply/trainee" element={<TraineeForm />} />

@@ -315,7 +315,7 @@ export default function SignUp() {
                 </div>
                 <div className="perk-text">
                   <h3>Club Applications</h3>
-                  <p>Apply to join club departments (OC, HR, Multimedia, Training) and review progress in the Admin Panel.</p>
+                  <p>Apply to join club departments (OC, HR, PR, Multimedia, Training) and review progress in the Admin Panel.</p>
                 </div>
               </div>
             </div>
