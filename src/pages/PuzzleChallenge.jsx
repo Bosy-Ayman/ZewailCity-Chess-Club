@@ -294,8 +294,31 @@ export default function PuzzleChallenge() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, currentPuzzleIdx, isFinished]);
 
+  const isUserRegistered = (tournament) => {
+    if (!tournament || !userEmail) return false;
+    const norm = userEmail.trim().toLowerCase();
+    return (tournament.participants || []).some(
+      (p) => p.email && p.email.trim().toLowerCase() === norm
+    );
+  };
+
+  const hasUserCompleted = (tournament) => {
+    if (!tournament || !userEmail) return false;
+    const norm = userEmail.trim().toLowerCase();
+    const inLeaderboard = (tournament.leaderboard || []).some(
+      (e) => e.email && e.email.trim().toLowerCase() === norm
+    );
+    const localAttemptKey = `puzzle_attempted_${tournament._id}_${norm}`;
+    const localCompletedKey = `puzzle_completed_${tournament._id}_${norm}`;
+    let hasLocalFlag = false;
+    try {
+      hasLocalFlag = localStorage.getItem(localAttemptKey) === "true" || localStorage.getItem(localCompletedKey) === "true";
+    } catch (e) {}
+    return inLeaderboard || hasLocalFlag;
+  };
+
   // Launch a tournament challenge
-  const startTournamentChallenge = (tournament) => {
+  const startTournamentChallenge = async (tournament) => {
     if (!isLoggedIn) {
       alert("Please log in first to enter and participate in the puzzle challenge!");
       return;
@@ -320,9 +343,24 @@ export default function PuzzleChallenge() {
       alert("This challenge is closed.");
       return;
     }
-    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) {
-      alert("You have already completed this challenge.");
+    if (hasUserCompleted(tournament)) {
+      alert("You have already participated in this challenge. Each player is allowed only 1 attempt!");
       return;
+    }
+
+    const norm = userEmail.trim().toLowerCase();
+    try {
+      localStorage.setItem(`puzzle_attempted_${tournament._id}_${norm}`, "true");
+    } catch (e) {}
+
+    if (tournament._id && !tournament._id.startsWith("default-")) {
+      try {
+        safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${tournament._id}/start-attempt`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: localStorage.getItem("userName") || userName, email: userEmail })
+        }).catch(() => {});
+      } catch (e) {}
     }
     
     scoreRef.current = 0;
@@ -376,7 +414,7 @@ export default function PuzzleChallenge() {
       : null;
     if (startAt && now < startAt) return "upcoming";
     if (endAt && now > endAt) return "closed";
-    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) return "completed";
+    if (hasUserCompleted(tournament)) return "completed";
     return "open";
   };
 
@@ -739,6 +777,14 @@ export default function PuzzleChallenge() {
       }
     }
 
+    const normEmail = targetEmail.trim().toLowerCase();
+    try {
+      if (activeTournament?._id) {
+        localStorage.setItem(`puzzle_completed_${activeTournament._id}_${normEmail}`, "true");
+        localStorage.setItem(`puzzle_attempted_${activeTournament._id}_${normEmail}`, "true");
+      }
+    } catch (e) {}
+
     // 🏆 Optimistically update local active tournament leaderboard so podium is immediately populated!
     if (activeTournament) {
       const currentBoard = [...(activeTournament.leaderboard || [])];
@@ -1020,13 +1066,24 @@ export default function PuzzleChallenge() {
                           {/* STATE 1: UPCOMING CHALLENGE */}
                           {getTournamentState(t) === "upcoming" && (
                             <>
-                              <button 
-                                type="button"
-                                className="card-action-btn enter-btn upcoming-btn" 
-                                onClick={() => registerForTournament(t)}
-                              >
-                                📝 Register for Challenge
-                              </button>
+                              {isUserRegistered(t) ? (
+                                <button 
+                                  type="button"
+                                  className="card-action-btn enter-btn upcoming-btn registered-badge" 
+                                  style={{ opacity: 0.9, cursor: "default", background: "rgba(46, 204, 113, 0.15)", borderColor: "#2ecc71", color: "#2ecc71", fontWeight: "bold" }}
+                                  disabled
+                                >
+                                  ✅ Registered · Starts {t.startDate}
+                                </button>
+                              ) : (
+                                <button 
+                                  type="button"
+                                  className="card-action-btn enter-btn upcoming-btn" 
+                                  onClick={() => registerForTournament(t)}
+                                >
+                                  📝 Register for Challenge
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="card-action-btn solutions-btn"
@@ -1073,7 +1130,7 @@ export default function PuzzleChallenge() {
                                 className="card-action-btn enter-btn completed-btn"
                                 onClick={() => handleOpenSolutionsModal(t, "standings")}
                               >
-                                ✅ Score Submitted · View Live Standings
+                                ✅ 1 Attempt Used · View Standings
                               </button>
                             </>
                           )}
@@ -1287,7 +1344,15 @@ export default function PuzzleChallenge() {
           /* SECTION 3: INTERACTIVE GAME BOARD SOLVER (FULL-SCREEN OPTIMIZED HUD) */
           <div className="puzzle-gameplay-container">
             <div className="game-status-bar">
-              <button className="quit-btn" onClick={() => { if (window.confirm("Quit challenge? Your current progress will be lost.")) setIsPlaying(false); }}>
+              <button 
+                type="button" 
+                className="quit-btn" 
+                onClick={() => { 
+                  if (window.confirm("Are you sure you want to quit? Each player is only allowed 1 attempt and your score so far will be submitted.")) { 
+                    finishChallenge(); 
+                  } 
+                }}
+              >
                 Quit Arena
               </button>
               <div className="puzzle-header-title">

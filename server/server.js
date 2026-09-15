@@ -4203,6 +4203,32 @@ app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
   }
 });
 
+// POST: record that a player has initiated their 1 single challenge attempt
+app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    const normalizedEmail = email.trim().toLowerCase();
+    tournament.participants = tournament.participants || [];
+
+    const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
+    const displayName = registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician';
+
+    if (!tournament.participants.some(p => p.email && p.email.trim().toLowerCase() === normalizedEmail)) {
+      tournament.participants.push({ name: displayName, email: normalizedEmail, registeredAt: new Date() });
+      await tournament.save();
+    }
+
+    res.json({ message: 'Attempt logged.', data: tournament });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record attempt start', details: error.message });
+  }
+});
+
 // DELETE: admin removes a registered tactician from a puzzle tournament
 app.delete('/api/puzzle-tournaments/:id/participants/:email', async (req, res) => {
   try {
@@ -4366,12 +4392,10 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
 
     const existingIndex = tournament.leaderboard.findIndex(entry => entry.email && entry.email.trim().toLowerCase() === normalizedEmail);
     if (existingIndex !== -1) {
-      // Update score with highest achieved
-      const prevScore = tournament.leaderboard[existingIndex].score || 0;
-      const prevSolved = tournament.leaderboard[existingIndex].solvedCount || 0;
-      tournament.leaderboard[existingIndex].name = displayName;
-      tournament.leaderboard[existingIndex].score = Math.max(prevScore, Number(score) || 0);
-      tournament.leaderboard[existingIndex].solvedCount = Math.max(prevSolved, Number(solvedCount) || 0);
+      return res.status(403).json({
+        error: 'You have already submitted your score for this challenge. Each player is allowed only 1 attempt.',
+        data: tournament
+      });
     } else {
       tournament.leaderboard.push({
         name: displayName,
