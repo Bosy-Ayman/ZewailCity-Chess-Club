@@ -3355,109 +3355,164 @@ export default function AdminDashboard() {
                     }
 
                     return (
-                      <div className="admin-table-container tournaments-desktop-table" style={{ marginTop: "16px" }}>
-                        <table className="admin-table">
-                          <thead>
-                            <tr>
-                              <th>Date & Time</th>
-                              <th>Announcement Subject</th>
-                              <th>Target Audience</th>
-                              <th>Channels</th>
-                              <th>Delivered Stats</th>
-                              <th>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredLogs.map((log) => (
-                              <tr key={log._id}>
-                                <td>
-                                  <div style={{ fontSize: "0.82rem", color: "#e5ded0" }}>
-                                    <strong>{new Date(log.createdAt).toLocaleDateString()}</strong>
-                                  </div>
-                                  <span style={{ fontSize: "0.74rem", color: "#8c8577" }}>
-                                    {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                </td>
-                                <td>
-                                  <div style={{ fontWeight: "700", color: "#f5edd6", fontSize: "0.92rem", marginBottom: "4px" }}>
-                                    {log.title}
-                                  </div>
-                                  <div style={{ fontSize: "0.78rem", color: "#9c9484", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {log.message}
-                                  </div>
-                                </td>
-                                <td>
-                                  {log.recipientType === "all" ? (
-                                    <span style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
-                                      🌐 All Members ({log.recipientCount || log.totalRecipients || 0})
-                                    </span>
-                                  ) : (
-                                    <div>
-                                      <span style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
-                                        👤 Direct Player
-                                      </span>
-                                      <div style={{ fontSize: "0.76rem", color: "#aaa", marginTop: "3px" }}>
-                                        {log.targetEmail || "Single User"}
-                                      </div>
-                                    </div>
-                                  )}
-                                </td>
-                                <td>
-                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                    {log.channels?.inApp !== false && (
-                                      <span style={{ background: "rgba(243, 193, 68, 0.12)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
-                                        🔔 In-App
-                                      </span>
-                                    )}
-                                    {log.channels?.email !== false && (
-                                      <span style={{ background: "rgba(46, 204, 113, 0.12)", color: "#2ecc71", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
-                                        ✉️ Email
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div style={{ fontSize: "0.82rem", color: "#bab19c" }}>
-                                    <div>In-App: <strong style={{ color: "#f3c144" }}>{log.inAppCount || 0}</strong></div>
-                                    <div>Emails: <strong style={{ color: "#2ecc71" }}>{log.emailCount || 0}</strong></div>
-                                  </div>
-                                </td>
-                                <td>
-                                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                    <button
-                                      type="button"
-                                      className="admin-view-profile-btn"
-                                      onClick={() => setSelectedLogPreview(log)}
-                                      title="View dispatched email & message"
-                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
-                                    >
-                                      👁️ View
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="tab-btn"
-                                      onClick={() => handleReuseBroadcastLog(log)}
-                                      title="Copy into composer to resend or edit"
-                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
-                                    >
-                                      🔄 Reuse
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="delete-btn"
-                                      onClick={() => handleDeleteBroadcastLog(log._id)}
-                                      title="Delete log entry"
-                                      style={{ padding: "4px 8px", fontSize: "0.76rem" }}
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                </td>
+                      <>
+                        <div className="admin-table-container tournaments-desktop-table" style={{ marginTop: "16px" }}>
+                          <table className="admin-table">
+                            <thead>
+                              <tr>
+                                <th>Date & Time</th>
+                                <th>Announcement Subject</th>
+                                <th>Target Audience</th>
+                                <th>Channels</th>
+                                <th>Delivered Stats</th>
+                                <th>Actions</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody>
+                              {filteredLogs.map((log) => (
+                                <tr key={log._id}>
+                                  <td>
+                                    <div style={{ fontSize: "0.82rem", color: "#e5ded0" }}>
+                                      <strong>{new Date(log.createdAt).toLocaleDateString()}</strong>
+                                    </div>
+                                    <span style={{ fontSize: "0.74rem", color: "#8c8577" }}>
+                                      {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div style={{ fontWeight: "700", color: "#f5edd6", fontSize: "0.92rem", marginBottom: "4px" }}>
+                                      {log.title}
+                                    </div>
+                                    <div style={{ fontSize: "0.78rem", color: "#9c9484", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {log.message}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    {log.recipientType === "all" ? (
+                                      <span style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
+                                        🌐 All Members ({log.recipientCount || log.totalRecipients || 0})
+                                      </span>
+                                    ) : (
+                                      <div>
+                                        <span style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "3px 8px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700" }}>
+                                          👤 Direct Player
+                                        </span>
+                                        <div style={{ fontSize: "0.76rem", color: "#aaa", marginTop: "3px" }}>
+                                          {log.targetEmail || "Single User"}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                      {log.channels?.inApp !== false && (
+                                        <span style={{ background: "rgba(243, 193, 68, 0.12)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                          🔔 In-App
+                                        </span>
+                                      )}
+                                      {log.channels?.email !== false && (
+                                        <span style={{ background: "rgba(46, 204, 113, 0.12)", color: "#2ecc71", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "2px 6px", borderRadius: "4px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                          ✉️ Email
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div style={{ fontSize: "0.82rem", color: "#bab19c" }}>
+                                      <div>In-App: <strong style={{ color: "#f3c144" }}>{log.inAppCount || 0}</strong></div>
+                                      <div>Emails: <strong style={{ color: "#2ecc71" }}>{log.emailCount || 0}</strong></div>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                      <button
+                                        type="button"
+                                        className="admin-view-profile-btn"
+                                        onClick={() => setSelectedLogPreview(log)}
+                                        title="View dispatched email & message"
+                                        style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                      >
+                                        👁️ View
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="tab-btn"
+                                        onClick={() => handleReuseBroadcastLog(log)}
+                                        title="Copy into composer to resend or edit"
+                                        style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                      >
+                                        🔄 Reuse
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="delete-btn"
+                                        onClick={() => handleDeleteBroadcastLog(log._id)}
+                                        title="Delete log entry"
+                                        style={{ padding: "4px 8px", fontSize: "0.76rem" }}
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile Broadcast Logs Cards */}
+                        <div className="tournaments-mobile-cards" style={{ marginTop: "14px" }}>
+                          {filteredLogs.map((log) => (
+                            <div key={log._id} className="mobile-tournament-card" style={{ padding: "16px" }}>
+                              <div className="mobile-card-header">
+                                <h3 className="mobile-card-title">{log.title}</h3>
+                                {log.recipientType === "all" ? (
+                                  <span style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", padding: "3px 8px", borderRadius: "6px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                    🌐 All ({log.recipientCount || log.totalRecipients || 0})
+                                  </span>
+                                ) : (
+                                  <span style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "3px 8px", borderRadius: "6px", fontSize: "0.74rem", fontWeight: "700" }}>
+                                    👤 Direct
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: "0.82rem", color: "#8c8577", margin: "4px 0" }}>
+                                📅 {new Date(log.createdAt).toLocaleString()}
+                              </div>
+                              <div style={{ fontSize: "0.85rem", color: "#d8cebc", margin: "6px 0", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "6px", lineHeight: "1.4" }}>
+                                {log.message}
+                              </div>
+                              <div style={{ display: "flex", gap: "12px", fontSize: "0.8rem", color: "#bab19c", flexWrap: "wrap", margin: "4px 0 8px" }}>
+                                <div>🔔 In-App: <strong style={{ color: "#f3c144" }}>{log.inAppCount || 0}</strong></div>
+                                <div>✉️ Email: <strong style={{ color: "#2ecc71" }}>{log.emailCount || 0}</strong></div>
+                              </div>
+                              <div style={{ display: "flex", gap: "8px", marginTop: "8px", flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  className="admin-view-profile-btn mobile-full-btn"
+                                  onClick={() => setSelectedLogPreview(log)}
+                                >
+                                  👁️ View Full Dispatch
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tab-btn mobile-full-btn"
+                                  onClick={() => handleReuseBroadcastLog(log)}
+                                >
+                                  🔄 Reuse in Composer
+                                </button>
+                                <button
+                                  type="button"
+                                  className="delete-btn mobile-full-btn"
+                                  onClick={() => handleDeleteBroadcastLog(log._id)}
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     );
                   })()}
                 </div>

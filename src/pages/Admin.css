@@ -728,8 +728,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 20px;
+  z-index: 10005;
+  padding: 16px;
   backdrop-filter: blur(8px);
 }
 
@@ -737,26 +737,36 @@
   background-color: #1c1912;
   border: 1px solid #f3c144;
   border-radius: 18px;
-  max-width: 700px;
+  max-width: 680px;
   width: 100%;
-  padding: 32px;
-  max-height: 85vh;
+  padding: 28px;
+  max-height: 88vh;
   overflow-y: auto;
   position: relative;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
   animation: modalSlideUp 0.3s ease;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  .admin-modal-content {
+    padding: 20px 14px;
+    border-radius: 14px;
+    max-height: 90vh;
+  }
 }
 
 .close-modal-btn {
   position: absolute;
-  top: 18px;
-  right: 22px;
+  top: 14px;
+  right: 18px;
   background: none;
   border: none;
-  font-size: 2rem;
+  font-size: 1.8rem;
   color: #bab19c;
   cursor: pointer;
   transition: color 0.25s ease;
+  line-height: 1;
 }
 
 .close-modal-btn:hover {
@@ -765,16 +775,34 @@
 
 .admin-modal-content h3 {
   color: #ffffff;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  margin-right: 30px;
+  font-size: 1.35rem;
+  margin: 0 32px 16px 0;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
 }
 
 .modal-divider {
   border: 0;
   height: 1px;
   background: rgba(243, 193, 68, 0.15);
-  margin: 20px 0;
+  margin: 16px 0;
+}
+
+.modal-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 18px;
+  margin-bottom: 16px;
+  font-size: 0.92rem;
+  color: #e5ded0;
+}
+
+@media (max-width: 600px) {
+  .modal-info-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
 }
 
 /* Puzzle Management Styles */
@@ -937,48 +965,91 @@
 }
 
 /* -------------------------------------------------------------------------- */
-/* Responsive Mobile Media Queries                                            */
+/* Responsive Mobile Media Queries & Mobile-First Component Rules             */
 /* -------------------------------------------------------------------------- */
+@media (max-width: 980px) {
+  .admin-broadcast-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .admin-broadcast-preview-col {
+    position: static;
+    top: auto;
+  }
+}
+
 @media (max-width: 900px) {
   .puzzle-dashboard-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
 
 @media (max-width: 768px) {
   .admin-container {
-    padding: 20px 14px 40px;
+    padding: 16px 12px 48px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .intro-header {
     flex-direction: column;
     align-items: flex-start;
-    padding: 24px 20px;
+    padding: 20px 16px;
     border-radius: 16px;
-    gap: 18px;
+    gap: 16px;
+    margin-bottom: 20px;
   }
 
   .admin-header-titles h1 {
-    font-size: 1.7rem;
+    font-size: 1.55rem;
+    line-height: 1.25;
+  }
+
+  .admin-header-titles p {
+    font-size: 0.88rem;
   }
 
   .admin-kpi-bar {
-    flex-wrap: wrap;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    width: 100%;
+    gap: 8px;
+    margin-top: 6px;
   }
 
   .kpi-pill {
-    padding: 6px 14px;
+    padding: 8px 10px;
+    justify-content: center;
+    border-radius: 10px;
+  }
+
+  .kpi-num {
+    font-size: 1.2rem;
+  }
+
+  .kpi-label {
+    font-size: 0.72rem;
   }
 
   .logout-btn {
     width: 100%;
     text-align: center;
+    padding: 12px;
   }
 
+  /* Mobile Tab Selector */
   .admin-mobile-tab-select-wrapper {
-    display: flex;
-    flex-direction: column;
+    display: block;
+    width: 100%;
+    margin-bottom: 20px;
+    padding: 12px 14px;
+  }
+
+  .admin-mobile-tab-select {
+    font-size: 16px !important;
   }
 
   .admin-desktop-tabs {
@@ -987,97 +1058,187 @@
 
   .form-card,
   .table-card {
-    padding: 22px 16px;
+    padding: 20px 14px;
     border-radius: 16px;
+    margin-bottom: 20px;
   }
 
   .form-card h2,
   .table-card h2 {
-    font-size: 1.35rem;
-    margin-bottom: 18px;
+    font-size: 1.25rem;
+    margin-bottom: 16px;
   }
 
-  /* Switch tables to mobile cards on small screens */
-  .tournaments-desktop-table {
-    display: none;
-  }
-
-  .tournaments-mobile-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .mobile-tournament-card {
-    background: #17140f;
-    border: 1px solid rgba(243, 193, 68, 0.18);
-    border-radius: 14px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .mobile-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .mobile-card-title {
-    font-size: 1.05rem;
-    font-weight: 800;
-    color: #ffffff;
-    margin: 0;
-  }
-
-  .mobile-full-btn {
-    width: 100%;
-    display: block;
-    box-sizing: border-box;
-    border-radius: 8px;
-  }
-}
-
-@media (max-width: 600px) {
+  /* Form layouts */
   .form-row {
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
 
   .form-row .form-group {
     min-width: 100%;
   }
 
+  .admin-form input,
+  .admin-form select,
+  .admin-form textarea {
+    font-size: 16px !important;
+    padding: 12px 14px;
+  }
+
   .submit-btn {
     width: 100%;
     padding: 14px;
     font-size: 1rem;
+    box-sizing: border-box;
   }
 
-  .puzzle-dashboard-grid {
+  /* Switch all desktop tables to mobile cards on small screens */
+  .tournaments-desktop-table {
+    display: none !important;
+  }
+
+  .tournaments-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-tournament-card {
+    background: #17140f;
+    border: 1px solid rgba(243, 193, 68, 0.2);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .mobile-card-title {
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .mobile-full-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    box-sizing: border-box;
+  }
+
+  /* User Management Mobile Layout */
+  .admin-user-tab-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .admin-user-tab-desc {
+    margin: -8px 0 0 0;
+    font-size: 0.85rem;
+  }
+
+  .admin-user-filters-bar {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .admin-user-search-wrap,
+  .admin-role-filter-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-user-search-input,
+  .admin-role-filter-select {
+    width: 100%;
+    font-size: 16px !important;
+    padding: 11px 14px 11px 36px !important;
+  }
+
+  .admin-mobile-user-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .admin-mobile-user-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  /* Broadcast Card Mobile */
+  .admin-broadcast-card {
+    padding: 18px 14px;
+  }
+
+  .admin-broadcast-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .admin-sender-badge {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    font-size: 0.78rem;
+  }
+
+  .admin-recipient-toggle-group {
     grid-template-columns: 1fr;
-    gap: 16px;
   }
 
+  .admin-channels-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-broadcast-submit-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 0.95rem;
+  }
+
+  /* Puzzle Management Mobile */
   .puzzle-editor-card {
-    padding: 12px 8px !important;
+    padding: 14px 10px !important;
     border-radius: 14px;
     margin-bottom: 14px;
   }
 
   .puzzle-board-container {
-    padding: 6px 0 !important;
+    padding: 10px 4px !important;
     border-radius: 12px;
-    border: none;
     background: transparent;
+    border: none;
     width: 100%;
   }
 
   .puzzle-board-wrapper {
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: min(92vw, 420px) !important;
     aspect-ratio: 1 / 1;
     border-width: 2px;
     border-radius: 10px;
@@ -1104,6 +1265,7 @@
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     width: 100%;
+    box-sizing: border-box;
   }
 
   .palette-btn {
@@ -1132,44 +1294,53 @@
 
   .fen-input-row {
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+  }
+
+  .fen-input-row input {
+    font-size: 16px !important;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .fen-input-row button {
     width: 100%;
+    padding: 10px;
   }
 }
 
 @media (max-width: 480px) {
   .admin-container {
-    padding: 8px 4px 24px;
+    padding: 12px 8px 40px;
+  }
+
+  .intro-header {
+    padding: 16px 12px;
+    border-radius: 14px;
   }
 
   .admin-header-titles h1 {
-    font-size: 1.45rem;
+    font-size: 1.35rem;
   }
 
   .form-card,
   .table-card {
-    padding: 8px 4px !important;
+    padding: 16px 10px !important;
+    border-radius: 12px;
   }
 
-  .puzzle-editor-card {
-    padding: 6px 2px !important;
-  }
-
-  .puzzle-board-container {
-    padding: 2px 0 !important;
+  .admin-mobile-user-actions {
+    grid-template-columns: 1fr;
   }
 
   .piece-palette {
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
-    padding: 4px 2px;
+    gap: 3px;
+    padding: 6px 2px;
   }
 
   .palette-btn {
-    padding: 5px 0px;
+    padding: 6px 0px;
   }
 
   .palette-symbol {
