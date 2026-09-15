@@ -190,11 +190,20 @@ export default function PuzzleChallenge() {
   const isAdmin = userRole === "admin" || userRole === "oc" || userRole === "hr";
   const userName = localStorage.getItem("userName") || (userEmail ? userEmail.split("@")[0] : "Club Tactician");
 
+  const isPlayingRef = useRef(false);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
   // Fetch puzzle tournaments and player avatars on load
   useEffect(() => {
-    fetchTournaments();
+    fetchTournaments(true);
     fetchAvatars();
-    const refreshTimer = setInterval(fetchTournaments, 15000);
+    const refreshTimer = setInterval(() => {
+      if (!isPlayingRef.current && !document.hidden) {
+        fetchTournaments(false);
+      }
+    }, 45000);
     return () => clearInterval(refreshTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -248,21 +257,27 @@ export default function PuzzleChallenge() {
     }
   ];
 
-  const fetchTournaments = async () => {
-    setIsLoading(true);
+  const fetchTournaments = async (isInitial = false) => {
+    if (isInitial) {
+      setIsLoading(true);
+    }
     try {
       const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments`);
       if (Array.isArray(data)) {
-        // An empty response is authoritative: admins may have deleted every challenge.
-        setTournaments(data);
+        setTournaments((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+          return data;
+        });
         return;
       }
       setTournaments(MOCK_TOURNAMENTS);
     } catch (err) {
       console.warn("Failed to load puzzle tournaments from server, using fallback:", err.message);
-      setTournaments(MOCK_TOURNAMENTS);
+      if (isInitial) setTournaments(MOCK_TOURNAMENTS);
     } finally {
-      setIsLoading(false);
+      if (isInitial) {
+        setIsLoading(false);
+      }
     }
   };
 
