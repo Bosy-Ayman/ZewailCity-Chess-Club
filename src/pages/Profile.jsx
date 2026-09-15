@@ -1972,8 +1972,11 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                           <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
                         </optgroup>
 
-                        <optgroup label="💻 School of Business & Computing">
-                          <option value="Computer Science and Artificial Intelligence (CSAI)">Computer Science and Artificial Intelligence (CSAI)</option>
+                        <optgroup label="💻 School of Business & Computing (CSAI)">
+                          <option value="Data Science and Artificial Intelligence (DSAI)">Data Science and Artificial Intelligence (DSAI)</option>
+                          <option value="Software Development (SW)">Software Development (SW)</option>
+                          <option value="Information Technology (IT)">Information Technology (IT)</option>
+                          <option value="Computer Science and Artificial Intelligence (CSAI - General)">Computer Science and Artificial Intelligence (CSAI - General)</option>
                           <option value="Business Informatics">Business Informatics</option>
                         </optgroup>
 
