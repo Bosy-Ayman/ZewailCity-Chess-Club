@@ -740,6 +740,21 @@
   to   { opacity: 1; }
 }
 
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10001;
+  animation: fadeInBackdrop 0.22s ease-out;
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ============================================================
    GUEST MOBILE SIDEBAR (slides from right)
 ============================================================ */
@@ -754,7 +769,7 @@
   box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
-  z-index: 1100;
+  z-index: 10002;
   box-sizing: border-box;
   animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
@@ -919,7 +934,7 @@
   background: linear-gradient(160deg, #1a1710 0%, #15120c 100%);
   border-left: 1px solid rgba(243, 193, 68, 0.1);
   box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
-  z-index: 1100;
+  z-index: 10002;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
