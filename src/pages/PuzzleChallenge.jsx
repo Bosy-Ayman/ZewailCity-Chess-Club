@@ -466,8 +466,28 @@ export default function PuzzleChallenge() {
     getPlayerAvatarUrl(player.name, customAvatars)
   );
 
-  const getPlayerDisplayName = (player) =>
-    playerNamesByEmail[player.email?.trim().toLowerCase()] || player.name || player.email?.split("@")[0] || "Tactician";
+  const getPlayerDisplayName = (player) => {
+    if (!player) return "Tactician";
+    const pEmail = (player.email || "").trim().toLowerCase();
+    const currEmail = (userEmail || "").trim().toLowerCase();
+
+    // If this entry belongs to the current user, show their local name
+    if (pEmail && currEmail && pEmail === currEmail) {
+      const storedName = localStorage.getItem("userName");
+      if (storedName && storedName.trim() && storedName.trim() !== "ZC Chess Club") return storedName.trim();
+      if (userName && userName.trim() && userName.trim() !== "ZC Chess Club") return userName.trim();
+    }
+
+    if (player.name && player.name.trim() && player.name.trim() !== "ZC Chess Club") {
+      return player.name.trim();
+    }
+
+    if (pEmail && playerNamesByEmail[pEmail] && playerNamesByEmail[pEmail] !== "ZC Chess Club") {
+      return playerNamesByEmail[pEmail];
+    }
+
+    return player.name || (pEmail ? pEmail.split("@")[0] : "Tactician");
+  };
 
   // Load a single puzzle
   const loadPuzzle = (puzzle, timeLimit) => {

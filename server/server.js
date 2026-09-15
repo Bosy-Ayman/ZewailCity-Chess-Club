@@ -4190,7 +4190,9 @@ app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
-    const displayName = registeredUser?.name?.trim() || name.trim();
+    const displayName = (name && name.trim() && name.trim() !== 'ZC Chess Club')
+      ? name.trim()
+      : (registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician');
     tournament.participants = tournament.participants || [];
     if (!tournament.participants.some((participant) => participant.email.toLowerCase() === normalizedEmail)) {
       tournament.participants.push({ name: displayName, email: normalizedEmail });
@@ -4216,7 +4218,9 @@ app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
     tournament.participants = tournament.participants || [];
 
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
-    const displayName = registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician';
+    const displayName = (name && name.trim() && name.trim() !== 'ZC Chess Club')
+      ? name.trim()
+      : (registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician');
 
     if (!tournament.participants.some(p => p.email && p.email.trim().toLowerCase() === normalizedEmail)) {
       tournament.participants.push({ name: displayName, email: normalizedEmail, registeredAt: new Date() });
@@ -4380,7 +4384,9 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
-    const displayName = registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician';
+    const displayName = (name && name.trim() && name.trim() !== 'ZC Chess Club')
+      ? name.trim()
+      : (registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician');
 
     tournament.leaderboard = tournament.leaderboard || [];
     tournament.participants = tournament.participants || [];
