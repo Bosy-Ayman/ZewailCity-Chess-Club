@@ -101,15 +101,16 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const updateBoardWidth = () => {
-      if (boardWrapperRef.current) {
-        const innerW = boardWrapperRef.current.clientWidth;
-        if (innerW > 0) {
-          setBoardWidth(innerW);
+      const maxAllowed = Math.min(window.innerWidth - 32, 480);
+      let calculatedW = maxAllowed;
+      if (boardWrapperRef.current && boardWrapperRef.current.parentElement) {
+        const parentW = boardWrapperRef.current.parentElement.clientWidth - 32;
+        if (parentW > 0) {
+          calculatedW = Math.min(parentW, maxAllowed);
         }
-      } else {
-        const containerFallback = Math.min(window.innerWidth - 24, 480);
-        setBoardWidth(containerFallback);
       }
+      calculatedW = Math.max(260, Math.floor(calculatedW));
+      setBoardWidth((prev) => (Math.abs(prev - calculatedW) > 2 ? calculatedW : prev));
     };
 
     updateBoardWidth();
@@ -117,17 +118,10 @@ export default function AdminDashboard() {
     const t2 = setTimeout(updateBoardWidth, 200);
     window.addEventListener("resize", updateBoardWidth);
 
-    let observer;
-    if (typeof ResizeObserver !== "undefined" && boardWrapperRef.current) {
-      observer = new ResizeObserver(() => updateBoardWidth());
-      observer.observe(boardWrapperRef.current);
-    }
-
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener("resize", updateBoardWidth);
-      if (observer) observer.disconnect();
     };
   }, [activeTab, setupMode, editingPuzzleTournamentId]);
 

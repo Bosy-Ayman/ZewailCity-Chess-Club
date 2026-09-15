@@ -144,21 +144,22 @@ export default function PuzzleChallenge() {
   const scoreRef = useRef(0);
   const solvedCountRef = useRef(0);
 
-  // Dynamic Board Width calculation to prevent piece drag offset
+  // Dynamic Board Width calculation with hard limits to prevent zoom / overflow
   const boardContainerRef = useRef(null);
-  const [boardWidth, setBoardWidth] = useState(() => Math.min(window.innerWidth - 32, 380));
+  const [boardWidth, setBoardWidth] = useState(() => Math.min(window.innerWidth - 32, 440));
 
   useEffect(() => {
     const updateBoardWidth = () => {
-      if (boardContainerRef.current) {
-        const innerW = boardContainerRef.current.clientWidth;
-        if (innerW > 0) {
-          setBoardWidth(innerW);
+      const maxAllowed = Math.min(window.innerWidth - 32, 440);
+      let calculatedW = maxAllowed;
+      if (boardContainerRef.current && boardContainerRef.current.parentElement) {
+        const parentW = boardContainerRef.current.parentElement.clientWidth - 32;
+        if (parentW > 0) {
+          calculatedW = Math.min(parentW, maxAllowed);
         }
-      } else {
-        const containerFallback = Math.min(window.innerWidth - 24, 380);
-        setBoardWidth(containerFallback);
       }
+      calculatedW = Math.max(260, Math.floor(calculatedW));
+      setBoardWidth((prev) => (Math.abs(prev - calculatedW) > 2 ? calculatedW : prev));
     };
 
     updateBoardWidth();
@@ -166,17 +167,10 @@ export default function PuzzleChallenge() {
     const t2 = setTimeout(updateBoardWidth, 200);
     window.addEventListener("resize", updateBoardWidth);
 
-    let observer;
-    if (typeof ResizeObserver !== "undefined" && boardContainerRef.current) {
-      observer = new ResizeObserver(() => updateBoardWidth());
-      observer.observe(boardContainerRef.current);
-    }
-
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener("resize", updateBoardWidth);
-      if (observer) observer.disconnect();
     };
   }, [isPlaying, currentPuzzleIdx]);
 
@@ -1787,7 +1781,7 @@ export default function PuzzleChallenge() {
                             <div className="solution-board-wrapper">
                               <Chessboard
                                 position={currentFen}
-                                boardWidth={320}
+                                boardWidth={Math.min(320, typeof window !== "undefined" ? Math.max(260, window.innerWidth - 64) : 320)}
                                 arePiecesDraggable={false}
                                 customDarkSquareStyle={{ backgroundColor: "#b58863" }}
                                 customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}

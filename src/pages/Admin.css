@@ -2005,4 +2005,13 @@
   margin: 2px 0;
 }
 
+.puzzle-board-wrapper {
+  max-width: 100%;
+  aspect-ratio: 1;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 
