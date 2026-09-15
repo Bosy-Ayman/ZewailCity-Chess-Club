@@ -2494,19 +2494,26 @@ export default function AdminDashboard() {
                           <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                             {t.leaderboard && t.leaderboard.length > 0 && (
                               isPuzzleChallengeFinished(t) ? (
-                                <button
-                                  type="button"
-                                  className="btn-status mobile-full-btn"
-                                  style={{
-                                    background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
-                                    color: "#12100d",
-                                    border: "none",
-                                    fontWeight: "800"
-                                  }}
-                                  onClick={() => handleBroadcastPuzzleWinners(t)}
-                                >
-                                  🏆 Announce Podium
-                                </button>
+                                <div style={{ display: "flex", gap: "8px", alignItems: "center", width: "100%", flexWrap: "wrap" }}>
+                                  {t.winnersBroadcasted ? (
+                                    <span style={{ fontSize: "0.8rem", color: "#2ecc71", background: "rgba(46, 204, 113, 0.15)", border: "1px solid rgba(46, 204, 113, 0.3)", padding: "6px 12px", borderRadius: "6px", fontWeight: "bold" }}>
+                                      ✅ Podium Auto-Broadcasted
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="btn-status mobile-full-btn"
+                                    style={{
+                                      background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                                      color: "#12100d",
+                                      border: "none",
+                                      fontWeight: "800"
+                                    }}
+                                    onClick={() => handleBroadcastPuzzleWinners(t)}
+                                  >
+                                    {t.winnersBroadcasted ? "📢 Re-Broadcast Announcement" : "🏆 Announce Podium & Email"}
+                                  </button>
+                                </div>
                               ) : (
                                 <div
                                   style={{

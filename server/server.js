@@ -991,6 +991,9 @@ async function checkAndDispatch15MinuteReminders() {
         await t.save();
       }
     }
+
+    // Also auto-broadcast closed puzzle tournaments
+    await checkAndAutoBroadcastPuzzleTournaments();
   } catch (err) {
     console.warn('[Auto-Reminder Error]:', err.message);
   }
@@ -1030,10 +1033,53 @@ const PuzzleTournamentSchema = new mongoose.Schema({
     score: { type: Number, required: true },
     solvedCount: { type: Number, required: true }
   }],
+  winnersBroadcasted: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
 const PuzzleTournament = mongoose.model('PuzzleTournament', PuzzleTournamentSchema, 'puzzle_tournaments');
+
+// Helper: Automatically check closed puzzle arenas and broadcast champions announcement
+async function checkAndAutoBroadcastPuzzleTournaments() {
+  try {
+    const now = new Date();
+    const closedTournaments = await PuzzleTournament.find({ winnersBroadcasted: { $ne: true } });
+
+    for (const t of closedTournaments) {
+      if (!t.endDate) continue;
+      const endStr = `${t.endDate}T${t.endTime || '23:59'}:59`;
+      const endAt = new Date(endStr);
+      if (isNaN(endAt.getTime()) || now < endAt) continue;
+
+      // Arena deadline has passed (Closed)
+      if (Array.isArray(t.leaderboard) && t.leaderboard.length > 0) {
+        const sorted = [...t.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+        const p1 = sorted[0];
+        const p2 = sorted[1];
+        const p3 = sorted[2];
+
+        console.log(`[Auto-Broadcast] Puzzle Arena "${t.title}" deadline reached! Broadcasting champion ${p1.name}...`);
+        await broadcastWinnerNotification({
+          tournamentTitle: t.title,
+          tournamentType: "Puzzle Tactics Arena",
+          winnerName: p1.name,
+          winnerEmail: p1.email,
+          winnerScoreOrPoints: `${p1.score} pts (${p1.solvedCount || 0} solved)`,
+          runnerUpName: p2 ? p2.name : '',
+          runnerUpScoreOrPoints: p2 ? `${p2.score} pts (${p2.solvedCount || 0} solved)` : '',
+          thirdPlaceName: p3 ? p3.name : '',
+          thirdPlaceScoreOrPoints: p3 ? `${p3.score} pts (${p3.solvedCount || 0} solved)` : '',
+          link: `/puzzlechallenge`
+        });
+      }
+
+      t.winnersBroadcasted = true;
+      await t.save();
+    }
+  } catch (err) {
+    console.warn('[Auto-Broadcast Error]:', err.message);
+  }
+}
 
 // --- Contact Message Schema & Model ---
 const ContactMessageSchema = new mongoose.Schema({
@@ -4151,6 +4197,7 @@ app.post('/api/puzzle-tournaments', async (req, res) => {
 // GET: fetch all puzzle tournaments
 app.get('/api/puzzle-tournaments', async (req, res) => {
   try {
+    await checkAndAutoBroadcastPuzzleTournaments();
     const tournaments = await PuzzleTournament.find().sort({ createdAt: -1 });
     res.json(tournaments);
   } catch (error) {
@@ -4161,6 +4208,7 @@ app.get('/api/puzzle-tournaments', async (req, res) => {
 // GET: fetch a single puzzle tournament
 app.get('/api/puzzle-tournaments/:id', async (req, res) => {
   try {
+    await checkAndAutoBroadcastPuzzleTournaments();
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
     res.json(tournament);
@@ -4465,6 +4513,9 @@ app.post('/api/puzzle-tournaments/:id/broadcast-winner', async (req, res) => {
       thirdPlaceScoreOrPoints: p3 ? `${p3.score} pts (${p3.solvedCount || 0} solved)` : '',
       link: `/puzzlechallenge`
     });
+
+    tournament.winnersBroadcasted = true;
+    await tournament.save();
 
     res.json({ success: true, message: `Champion alert for ${p1.name} broadcast to all members!` });
   } catch (err) {
