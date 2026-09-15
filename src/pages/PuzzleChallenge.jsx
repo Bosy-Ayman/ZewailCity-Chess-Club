@@ -813,6 +813,46 @@ export default function PuzzleChallenge() {
     }
   };
 
+  // Refs to persist last score submission payload so the retry button works correctly
+  const lastSubmitPayloadRef = useRef(null);
+
+  // Submit the current score to the server with automatic retries (handles Vercel cold-starts)
+  const submitScoreToServer = async (tournament, payload) => {
+    if (!tournament || !tournament._id || tournament._id.startsWith("default-")) return;
+    setIsSubmittingScore(true);
+    setSubmitScoreError(null);
+
+    const attempt = async (attemptsLeft) => {
+      try {
+        const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${tournament._id}/submit-score`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (data && data.data) {
+          setActiveTournament(data.data);
+          setCelebrationTournament(data.data);
+          setTournaments((prev) => prev.map((item) => (item._id === data.data._id ? data.data : item)));
+          fetchTournaments();
+        }
+      } catch (err) {
+        if (attemptsLeft > 1) {
+          console.warn(`Score submit failed (${4 - attemptsLeft}/3 attempts), retrying in 2s...`, err.message);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return attempt(attemptsLeft - 1);
+        }
+        console.error("Score submit failed after 3 attempts:", err.message);
+        setSubmitScoreError("⚠️ Your score could not be saved to the server. Tap Retry or refresh the page.");
+      }
+    };
+
+    try {
+      await attempt(3);
+    } finally {
+      setIsSubmittingScore(false);
+    }
+  };
+
   const finishChallenge = async () => {
     setIsFinished(true);
     clearInterval(timerRef.current);
@@ -876,36 +916,11 @@ export default function PuzzleChallenge() {
       setCelebrationTournament(updatedTourney);
     }
 
-    setIsSubmittingScore(true);
-    setSubmitScoreError(null);
+    // Save payload in ref so retry button can reuse it without re-running this function
+    const submitPayload = { name: targetName, email: targetEmail, score: finalScore, solvedCount: finalSolved };
+    lastSubmitPayloadRef.current = { tournament: activeTournament, payload: submitPayload };
 
-    // Submit score to database safely
-    try {
-      if (activeTournament && activeTournament._id && !activeTournament._id.startsWith("default-")) {
-        const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: targetName,
-            email: targetEmail,
-            score: finalScore,
-            solvedCount: finalSolved
-          })
-        });
-
-        if (data && data.data) {
-          setActiveTournament(data.data);
-          setCelebrationTournament(data.data);
-          setTournaments((prev) => prev.map((item) => (item._id === data.data._id ? data.data : item)));
-          fetchTournaments();
-        }
-      }
-    } catch (err) {
-      console.warn("Notice: Score saved locally; server response:", err.message);
-      // Keep optimistic state intact so user smoothly views champions podium without disruption
-    } finally {
-      setIsSubmittingScore(false);
-    }
+    await submitScoreToServer(activeTournament, submitPayload);
   };
 
   // Compute user statistics from tournaments leaderboard data
@@ -1268,7 +1283,12 @@ export default function PuzzleChallenge() {
                   type="button" 
                   className="btn-primary" 
                   style={{ padding: "6px 14px", fontSize: "0.85rem", background: "#f3c144", color: "#111", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: "pointer" }}
-                  onClick={finishChallenge}
+                  onClick={() => {
+                    if (lastSubmitPayloadRef.current) {
+                      const { tournament, payload } = lastSubmitPayloadRef.current;
+                      submitScoreToServer(tournament, payload);
+                    }
+                  }}
                   disabled={isSubmittingScore}
                 >
                   {isSubmittingScore ? "Retrying..." : "🔄 Retry Submitting Score"}
