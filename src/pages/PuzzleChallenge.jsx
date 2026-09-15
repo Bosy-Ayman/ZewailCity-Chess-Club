@@ -1587,7 +1587,7 @@ export default function PuzzleChallenge() {
             <button 
               type="button" 
               className="solutions-modal-close" 
-              onClick={() => setliveTournament(null)} 
+              onClick={() => setSelectedSolutionsTournament(null)} 
               aria-label="Close solutions modal"
             >
               ×
