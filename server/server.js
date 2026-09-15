@@ -1033,18 +1033,90 @@ const PuzzleTournamentSchema = new mongoose.Schema({
     score: { type: Number, required: true },
     solvedCount: { type: Number, required: true }
   }],
+  startBroadcasted: { type: Boolean, default: false },
   winnersBroadcasted: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
 const PuzzleTournament = mongoose.model('PuzzleTournament', PuzzleTournamentSchema, 'puzzle_tournaments');
 
-// Helper: Automatically check closed puzzle arenas and broadcast champions announcement
+// Helper: Broadcast live announcement when a puzzle challenge starts
+async function broadcastPuzzleStartNotification(tournament) {
+  try {
+    const allUsers = await User.find({}).select('email name role profileImage');
+    const notifDocs = allUsers.map(u => ({
+      recipientEmail: u.email.toLowerCase(),
+      type: 'puzzle_start',
+      actorName: 'ZC Chess Club Tactics Arena',
+      actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+      message: `♟️ Tactics Arena Live: "${tournament.title}" has officially begun! Solve puzzles, earn speed bonus points, and claim your spot on the leaderboard.`,
+      link: '/puzzlechallenge',
+      read: false,
+      createdAt: new Date()
+    }));
+
+    if (notifDocs.length > 0) {
+      await Notification.insertMany(notifDocs);
+    }
+
+    const puzzleCount = (tournament.puzzles || []).length;
+    const puzzleText = `${puzzleCount} tactical puzzle${puzzleCount > 1 ? 's' : ''}`;
+
+    for (const u of allUsers) {
+      if (!u.email) continue;
+      const emailHtml = generateClubEmailHtml({
+        title: `♟️ Tactics Arena Live: ${tournament.title}`,
+        recipientName: u.name || u.email.split('@')[0],
+        message: `A new Puzzle Challenge tournament is now officially live and open for participation!\n\n• Challenge Arena: ${tournament.title}\n• Begins: ${tournament.startDate}${tournament.startTime ? ` at ${tournament.startTime}` : ''}\n• Ends: ${tournament.endDate || 'TBD'}${tournament.endTime ? ` at ${tournament.endTime}` : ''}\n• Time Limit: ${tournament.timeLimit || 60}s per puzzle\n• Challenge Size: ${puzzleText}\n\nEach tactician gets 1 official attempt with 3 trials per puzzle. Speed bonuses are awarded for rapid calculation.\n\nGood luck!`,
+        actionLabel: '⚡ Enter Puzzle Arena Now →',
+        actionUrl: '/puzzlechallenge',
+        senderName: 'ZC Chess Club Arbiters'
+      });
+
+      sendEmail({
+        to: u.email,
+        subject: `[ZC Chess Club] ♟️ Challenge Live: "${tournament.title}" is now open!`,
+        html: emailHtml,
+        text: `♟️ Tactics Arena Live: "${tournament.title}" is now open! Play at /puzzlechallenge`
+      }).catch(e => console.warn(`Start email to ${u.email} failed:`, e.message));
+    }
+
+    console.log(`[Puzzle Start Broadcast] Dispatched start alert for "${tournament.title}" to ${allUsers.length} tacticians!`);
+  } catch (err) {
+    console.warn('[Puzzle Start Broadcast Error]:', err.message);
+  }
+}
+
+// Helper: Automatically check puzzle arenas for start and closed announcements
 async function checkAndAutoBroadcastPuzzleTournaments() {
   try {
     const now = new Date();
-    const closedTournaments = await PuzzleTournament.find({ winnersBroadcasted: { $ne: true } });
 
+    // 1. Check arenas that have started and need a "Live / Started" announcement
+    const unbroadcastedLive = await PuzzleTournament.find({ startBroadcasted: { $ne: true } });
+    for (const t of unbroadcastedLive) {
+      if (!t.startDate || !t.puzzles || t.puzzles.length === 0) continue;
+      const startStr = `${t.startDate}T${t.startTime || '00:00'}:00`;
+      const startAt = new Date(startStr);
+      const endStr = t.endDate ? `${t.endDate}T${t.endTime || '23:59'}:59` : null;
+      const endAt = endStr ? new Date(endStr) : null;
+
+      if (isNaN(startAt.getTime()) || now < startAt) continue;
+      if (endAt && now > endAt) {
+        // Tournament already concluded without start announcement, mark start as handled
+        t.startBroadcasted = true;
+        await t.save();
+        continue;
+      }
+
+      console.log(`[Auto-Broadcast] Puzzle Arena "${t.title}" is now LIVE! Broadcasting start announcement...`);
+      await broadcastPuzzleStartNotification(t);
+      t.startBroadcasted = true;
+      await t.save();
+    }
+
+    // 2. Check closed arenas that need a "Champions / Podium" announcement
+    const closedTournaments = await PuzzleTournament.find({ winnersBroadcasted: { $ne: true } });
     for (const t of closedTournaments) {
       if (!t.endDate) continue;
       const endStr = `${t.endDate}T${t.endTime || '23:59'}:59`;
