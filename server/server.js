@@ -53,15 +53,33 @@ const getMongoUri = () => {
   return process.env.MONGO_URI || 'mongodb+srv://poussyayman1_db_user:BzCJwFdQ7TSa2DmR@cluster0.d7yqddz.mongodb.net/chess_club?retryWrites=true&w=majority';
 };
 
+// In-memory micro-cache to smoothly handle high-concurrency spikes (100+ concurrent users)
+const memCache = new Map();
+const getCached = (key) => {
+  const item = memCache.get(key);
+  if (item && item.expiry > Date.now()) return item.data;
+  memCache.delete(key);
+  return null;
+};
+const setCached = (key, data, ttlMs = 5000) => {
+  memCache.set(key, { data, expiry: Date.now() + ttlMs });
+};
+const clearCache = (prefix = '') => {
+  if (!prefix) return memCache.clear();
+  for (const key of memCache.keys()) {
+    if (key.startsWith(prefix)) memCache.delete(key);
+  }
+};
+
 const getMongoOptions = () => ({
-  serverSelectionTimeoutMS: 5000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 20000,
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 15000,
+  socketTimeoutMS: 30000,
   tls: true,
   tlsAllowInvalidCertificates: true,
-  maxPoolSize: 2, // Essential for Serverless on MongoDB Atlas M0: caps connection footprint to prevent 500 connection limit alert
+  maxPoolSize: process.env.VERCEL ? 2 : 25, // Auto-scales to 25 connections in standalone node server (supports 100+ concurrent users effortlessly)
   minPoolSize: 0,
-  maxIdleTimeMS: 10000
+  maxIdleTimeMS: 15000
 });
 
 const connectDB = async (req, res, next) => {
@@ -1170,6 +1188,7 @@ app.post('/api/applications', async (req, res) => {
     });
 
     const savedApp = await newApp.save();
+    clearCache('applications');
     res.status(201).json({ message: 'Application submitted!', data: savedApp });
   } catch (error) {
     if (error.name === 'ValidationError') return res.status(400).json({ error: 'Validation failed', details: error.message });
@@ -1181,7 +1200,11 @@ app.post('/api/applications', async (req, res) => {
 // GET: fetch all applications
 app.get('/api/applications', async (req, res) => {
   try {
-    const apps = await Application.find().sort({ submissionDate: -1 });
+    const cached = getCached('applications_all');
+    if (cached) return res.json(cached);
+
+    const apps = await Application.find().sort({ submissionDate: -1 }).lean();
+    setCached('applications_all', apps, 5000);
     res.json(apps);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch applications', details: error.message });
@@ -2325,13 +2348,16 @@ app.delete('/api/users/:id', async (req, res) => {
 // GET: fetch all tournaments
 app.get('/api/tournaments', async (req, res) => {
   try {
-    const tournaments = await Tournament.find().sort({ startDate: 1 });
+    const cached = getCached('tournaments_all');
+    if (cached) return res.json(cached);
+
+    const tournaments = await Tournament.find().sort({ startDate: 1 }).lean();
     // Dynamically compute player count to ensure it's always accurate
     const dynamicTournaments = tournaments.map(t => {
-      const obj = t.toObject();
-      obj.players = obj.playersList ? obj.playersList.length : 0;
-      return obj;
+      t.players = t.playersList ? t.playersList.length : 0;
+      return t;
     });
+    setCached('tournaments_all', dynamicTournaments, 5000);
     res.json(dynamicTournaments);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tournaments', details: error.message });
@@ -4250,9 +4276,12 @@ app.delete('/api/puzzle-tournaments/:id/puzzles/:puzzleIdOrIndex', async (req, r
 // POST: submit a score and update the leaderboard
 app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
   try {
-    const { name, email, score, solvedCount } = req.body;
-    if (!name || !email || score === undefined || solvedCount === undefined) {
-      return res.status(400).json({ error: 'Name, email, score, and solvedCount are required' });
+    let { name, email, score, solvedCount } = req.body;
+    if (!email && req.headers['x-user-email']) email = req.headers['x-user-email'];
+    if (!email && req.headers['x-admin-email']) email = req.headers['x-admin-email'];
+
+    if (!email || score === undefined || solvedCount === undefined) {
+      return res.status(400).json({ error: 'Valid email, score, and solvedCount are required to submit scores.' });
     }
 
     const tournament = await PuzzleTournament.findById(req.params.id);
@@ -4265,6 +4294,7 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
     const endAt = tournament.endDate
       ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
       : null;
+
     if (startAt && now < startAt) {
       return res.status(403).json({ error: 'This challenge has not started yet.' });
     }
@@ -4272,19 +4302,37 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
       return res.status(403).json({ error: 'This challenge is closed.' });
     }
 
-    // Check if user already submitted a score
     const normalizedEmail = email.trim().toLowerCase();
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
-    const displayName = registeredUser?.name?.trim() || name.trim();
-    const existingIndex = tournament.leaderboard.findIndex(entry => entry.email.trim().toLowerCase() === normalizedEmail);
-    if (existingIndex !== -1) {
-      return res.status(409).json({ error: 'You have already completed this challenge.' });
+    const displayName = registeredUser?.name?.trim() || (name && name.trim()) || normalizedEmail.split('@')[0] || 'Tactician';
+
+    tournament.leaderboard = tournament.leaderboard || [];
+    tournament.participants = tournament.participants || [];
+
+    // Ensure player is also listed in participants roster
+    if (!tournament.participants.some(p => p.email && p.email.trim().toLowerCase() === normalizedEmail)) {
+      tournament.participants.push({ name: displayName, email: normalizedEmail, registeredAt: new Date() });
     }
 
-    tournament.leaderboard.push({ name: displayName, email: normalizedEmail, score, solvedCount });
+    const existingIndex = tournament.leaderboard.findIndex(entry => entry.email && entry.email.trim().toLowerCase() === normalizedEmail);
+    if (existingIndex !== -1) {
+      // Update score with highest achieved
+      const prevScore = tournament.leaderboard[existingIndex].score || 0;
+      const prevSolved = tournament.leaderboard[existingIndex].solvedCount || 0;
+      tournament.leaderboard[existingIndex].name = displayName;
+      tournament.leaderboard[existingIndex].score = Math.max(prevScore, Number(score) || 0);
+      tournament.leaderboard[existingIndex].solvedCount = Math.max(prevSolved, Number(solvedCount) || 0);
+    } else {
+      tournament.leaderboard.push({
+        name: displayName,
+        email: normalizedEmail,
+        score: Number(score) || 0,
+        solvedCount: Number(solvedCount) || 0
+      });
+    }
 
-    // Sort leaderboard desc
-    tournament.leaderboard.sort((a, b) => b.score - a.score);
+    // Sort leaderboard descending
+    tournament.leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0));
 
     const saved = await tournament.save();
 

@@ -13,13 +13,13 @@
 ======================== */
 .hero-section {
   position: relative;
-  min-height: calc(100vh - 120px);
-  max-height: 820px;
+  min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - 60px);
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 28px 20px 36px;
+  padding: clamp(60px, 7.5vh, 90px) 24px clamp(80px, 12vh, 120px);
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -73,8 +73,8 @@
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.42) 0%,
-    rgba(18, 16, 12, 0.48) 40%,
-    rgba(24, 22, 17, 0.85) 75%,
+    rgba(18, 16, 12, 0.5) 45%,
+    rgba(24, 22, 17, 0.86) 80%,
     #181611 100%
   );
   z-index: 2;
@@ -84,12 +84,12 @@
 .hero-content {
   position: relative;
   z-index: 3;
-  max-width: 640px;
+  max-width: 660px;
   margin: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8rem;
+  gap: clamp(0.75rem, 1.6vh, 1.1rem);
   animation: heroFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -104,7 +104,7 @@
   border: 1px solid rgba(243, 193, 68, 0.35);
   padding: 5px 16px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: #f3c144;
   letter-spacing: 1.1px;
@@ -115,19 +115,19 @@
 }
 
 .hero-content h1 {
-  font-size: 2.35rem;
+  font-size: clamp(2.05rem, 2.9vw, 2.55rem);
   font-weight: 800;
   color: #ffffff;
   margin: 0;
   line-height: 1.18;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
 }
 
 .hero-content p {
-  font-size: 0.98rem;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.5;
-  max-width: 480px;
+  font-size: clamp(0.92rem, 1.15vw, 1.02rem);
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.55;
+  max-width: 500px;
   margin: 0;
 }
 
@@ -135,8 +135,8 @@
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.85rem;
-  margin-top: 4px;
+  gap: 0.9rem;
+  margin-top: clamp(2px, 0.8vh, 6px);
 }
 
 /* Explore Button */
@@ -2353,30 +2353,31 @@
    ========================================================================== */
 @media (max-width: 768px) {
   .hero-section {
-    padding: 70px 14px 34px;
-    min-height: 85svh;
+    padding: clamp(55px, 8dvh, 75px) 16px clamp(65px, 10dvh, 90px);
+    min-height: calc(100vh - 60px);
+    min-height: calc(100dvh - 60px);
   }
 
   .hero-content {
-    gap: 0.65rem;
-    max-width: 92vw;
+    gap: 0.85rem;
+    max-width: 90vw;
   }
 
   .hero-content h1 {
-    font-size: 1.55rem;
+    font-size: clamp(1.6rem, 4.2vw, 1.95rem);
     line-height: 1.2;
   }
 
   .hero-content p {
-    font-size: 0.84rem;
-    line-height: 1.45;
-    max-width: 320px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    max-width: 380px;
   }
 
   .hero-badge {
-    font-size: 0.68rem;
-    padding: 3px 12px;
-    gap: 5px;
+    font-size: 0.7rem;
+    padding: 4px 14px;
+    gap: 6px;
   }
 
   .hero-buttons {
@@ -2384,9 +2385,9 @@
     flex-direction: row;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   .btn-link {
@@ -2800,16 +2801,39 @@
 
 @media (max-width: 480px) {
   .hero-section {
-    padding: 60px 12px 28px;
-    min-height: 80svh;
+    padding: clamp(55px, 8dvh, 70px) 14px clamp(24px, 4dvh, 36px);
+    min-height: calc(100dvh - 58px);
+    min-height: 84dvh;
+  }
+
+  .hero-content {
+    gap: 0.75rem;
   }
 
   .hero-content h1 {
-    font-size: 1.35rem;
+    font-size: 1.42rem;
+    line-height: 1.22;
   }
 
   .hero-content p {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    max-width: 300px;
+  }
+
+  .hero-quick-stats {
+    padding: 8px 16px;
+    gap: 14px;
+    margin-top: 10px;
+    max-width: 95vw;
+  }
+
+  .hero-stat-num {
+    font-size: 0.95rem;
+  }
+
+  .hero-stat-lbl {
+    font-size: 0.62rem;
   }
 
   .gallery-grid {
@@ -4688,53 +4712,67 @@
 
   /* Hero Section */
   .hero-section {
-    min-height: 85vh;
-    padding: 100px 16px 40px;
+    min-height: calc(100vh - 60px);
+    min-height: calc(100dvh - 60px);
+    padding: clamp(55px, 8dvh, 75px) 16px clamp(65px, 10dvh, 90px);
   }
   .hero-content h1 {
-    font-size: clamp(1.8rem, 6vw, 2.6rem);
+    font-size: clamp(1.45rem, 4.2vw, 1.75rem);
     line-height: 1.2;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
   }
   .hero-content p {
-    font-size: 0.95rem;
-    line-height: 1.55;
-    padding: 0 8px;
-    margin-bottom: 24px;
+    font-size: 0.84rem;
+    line-height: 1.48;
+    padding: 0 4px;
+    margin-bottom: 12px;
+    max-width: 360px;
   }
   .hero-buttons {
-    flex-direction: column;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     width: 100%;
-    max-width: 320px;
-    margin: 0 auto;
-    gap: 12px;
+    margin-top: 4px;
   }
   .hero-buttons .btn-link {
-    width: 100%;
+    width: auto;
   }
   .explore-btn, .hero-secondary-btn {
-    width: 100%;
-    justify-content: center;
-    padding: 13px 20px;
-    font-size: 0.92rem;
+    width: auto;
+    padding: 8px 15px;
+    font-size: 0.78rem;
+    gap: 6px;
+    border-radius: 999px;
+  }
+  .explore-btn .btn-emoji,
+  .hero-secondary-btn .btn-emoji {
+    font-size: 0.82rem;
   }
   .hero-quick-stats {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    padding: 14px 12px;
-    max-width: 340px;
-    margin: 28px auto 0;
-    border-radius: 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    width: auto;
+    max-width: 95vw;
+    margin: 12px auto 0;
   }
   .hero-stat-divider {
-    display: none;
+    display: block;
+    height: 16px;
   }
   .hero-stat-num {
-    font-size: 1.35rem;
+    font-size: 0.92rem;
   }
   .hero-stat-lbl {
-    font-size: 0.72rem;
+    font-size: 0.6rem;
   }
 
   /* Live Tournament Banner */
@@ -5113,13 +5151,43 @@
 
 @media (max-width: 480px) {
   .hero-section {
-    padding: 85px 12px 30px;
+    padding: clamp(50px, 7dvh, 65px) 12px clamp(55px, 9dvh, 80px);
+    min-height: calc(100vh - 60px);
+    min-height: calc(100dvh - 60px);
   }
   .hero-content h1 {
-    font-size: 1.8rem;
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+  .hero-content p {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    max-width: 290px;
+  }
+  .hero-buttons {
+    gap: 6px;
+    margin-top: 3px;
+  }
+  .explore-btn, .hero-secondary-btn {
+    padding: 7px 13px;
+    font-size: 0.75rem;
+    gap: 5px;
+  }
+  .explore-btn .btn-emoji,
+  .hero-secondary-btn .btn-emoji {
+    font-size: 0.78rem;
   }
   .hero-quick-stats {
-    max-width: 100%;
+    padding: 5px 12px;
+    gap: 6px;
+    margin-top: 8px;
+    max-width: 95vw;
+  }
+  .hero-stat-num {
+    font-size: 0.88rem;
+  }
+  .hero-stat-lbl {
+    font-size: 0.58rem;
   }
   .tacticians-filter-bar {
     display: flex;

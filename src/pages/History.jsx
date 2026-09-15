@@ -837,12 +837,84 @@ export default function EventHistory() {
           const matchingDefault = defaultHistoricalEvents.find(
             (d) => d._id === t._id || d.title.toLowerCase() === t.title.toLowerCase()
           );
+
+          // 1. Build rich podium/winner entries from MongoDB podium or winner
+          const podiumEntries = [];
+          if (Array.isArray(t.podium) && t.podium.length > 0) {
+            t.podium
+              .filter((item) => item && item.name)
+              .sort((a, b) => (a.place || 1) - (b.place || 1))
+              .forEach((item) => {
+                const placeEmoji = item.place === 1 ? "🥇" : item.place === 2 ? "🥈" : item.place === 3 ? "🥉" : "🏅";
+                const placeTitle = item.place === 1 ? "1st Place (Champion)" : item.place === 2 ? "2nd Place (Runner-up)" : item.place === 3 ? "3rd Place" : `${item.place}th Place`;
+                const ptsText = (item.points !== undefined && item.points !== null && item.points !== "") ? ` (${item.points} pts)` : "";
+                podiumEntries.push({
+                  name: `${placeEmoji} ${placeTitle}: ${item.name}${ptsText}`,
+                  email: item.email || ""
+                });
+              });
+          } else if (t.winner) {
+            podiumEntries.push({
+              name: `🥇 1st Place (Champion): ${t.winner}`,
+              email: ""
+            });
+          }
+
+          // 2. Check if matchingDefault has curated historical winners/placements
+          const defaultHasMedals = matchingDefault && matchingDefault.playersList && matchingDefault.playersList.some(
+            (p) => p && p.name && p.name.match(/(🥇|🥈|🥉|🏅|🏆|👑)/)
+          );
+
+          // 3. Determine the best combined playersList:
+          let finalPlayersList = [];
+
+          if (podiumEntries.length > 0) {
+            finalPlayersList = [...podiumEntries];
+            const winnerNames = new Set(
+              podiumEntries.map((e) => {
+                const colonIdx = e.name.indexOf(":");
+                const n = colonIdx !== -1 ? e.name.substring(colonIdx + 1).trim() : e.name;
+                return n.replace(/\(.*?\)/g, "").trim().toLowerCase();
+              })
+            );
+
+            const sourceList = (t.playersList && t.playersList.length > 0)
+              ? t.playersList
+              : (matchingDefault ? matchingDefault.playersList : []);
+
+            sourceList.forEach((p) => {
+              if (!p || !p.name) return;
+              const cleanName = p.name.replace(/(🥇|🥈|🥉|🏅|🏆|👑|🎯|♟️|👥)\s*([^:]+:)?/g, "").replace(/\(.*?\)/g, "").trim().toLowerCase();
+              if (!winnerNames.has(cleanName) && !p.name.match(/(🥇|🥈|🥉|🏅|🏆|👑)/)) {
+                finalPlayersList.push(p);
+              }
+            });
+          } else if (defaultHasMedals) {
+            finalPlayersList = [...matchingDefault.playersList];
+            if (t.playersList && t.playersList.length > 0) {
+              const existingNames = new Set(
+                finalPlayersList.map((p) => (p.name || "").toLowerCase().replace(/[^a-z0-9]/g, ""))
+              );
+              t.playersList.forEach((p) => {
+                if (!p || !p.name) return;
+                const clean = p.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                if (!existingNames.has(clean)) {
+                  finalPlayersList.push(p);
+                }
+              });
+            }
+          } else if (t.playersList && t.playersList.length > 0) {
+            finalPlayersList = t.playersList;
+          } else if (matchingDefault && matchingDefault.playersList) {
+            finalPlayersList = matchingDefault.playersList;
+          }
+
           return {
             ...matchingDefault,
             ...t,
             image: t.image || (matchingDefault ? matchingDefault.image : null),
             description: t.description || (matchingDefault ? matchingDefault.description : ""),
-            playersList: (t.playersList && t.playersList.length > 0) ? t.playersList : (matchingDefault ? matchingDefault.playersList : [])
+            playersList: finalPlayersList
           };
         });
 
@@ -1640,17 +1712,60 @@ export default function EventHistory() {
 
                 <p className="modal-desc">{selectedEventModal.description}</p>
 
-                {selectedEventModal.playersList && selectedEventModal.playersList.length > 0 && (() => {
+                {(() => {
                   const placements = [];
                   const participants = [];
-                  selectedEventModal.playersList.forEach((p) => {
-                      const h = { ...parseHighlight(p.name), email: p.email };
-                    if (h.emoji.match(/(🥇|🥈|🥉|🏅|🏆)/)) {
+                  const rawList = selectedEventModal.playersList || [];
+
+                  rawList.forEach((p) => {
+                    if (!p || !p.name) return;
+                    const h = { ...parseHighlight(p.name), email: p.email };
+                    if (h.emoji.match(/(🥇|🥈|🥉|🏅|🏆|👑)/) || h.isPlacement) {
                       placements.push(h);
                     } else {
                       participants.push(h);
                     }
                   });
+
+                  // Fallback: If placements are not in playersList, extract directly from podium or winner
+                  if (placements.length === 0 && Array.isArray(selectedEventModal.podium) && selectedEventModal.podium.length > 0) {
+                    selectedEventModal.podium
+                      .filter((item) => item && item.name)
+                      .sort((a, b) => (a.place || 1) - (b.place || 1))
+                      .forEach((item) => {
+                        const emoji = item.place === 1 ? "🥇" : item.place === 2 ? "🥈" : item.place === 3 ? "🥉" : "🏅";
+                        const role = item.place === 1 ? "1st Place (Champion)" : item.place === 2 ? "2nd Place (Runner-up)" : item.place === 3 ? "3rd Place" : `${item.place}th Place`;
+                        const pts = (item.points !== undefined && item.points !== null && item.points !== "") ? ` (${item.points} pts)` : "";
+                        placements.push({
+                          emoji,
+                          role,
+                          name: `${item.name}${pts}`,
+                          email: item.email || "",
+                          isPlacement: true
+                        });
+                      });
+                  } else if (placements.length === 0 && selectedEventModal.winner) {
+                    placements.push({
+                      emoji: "🥇",
+                      role: "1st Place (Champion)",
+                      name: selectedEventModal.winner,
+                      email: "",
+                      isPlacement: true
+                    });
+                  }
+
+                  // Remove winner names from participants list if they were duplicated
+                  const winnerNames = new Set(
+                    placements.map((p) => (p.name || "").replace(/\(.*?\)/g, "").trim().toLowerCase())
+                  );
+                  const filteredParticipants = participants.filter((p) => {
+                    const cleanP = (p.name || "").replace(/\(.*?\)/g, "").trim().toLowerCase();
+                    return !winnerNames.has(cleanP);
+                  });
+
+                  if (placements.length === 0 && filteredParticipants.length === 0) {
+                    return null;
+                  }
 
                   return (
                     <>
@@ -1747,11 +1862,11 @@ export default function EventHistory() {
                         </div>
                       )}
 
-                      {participants.length > 0 && (
+                      {filteredParticipants.length > 0 && (
                         <div className="modal-winners-section" style={{ borderTop: "none", paddingTop: 0 }}>
                           <h4>📋 Highlights & Tournament Information</h4>
                           <div className="modal-tags-grid">
-                            {participants.map((h, pIdx) => (
+                            {filteredParticipants.map((h, pIdx) => (
                               <div key={pIdx} className="modal-participant-chip">
                                 <span>{h.emoji}</span>
                                 <span className="highlight-name">{h.name}</span>

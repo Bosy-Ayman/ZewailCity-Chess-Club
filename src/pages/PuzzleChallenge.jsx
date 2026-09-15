@@ -34,10 +34,15 @@ export default function PuzzleChallenge() {
   };
 
   const handleOpenSolutionsModal = (tournament, initialTab = "solutions") => {
+    const closed = isTournamentClosed(tournament);
+    let resolvedTab = initialTab;
+    if (!closed && initialTab === "solutions") {
+      resolvedTab = getTournamentPhase(tournament) === "registration" ? "roster" : "standings";
+    }
     setSelectedSolutionsTournament(tournament);
     setSolutionPuzzleIdx(0);
     setSolutionMoveStep(0);
-    setSolutionsModalTab(initialTab);
+    setSolutionsModalTab(resolvedTab);
   };
 
   const toggleTournamentExpanded = (id) => {
@@ -175,12 +180,15 @@ export default function PuzzleChallenge() {
     };
   }, [isPlaying, currentPuzzleIdx]);
 
+  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
+  const [submitScoreError, setSubmitScoreError] = useState(null);
+
   // User session cache
-  const isLoggedIn = !!localStorage.getItem("adminToken");
-  const userEmail = localStorage.getItem("adminEmail") || "";
+  const isLoggedIn = !!localStorage.getItem("adminToken") || !!localStorage.getItem("userEmail") || !!localStorage.getItem("adminEmail");
+  const userEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || localStorage.getItem("email") || "";
   const userRole = localStorage.getItem("userRole") || "member";
   const isAdmin = userRole === "admin" || userRole === "oc" || userRole === "hr";
-  const userName = userEmail ? userEmail.split("@")[0] : "Guest Player";
+  const userName = localStorage.getItem("userName") || (userEmail ? userEmail.split("@")[0] : "Club Tactician");
 
   // Fetch puzzle tournaments and player avatars on load
   useEffect(() => {
@@ -289,7 +297,7 @@ export default function PuzzleChallenge() {
   // Launch a tournament challenge
   const startTournamentChallenge = (tournament) => {
     if (!isLoggedIn) {
-      alert("Please log in first to participate and submit scores to the leaderboard!");
+      alert("Please log in first to enter and participate in the puzzle challenge!");
       return;
     }
     if (!tournament.puzzles || tournament.puzzles.length === 0) {
@@ -348,9 +356,67 @@ export default function PuzzleChallenge() {
     }
   };
 
+  const isTournamentClosed = (tournament) => {
+    if (!tournament) return false;
+    const now = new Date();
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || "23:59"}:59`)
+      : null;
+    return !!(endAt && now > endAt);
+  };
+
+  const getTournamentState = (tournament) => {
+    if (!tournament) return "upcoming";
+    const now = new Date();
+    const startAt = tournament.startDate
+      ? new Date(`${tournament.startDate}T${tournament.startTime || "00:00"}:00`)
+      : null;
+    const endAt = tournament.endDate
+      ? new Date(`${tournament.endDate}T${tournament.endTime || "23:59"}:59`)
+      : null;
+    if (startAt && now < startAt) return "upcoming";
+    if (endAt && now > endAt) return "closed";
+    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) return "completed";
+    return "open";
+  };
+
   const getTournamentPhase = (tournament) => {
     const state = getTournamentState(tournament);
     return state === "upcoming" ? "registration" : state === "closed" || state === "completed" ? "results" : "live";
+  };
+
+  // Helper: Get standings dynamically based on tournament lifecycle
+  // When ongoing/live: only show participants who attempted and scored > 0
+  // When closed: include all participants (even those who scored 0 or didn't attempt)
+  const getTournamentStandings = (tournament) => {
+    if (!tournament) return [];
+    const closed = isTournamentClosed(tournament);
+    const rawLeaderboard = tournament.leaderboard || [];
+
+    if (closed) {
+      const scoredEmails = new Set(
+        rawLeaderboard
+          .filter((e) => e.email)
+          .map((e) => e.email.trim().toLowerCase())
+      );
+      const unattemptedParticipants = (tournament.participants || [])
+        .filter((p) => p.email && !scoredEmails.has(p.email.trim().toLowerCase()))
+        .map((p) => ({
+          name: p.name,
+          email: p.email,
+          score: 0,
+          solvedCount: 0,
+          unattempted: true
+        }));
+
+      return [...rawLeaderboard, ...unattemptedParticipants].sort(
+        (a, b) => (b.score || 0) - (a.score || 0)
+      );
+    }
+
+    return rawLeaderboard
+      .filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0)
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
   const getRosterAvatar = (player) => (
@@ -650,30 +716,56 @@ export default function PuzzleChallenge() {
     const finalScore = scoreRef.current;
     const finalSolved = solvedCountRef.current;
 
+    let targetEmail = userEmail || localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || localStorage.getItem("email") || "";
+    let targetName = localStorage.getItem("userName") || userName || (targetEmail ? targetEmail.split("@")[0] : "Club Tactician");
+
+    if (!targetEmail) {
+      const promptEmail = window.prompt("Enter your email to submit your score to the arena leaderboard:", "");
+      if (promptEmail && promptEmail.trim()) {
+        targetEmail = promptEmail.trim();
+        targetName = promptEmail.split("@")[0];
+        try {
+          localStorage.setItem("userEmail", targetEmail);
+          localStorage.setItem("userName", targetName);
+        } catch (e) {}
+      } else {
+        targetEmail = `tactician_${Date.now().toString().slice(-4)}@zewailcity.edu.eg`;
+      }
+    }
+
+    setIsSubmittingScore(true);
+    setSubmitScoreError(null);
+
     // Submit score to database
     try {
       const data = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${activeTournament._id}/submit-score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: userName,
-          email: userEmail,
+          name: targetName,
+          email: targetEmail,
           score: finalScore,
           solvedCount: finalSolved
         })
       });
+
       if (data && data.data) {
         setActiveTournament(data.data);
+        setTournaments((prev) => prev.map((item) => (item._id === data.data._id ? data.data : item)));
         fetchTournaments();
-        // If this player took 1st place, trigger winner celebration
+
+        // If this player took 1st place with a top score, trigger celebration
         const sorted = [...(data.data.leaderboard || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
-        if (sorted[0] && sorted[0].email?.toLowerCase() === userEmail.toLowerCase() && finalScore > 0) {
+        if (sorted[0] && sorted[0].email?.toLowerCase() === targetEmail.toLowerCase() && finalScore > 0) {
           setCelebrationTournament(data.data);
           setCelebrationModalOpen(true);
         }
       }
     } catch (err) {
       console.warn("Failed to submit score to server:", err.message);
+      setSubmitScoreError(err.message || "Could not submit score to server.");
+    } finally {
+      setIsSubmittingScore(false);
     }
   };
 
@@ -698,20 +790,6 @@ export default function PuzzleChallenge() {
   });
 
   const activePlayState = isPlaying && !isFinished;
-
-  const getTournamentState = (tournament) => {
-    const now = new Date();
-    const startAt = tournament.startDate
-      ? new Date(`${tournament.startDate}T${tournament.startTime || "00:00"}:00`)
-      : null;
-    const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || "23:59"}:59`)
-      : null;
-    if (startAt && now < startAt) return "upcoming";
-    if (endAt && now > endAt) return "closed";
-    if ((tournament.leaderboard || []).some((entry) => entry.email?.toLowerCase() === userEmail.toLowerCase())) return "completed";
-    return "open";
-  };
 
   if (isLoading) {
     return (
@@ -840,67 +918,73 @@ export default function PuzzleChallenge() {
                         </div>
                         
                         {/* Leaderboard Summary preview */}
-                        <div className="card-leaderboard-preview">
-                          <div className="preview-header-row">
-                            <h4>Leaderboard Standings</h4>
-                            {t.leaderboard && t.leaderboard.length > 0 && (
-                              <span className="player-count-badge">
-                                👥 {t.leaderboard.length} {t.leaderboard.length === 1 ? "Tactician" : "Tacticians"}
-                              </span>
-                            )}
-                          </div>
-                          {t.leaderboard && t.leaderboard.length > 0 ? (
-                            <>
-                              <div className="preview-list">
-                                {[...t.leaderboard]
-                                  .sort((a, b) => (b.score || 0) - (a.score || 0))
-                                  .slice(expandedTournaments[t._id] === false ? 0 : undefined, expandedTournaments[t._id] === false ? 3 : undefined)
-                                  .map((entry, idx) => {
-                                  const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
-                                  return (
-                                    <div key={idx} className={`leaderboard-preview-row ${entry.email === userEmail ? "highlight-user-row-preview" : ""}`}>
-                                      <div className="preview-player-info">
-                                        <span className="preview-rank">{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`}</span>
-                                        <img 
-                                          src={avatarUrl} 
-                                          alt={entry.name} 
-                                          className="preview-avatar"
-                                          onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
-                                        />
-                                        <span className="preview-name" title={getPlayerDisplayName(entry)}>{getPlayerDisplayName(entry)}</span>
-                                      </div>
-                                      <div className="preview-stats-col">
-                                        <span className="preview-solved">{entry.solvedCount || 0} 🧩</span>
-                                        <strong className="preview-score">{entry.score} pts</strong>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                        {(() => {
+                          const standings = getTournamentStandings(t);
+                          return (
+                            <div className="card-leaderboard-preview">
+                              <div className="preview-header-row">
+                                <h4>Leaderboard Standings</h4>
+                                {standings.length > 0 && (
+                                  <span className="player-count-badge">
+                                    👥 {standings.length} {standings.length === 1 ? "Tactician" : "Tacticians"}
+                                  </span>
+                                )}
                               </div>
+                              {standings.length > 0 ? (
+                                <>
+                                  <div className="preview-list">
+                                    {standings
+                                      .slice(0, expandedTournaments[t._id] === false ? 3 : undefined)
+                                      .map((entry, idx) => {
+                                      const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
+                                      return (
+                                        <div key={idx} className={`leaderboard-preview-row ${entry.email === userEmail ? "highlight-user-row-preview" : ""}`}>
+                                          <div className="preview-player-info">
+                                            <span className="preview-rank">{idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`}</span>
+                                            <img 
+                                              src={avatarUrl} 
+                                              alt={entry.name} 
+                                              className="preview-avatar"
+                                              onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                                            />
+                                            <span className="preview-name" title={getPlayerDisplayName(entry)}>{getPlayerDisplayName(entry)}</span>
+                                          </div>
+                                          <div className="preview-stats-col">
+                                            <span className="preview-solved">{entry.solvedCount || 0} 🧩</span>
+                                            <strong className="preview-score">{entry.score || 0} pts</strong>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
 
-                              {t.leaderboard.length > 3 && (
-                                <button 
-                                  type="button" 
-                                  className="view-all-players-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleTournamentExpanded(t._id);
-                                  }}
-                                >
-                                  {expandedTournaments[t._id] === false
-                                    ? `View all ${t.leaderboard.length} players ▼`
-                                    : "Show Top 3 ▲"}
-                                </button>
+                                  {standings.length > 3 && (
+                                    <button 
+                                      type="button" 
+                                      className="view-all-players-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleTournamentExpanded(t._id);
+                                      }}
+                                    >
+                                      {expandedTournaments[t._id] === false
+                                        ? `View all ${standings.length} players ▼`
+                                        : "Show Top 3 ▲"}
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <p className="no-scores-text">
+                                  {getTournamentState(t) === "upcoming" ? "Registration is open. Challenge begins soon!" : "Be the first to participate!"}
+                                </p>
                               )}
-                            </>
-                          ) : (
-                            <p className="no-scores-text">Be the first to participate!</p>
-                          )}
-                        </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Standardized Card Actions Container */}
                         <div className="card-actions-wrapper">
-                          {t.leaderboard && t.leaderboard.length > 0 && (
+                          {getTournamentStandings(t).length > 0 && (
                             <button
                               type="button"
                               className="card-action-btn celebration-btn"
@@ -917,13 +1001,15 @@ export default function PuzzleChallenge() {
                           <button
                             type="button"
                             className="card-action-btn solutions-btn"
-                            onClick={() => handleOpenSolutionsModal(t, getTournamentPhase(t) === "registration" ? "roster" : "solutions")}
+                            onClick={() => handleOpenSolutionsModal(t, getTournamentPhase(t) === "registration" ? "roster" : isTournamentClosed(t) ? "solutions" : "standings")}
                           >
-                            <span>{getTournamentPhase(t) === "registration" ? "👥" : "🧩"}</span>
+                            <span>{getTournamentPhase(t) === "registration" ? "👥" : isTournamentClosed(t) ? "🧩" : "📊"}</span>
                             <span>
                               {getTournamentPhase(t) === "registration" 
                                 ? `View Roster (${t.participants?.length || 0})` 
-                                : `Solutions & Standings (${t.leaderboard?.length || 0})`}
+                                : isTournamentClosed(t)
+                                  ? `Solutions & Standings (${getTournamentStandings(t).length})`
+                                  : `Standings & Roster (${getTournamentStandings(t).length})`}
                             </span>
                           </button>
 
@@ -947,15 +1033,21 @@ export default function PuzzleChallenge() {
                             <button 
                               type="button"
                               className="card-action-btn enter-btn completed-btn"
-                              onClick={() => handleOpenSolutionsModal(t, "solutions")}
+                              onClick={() => handleOpenSolutionsModal(t, isTournamentClosed(t) ? "solutions" : "standings")}
                             >
-                              ✅ Completed · View Solutions
+                              ✅ Completed · {isTournamentClosed(t) ? "View Solutions" : "View Standings"}
                             </button>
                           ) : (
                             <button 
                               type="button"
                               className="card-action-btn enter-btn live-btn" 
-                              onClick={() => startTournamentChallenge(t)}
+                              onClick={() => {
+                                if (!isLoggedIn) {
+                                  alert("Please log in first to enter and participate in the puzzle challenge!");
+                                  return;
+                                }
+                                startTournamentChallenge(t);
+                              }}
                             >
                               ⚡ Join Challenge
                             </button>
@@ -986,6 +1078,21 @@ export default function PuzzleChallenge() {
               </div>
             </div>
             
+            {submitScoreError && (
+              <div style={{ background: "rgba(220, 53, 69, 0.15)", border: "1px solid rgba(220, 53, 69, 0.4)", color: "#ff8585", padding: "12px 16px", borderRadius: "8px", margin: "14px 0", textAlign: "center" }}>
+                <p style={{ margin: "0 0 8px" }}>⚠️ {submitScoreError}</p>
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  style={{ padding: "6px 14px", fontSize: "0.85rem", background: "#f3c144", color: "#111", border: "none", borderRadius: "6px", fontWeight: "bold", cursor: "pointer" }}
+                  onClick={finishChallenge}
+                  disabled={isSubmittingScore}
+                >
+                  {isSubmittingScore ? "Retrying..." : "🔄 Retry Submitting Score"}
+                </button>
+              </div>
+            )}
+
             <div className="leaderboard-full-wrapper">
               <h3>Leaderboard Rankings</h3>
               <div className="leaderboard-table-container">
@@ -999,38 +1106,48 @@ export default function PuzzleChallenge() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeTournament.leaderboard && activeTournament.leaderboard.length > 0 ? (
-                      activeTournament.leaderboard.map((entry, idx) => {
-                        const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
-                        return (
-                          <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
-                            <td className="col-rank">
-                              <span className={`rank-badge rank-${idx + 1}`}>
-                                {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
-                              </span>
-                            </td>
-                            <td className="col-player">
-                              <div className="table-player-cell">
-                                <img 
-                                  src={avatarUrl} 
-                                  alt={entry.name} 
-                                  className="table-player-avatar"
-                                  onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
-                                />
-                                <span className="player-name">{getPlayerDisplayName(entry)}</span>
-                                {entry.email === userEmail && <span className="you-pill">YOU</span>}
-                              </div>
-                            </td>
-                            <td className="col-solved">{entry.solvedCount}</td>
-                            <td className="col-score">{entry.score} pts</td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan="4" style={{ textAlign: "center", color: "#888", padding: "20px" }}>No scores submitted yet.</td>
-                      </tr>
-                    )}
+                    {(() => {
+                      const currentBoard = activeTournament?.leaderboard && activeTournament.leaderboard.length > 0
+                        ? [...activeTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0))
+                        : [];
+
+                      if (currentBoard.length > 0) {
+                        return currentBoard.map((entry, idx) => {
+                          const avatarUrl = customAvatars[entry.name] || customAvatars[entry.email] || getPlayerAvatarUrl(entry.name, customAvatars);
+                          return (
+                            <tr key={idx} className={entry.email?.toLowerCase() === userEmail.toLowerCase() ? "highlight-user-row" : ""}>
+                              <td className="col-rank">
+                                <span className={`rank-badge rank-${idx + 1}`}>
+                                  {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
+                                </span>
+                              </td>
+                              <td className="col-player">
+                                <div className="table-player-cell">
+                                  <img 
+                                    src={avatarUrl} 
+                                    alt={entry.name} 
+                                    className="table-player-avatar"
+                                    onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
+                                  />
+                                  <span className="player-name">{getPlayerDisplayName(entry)}</span>
+                                  {entry.email?.toLowerCase() === userEmail.toLowerCase() && <span className="you-pill">YOU</span>}
+                                </div>
+                              </td>
+                              <td className="col-solved">{entry.solvedCount || 0}</td>
+                              <td className="col-score">{entry.score || 0} pts</td>
+                            </tr>
+                          );
+                        });
+                      }
+
+                      return (
+                        <tr>
+                          <td colSpan="4" style={{ textAlign: "center", color: "#888", padding: "20px" }}>
+                            {isSubmittingScore ? "Submitting score to leaderboard..." : "No scores submitted yet."}
+                          </td>
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -1226,17 +1343,23 @@ export default function PuzzleChallenge() {
             </div>
 
             {/* 🏆 Top 3 Winners Podium Cards & Overall Cumulative Score Bar */}
-            {selectedSolutionsTournament.leaderboard && selectedSolutionsTournament.leaderboard.length > 0 && (
-              <div className="solutions-podium-section">
-                <div className="podium-section-title">
-                  <span>🏆</span>
-                  <h3>Arena Champions Podium & Overall Scores</h3>
-                </div>
-                <div className="solutions-winners-grid">
-                  {(() => {
-                    const sortedLb = [...selectedSolutionsTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
-                    const top3 = sortedLb.slice(0, 3);
-                    return top3.map((winner, idx) => {
+            {(() => {
+              const modalStandings = getTournamentStandings(selectedSolutionsTournament);
+              if (modalStandings.length === 0) return null;
+              const top3 = modalStandings.slice(0, 3);
+              const totalScoreAll = modalStandings.reduce((acc, curr) => acc + (curr.score || 0), 0);
+              const totalSolvedAll = modalStandings.reduce((acc, curr) => acc + (curr.solvedCount || 0), 0);
+              const maxScore = modalStandings[0]?.score || 0;
+              const puzzleCount = selectedSolutionsTournament.puzzles?.length || 0;
+
+              return (
+                <div className="solutions-podium-section">
+                  <div className="podium-section-title">
+                    <span>🏆</span>
+                    <h3>Arena Champions Podium & Overall Scores</h3>
+                  </div>
+                  <div className="solutions-winners-grid">
+                    {top3.map((winner, idx) => {
                       const avatar = getRosterAvatar(winner);
                       const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
                       const rankClass = idx === 0 ? "rank-gold" : idx === 1 ? "rank-silver" : "rank-bronze";
@@ -1257,56 +1380,46 @@ export default function PuzzleChallenge() {
                               {getPlayerDisplayName(winner)}
                             </strong>
                             <div className="winner-stats-row">
-                              <span className="winner-score">{winner.score} pts</span>
-                              <span className="winner-solved">{winner.solvedCount} / {totalPuzzles} 🧩</span>
+                              <span className="winner-score">{winner.score || 0} pts</span>
+                              <span className="winner-solved">{winner.solvedCount || 0} / {totalPuzzles} 🧩</span>
                             </div>
                           </div>
                         </div>
                       );
-                    });
-                  })()}
-                </div>
+                    })}
+                  </div>
 
-                {/* Overall Score Metrics Bar */}
-                {(() => {
-                  const sortedLb = [...selectedSolutionsTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
-                  const totalScoreAll = sortedLb.reduce((acc, curr) => acc + (curr.score || 0), 0);
-                  const totalSolvedAll = sortedLb.reduce((acc, curr) => acc + (curr.solvedCount || 0), 0);
-                  const maxScore = sortedLb[0]?.score || 0;
-                  const puzzleCount = selectedSolutionsTournament.puzzles?.length || 0;
-
-                  return (
-                    <div className="overall-metrics-bar">
-                      <div className="metric-box">
-                        <span className="metric-icon">👥</span>
-                        <span className="metric-label">Competitors</span>
-                        <strong className="metric-val">{sortedLb.length}</strong>
-                      </div>
-                      <div className="metric-box">
-                        <span className="metric-icon">🧩</span>
-                        <span className="metric-label">Total Puzzles</span>
-                        <strong className="metric-val">{puzzleCount}</strong>
-                      </div>
-                      <div className="metric-box">
-                        <span className="metric-icon">⚡</span>
-                        <span className="metric-label">Top Score</span>
-                        <strong className="metric-val">{maxScore} pts</strong>
-                      </div>
-                      <div className="metric-box">
-                        <span className="metric-icon">📊</span>
-                        <span className="metric-label">Total Solved</span>
-                        <strong className="metric-val">{totalSolvedAll}</strong>
-                      </div>
-                      <div className="metric-box">
-                        <span className="metric-icon">🏆</span>
-                        <span className="metric-label">Overall Points</span>
-                        <strong className="metric-val">{totalScoreAll} pts</strong>
-                      </div>
+                  {/* Overall Score Metrics Bar */}
+                  <div className="overall-metrics-bar">
+                    <div className="metric-box">
+                      <span className="metric-icon">👥</span>
+                      <span className="metric-label">Competitors</span>
+                      <strong className="metric-val">{modalStandings.length}</strong>
                     </div>
-                  );
-                })()}
-              </div>
-            )}
+                    <div className="metric-box">
+                      <span className="metric-icon">🧩</span>
+                      <span className="metric-label">Total Puzzles</span>
+                      <strong className="metric-val">{puzzleCount}</strong>
+                    </div>
+                    <div className="metric-box">
+                      <span className="metric-icon">⚡</span>
+                      <span className="metric-label">Top Score</span>
+                      <strong className="metric-val">{maxScore} pts</strong>
+                    </div>
+                    <div className="metric-box">
+                      <span className="metric-icon">📊</span>
+                      <span className="metric-label">Total Solved</span>
+                      <strong className="metric-val">{totalSolvedAll}</strong>
+                    </div>
+                    <div className="metric-box">
+                      <span className="metric-icon">🏆</span>
+                      <span className="metric-label">Overall Points</span>
+                      <strong className="metric-val">{totalScoreAll} pts</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Modal Tabs Switcher */}
             <div className="solutions-tabs-nav">
@@ -1315,14 +1428,16 @@ export default function PuzzleChallenge() {
                 className={`tab-btn ${solutionsModalTab === "solutions" ? "active" : ""}`}
                 onClick={() => setSolutionsModalTab("solutions")}
               >
-                🧩 Puzzle Solutions ({selectedSolutionsTournament.puzzles?.length || 0})
+                {isTournamentClosed(selectedSolutionsTournament)
+                  ? `🧩 Puzzle Solutions (${selectedSolutionsTournament.puzzles?.length || 0})`
+                  : "🔒 Solutions (Locked)"}
               </button>
               <button
                 type="button"
                 className={`tab-btn ${solutionsModalTab === "standings" ? "active" : ""}`}
                 onClick={() => setSolutionsModalTab("standings")}
               >
-                📊 Overall Standings ({selectedSolutionsTournament.leaderboard?.length || 0})
+                📊 Overall Standings ({getTournamentStandings(selectedSolutionsTournament).length})
               </button>
               <button
                 type="button"
@@ -1336,7 +1451,37 @@ export default function PuzzleChallenge() {
             {/* TAB 1: INTERACTIVE PUZZLE SOLUTIONS */}
             {solutionsModalTab === "solutions" && (
               <div className="solutions-tab-content">
-                {(!selectedSolutionsTournament.puzzles || selectedSolutionsTournament.puzzles.length === 0) ? (
+                {!isTournamentClosed(selectedSolutionsTournament) ? (
+                  <div className="solutions-locked-view" style={{ textAlign: "center", padding: "48px 24px", background: "rgba(25, 23, 19, 0.7)", borderRadius: "14px", border: "1px solid rgba(243, 193, 68, 0.2)", margin: "16px 0" }}>
+                    <div style={{ fontSize: "3.5rem", marginBottom: "16px" }}>🔒</div>
+                    <h3 style={{ color: "#f3c144", margin: "0 0 12px", fontSize: "1.35rem" }}>
+                      Tactical Solutions are Locked
+                    </h3>
+                    <p style={{ color: "#aaa08f", maxWidth: "520px", margin: "0 auto 24px", lineHeight: "1.6", fontSize: "0.95rem" }}>
+                      To preserve tournament integrity, step-by-step puzzle solutions and tactical checkmate sequences remain hidden while the challenge is live. Solutions will be automatically revealed once this arena closes on{" "}
+                      <strong style={{ color: "#fff" }}>
+                        {selectedSolutionsTournament.endDate} {selectedSolutionsTournament.endTime || "23:59"}
+                      </strong>.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{
+                        background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                        color: "#12100d",
+                        border: "none",
+                        fontWeight: "bold",
+                        padding: "10px 24px",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontSize: "0.95rem"
+                      }}
+                      onClick={() => setSolutionsModalTab("standings")}
+                    >
+                      📊 View Arena Standings
+                    </button>
+                  </div>
+                ) : (!selectedSolutionsTournament.puzzles || selectedSolutionsTournament.puzzles.length === 0) ? (
                   <p className="no-scores-text">No tactical puzzles registered in this tournament.</p>
                 ) : (
                   <div className="solutions-viewer-grid">
@@ -1499,10 +1644,10 @@ export default function PuzzleChallenge() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedSolutionsTournament.leaderboard && selectedSolutionsTournament.leaderboard.length > 0 ? (
-                        [...selectedSolutionsTournament.leaderboard]
-                          .sort((a, b) => (b.score || 0) - (a.score || 0))
-                          .map((entry, idx) => {
+                      {(() => {
+                        const standings = getTournamentStandings(selectedSolutionsTournament);
+                        if (standings.length > 0) {
+                          return standings.map((entry, idx) => {
                             const avatarUrl = getRosterAvatar(entry);
                             const puzzleCount = selectedSolutionsTournament.puzzles?.length || 1;
                             const solvePct = Math.round(((entry.solvedCount || 0) / puzzleCount) * 100);
@@ -1523,6 +1668,22 @@ export default function PuzzleChallenge() {
                                     />
                                     <span className="player-name">{getPlayerDisplayName(entry)}</span>
                                     {entry.email === userEmail && <span className="you-pill">YOU</span>}
+                                    {entry.unattempted && (
+                                      <span
+                                        className="unattempted-pill"
+                                        style={{
+                                          marginLeft: "8px",
+                                          fontSize: "0.72rem",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          background: "rgba(255, 255, 255, 0.08)",
+                                          color: "#a89f91",
+                                          border: "1px solid rgba(255, 255, 255, 0.12)"
+                                        }}
+                                      >
+                                        Unattempted
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="col-solved">
@@ -1535,18 +1696,22 @@ export default function PuzzleChallenge() {
                                   </div>
                                 </td>
                                 <td className="col-score">
-                                  <strong className="score-val">{entry.score} pts</strong>
+                                  <strong className="score-val">{entry.score || 0} pts</strong>
                                 </td>
                               </tr>
                             );
-                          })
-                      ) : (
-                        <tr>
-                          <td colSpan="5" style={{ textAlign: "center", color: "#888", padding: "24px" }}>
-                            No scores recorded yet for this challenge.
-                          </td>
-                        </tr>
-                      )}
+                          });
+                        }
+                        return (
+                          <tr>
+                            <td colSpan="5" style={{ textAlign: "center", color: "#888", padding: "24px" }}>
+                              {isTournamentClosed(selectedSolutionsTournament)
+                                ? "No registered participants or scores for this challenge."
+                                : "No scores recorded yet for this active challenge."}
+                            </td>
+                          </tr>
+                        );
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -1589,7 +1754,7 @@ export default function PuzzleChallenge() {
       )}
       {/* Universal Winner Celebration Modal for Tactics Arena */}
       {(() => {
-        const sortedLb = celebrationTournament?.leaderboard ? [...celebrationTournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0)) : [];
+        const sortedLb = celebrationTournament ? getTournamentStandings(celebrationTournament) : [];
         const puzzleP1 = sortedLb[0] ? { name: getPlayerDisplayName(sortedLb[0]), score: sortedLb[0].score, solvedCount: sortedLb[0].solvedCount, email: sortedLb[0].email } : null;
         const puzzleP2 = sortedLb[1] ? { name: getPlayerDisplayName(sortedLb[1]), score: sortedLb[1].score, solvedCount: sortedLb[1].solvedCount, email: sortedLb[1].email } : null;
         const puzzleP3 = sortedLb[2] ? { name: getPlayerDisplayName(sortedLb[2]), score: sortedLb[2].score, solvedCount: sortedLb[2].solvedCount, email: sortedLb[2].email } : null;
