@@ -2648,7 +2648,15 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     <input 
                       type="text" 
                       value={adminRoleForm.idNumber}
-                      onChange={(e) => setAdminRoleForm(prev => ({ ...prev, idNumber: e.target.value }))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const autoBatch = val.trim().length >= 4 && /^\d{4}/.test(val.trim()) ? val.trim().slice(0, 4) : "";
+                        setAdminRoleForm(prev => ({ 
+                          ...prev, 
+                          idNumber: val,
+                          batch: autoBatch || prev.batch
+                        }));
+                      }}
                       placeholder="e.g. 202100123"
                       className="admin-input"
                     />
@@ -2667,13 +2675,42 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
                   <div className="form-group">
                     <label>Academic Major</label>
-                    <input 
-                      type="text" 
-                      value={adminRoleForm.major}
+                    <select 
+                      value={adminRoleForm.major || ""}
                       onChange={(e) => setAdminRoleForm(prev => ({ ...prev, major: e.target.value }))}
-                      placeholder="e.g. Computer Science, Aerospace Engineering"
                       className="admin-input"
-                    />
+                    >
+                      <option value="">-- Select ZC Major / Program --</option>
+                      
+                      <optgroup label="🏛️ School of Engineering">
+                        <option value="Aerospace Engineering">Aerospace Engineering</option>
+                        <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
+                        <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
+                        <option value="Mechatronics Engineering">Mechatronics Engineering</option>
+                        <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
+                        <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
+                      </optgroup>
+
+                      <optgroup label="🔬 School of Science">
+                        <option value="Biomedical Sciences">Biomedical Sciences</option>
+                        <option value="Biotechnology">Biotechnology</option>
+                        <option value="Nano Science">Nano Science</option>
+                        <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
+                      </optgroup>
+
+                      <optgroup label="💻 School of Business & Computing (CSAI)">
+                        <option value="Data Science and Artificial Intelligence (DSAI)">Data Science and Artificial Intelligence (DSAI)</option>
+                        <option value="Software Development (SW)">Software Development (SW)</option>
+                        <option value="Information Technology (IT)">Information Technology (IT)</option>
+                        <option value="Computer Science and Artificial Intelligence (CSAI - General)">Computer Science and Artificial Intelligence (CSAI - General)</option>
+                        <option value="Business Informatics">Business Informatics</option>
+                      </optgroup>
+
+                      <optgroup label="✨ General & Other">
+                        <option value="General / Foundation Year">General / Foundation Year</option>
+                        <option value="Other">Other</option>
+                      </optgroup>
+                    </select>
                   </div>
 
                   <div className="form-group">

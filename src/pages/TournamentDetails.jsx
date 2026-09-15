@@ -2012,14 +2012,44 @@ const isBlackWinner = (result) => {
                 />
               </div>
               <div>
-                <label>Major *</label>
-                <input 
-                  type="text" 
-                  value={playerForm.major} 
+                <label>Major / Program *</label>
+                <select 
+                  value={playerForm.major || ""} 
                   onChange={(e) => setPlayerForm({ ...playerForm, major: e.target.value })} 
-                  placeholder="e.g. Computer Science"
                   required 
-                />
+                  style={{ width: "100%", padding: "10px 12px", background: "#1c1914", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "8px", color: "#fff", fontSize: "14px" }}
+                >
+                  <option value="" disabled>-- Select ZC Major / Program --</option>
+                  
+                  <optgroup label="🏛️ School of Engineering">
+                    <option value="Aerospace Engineering">Aerospace Engineering</option>
+                    <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
+                    <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
+                    <option value="Mechatronics Engineering">Mechatronics Engineering</option>
+                    <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
+                    <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
+                  </optgroup>
+
+                  <optgroup label="🔬 School of Science">
+                    <option value="Biomedical Sciences">Biomedical Sciences</option>
+                    <option value="Biotechnology">Biotechnology</option>
+                    <option value="Nano Science">Nano Science</option>
+                    <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
+                  </optgroup>
+
+                  <optgroup label="💻 School of Business & Computing (CSAI)">
+                    <option value="Data Science and Artificial Intelligence (DSAI)">Data Science and Artificial Intelligence (DSAI)</option>
+                    <option value="Software Development (SW)">Software Development (SW)</option>
+                    <option value="Information Technology (IT)">Information Technology (IT)</option>
+                    <option value="Computer Science and Artificial Intelligence (CSAI - General)">Computer Science and Artificial Intelligence (CSAI - General)</option>
+                    <option value="Business Informatics">Business Informatics</option>
+                  </optgroup>
+
+                  <optgroup label="✨ General & Other">
+                    <option value="General / Foundation Year">General / Foundation Year</option>
+                    <option value="Other">Other</option>
+                  </optgroup>
+                </select>
               </div>
               <div className="modal-btn-row">
                 <button type="button" className="btn-secondary" onClick={() => setPlayerModalOpen(false)}>
