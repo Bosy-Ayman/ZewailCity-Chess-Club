@@ -84,6 +84,10 @@ export default function SignUp() {
 
     setIsLoading(true);
 
+    const derivedBatch = id && id.trim().length >= 4 && /^\d{4}/.test(id.trim())
+      ? id.trim().slice(0, 4)
+      : "2026";
+
     try {
       let res;
       if (googleCredential) {
@@ -96,7 +100,7 @@ export default function SignUp() {
             idNumber: id, 
             phone, 
             major,
-            batch: "2026"
+            batch: derivedBatch
           })
         });
       } else {
@@ -110,7 +114,7 @@ export default function SignUp() {
             idNumber: id, 
             phone, 
             major,
-            batch: "2026"
+            batch: derivedBatch
           })
         });
       }
@@ -186,7 +190,14 @@ export default function SignUp() {
 
               <div className="signup-form-row">
                 <div className="signup-input-wrapper">
-                  <label className="signup-input-label" htmlFor="su-id">Student ID</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label className="signup-input-label" htmlFor="su-id">Student ID</label>
+                    {id && id.trim().length >= 4 && /^\d{4}/.test(id.trim()) && (
+                      <span style={{ fontSize: "0.72rem", color: "#f3c144", fontWeight: "700" }}>
+                        🎓 Batch {id.trim().slice(0, 4)}
+                      </span>
+                    )}
+                  </div>
                   <input
                     id="su-id"
                     type="text"
@@ -215,17 +226,42 @@ export default function SignUp() {
 
               <div className="signup-form-row">
                 <div className="signup-input-wrapper">
-                  <label className="signup-input-label" htmlFor="su-major">Major</label>
-                  <input
+                  <label className="signup-input-label" htmlFor="su-major">Academic Major / Program</label>
+                  <select
                     id="su-major"
-                    type="text"
-                    placeholder="e.g. Computer Science"
-                    className="signup-input-split"
+                    className="signup-input-split signup-select-split"
                     value={major}
                     onChange={(e) => setMajor(e.target.value)}
                     required
-                    autoComplete="off"
-                  />
+                  >
+                    <option value="" disabled>-- Select Your ZC Major / Program --</option>
+                    
+                    <optgroup label="🏛️ School of Engineering">
+                      <option value="Aerospace Engineering">Aerospace Engineering</option>
+                      <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
+                      <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
+                      <option value="Mechatronics Engineering">Mechatronics Engineering</option>
+                      <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
+                      <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
+                    </optgroup>
+
+                    <optgroup label="🔬 School of Science">
+                      <option value="Biomedical Sciences">Biomedical Sciences</option>
+                      <option value="Biotechnology">Biotechnology</option>
+                      <option value="Nano Science">Nano Science</option>
+                      <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
+                    </optgroup>
+
+                    <optgroup label="💻 School of Business & Computing">
+                      <option value="Computer Science and Artificial Intelligence (CSAI)">Computer Science and Artificial Intelligence (CSAI)</option>
+                      <option value="Business Informatics">Business Informatics</option>
+                    </optgroup>
+
+                    <optgroup label="✨ General & Other">
+                      <option value="General / Foundation Year">General / Foundation Year</option>
+                      <option value="Other">Other</option>
+                    </optgroup>
+                  </select>
                 </div>
               </div>
 

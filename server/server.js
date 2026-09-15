@@ -1316,13 +1316,15 @@ app.post('/api/applications', async (req, res) => {
       return res.status(400).json({ error: 'Email is required to submit an application.' });
     }
 
+    const derivedBatch = batch || (idNumber && /^\d{4}/.test(String(idNumber).trim()) ? String(idNumber).trim().slice(0, 4) : '2026');
+
     const newApp = new Application({
       name: name || 'Applicant',
       email: email.trim().toLowerCase(),
       idNumber: idNumber || '',
       phone: phone || '',
       major: major || 'General',
-      batch: batch || '2026',
+      batch: derivedBatch,
       roleTitle: roleTitle || 'Member',
       department: department || roleTitle || 'General Committee',
       roleSpecificData: roleSpecificData || {}
@@ -1530,6 +1532,8 @@ app.post('/api/admin/google-login', async (req, res) => {
         return res.status(404).json({ error: 'Account not found. Please sign up first.' });
       }
       
+      const derivedBatch = batch || (idNumber && /^\d{4}/.test(String(idNumber).trim()) ? String(idNumber).trim().slice(0, 4) : '2026');
+      
       // Auto-register google users when they provide sign-up profile fields
       user = new User({
         email,
@@ -1538,7 +1542,7 @@ app.post('/api/admin/google-login', async (req, res) => {
         idNumber: idNumber || "",
         phone: phone || "",
         major: major || "",
-        batch: batch || "",
+        batch: derivedBatch,
         role: isAdminEmail(email) ? 'admin' : 'member',
         profileImage: payload.picture || ""
       });
@@ -1546,7 +1550,13 @@ app.post('/api/admin/google-login', async (req, res) => {
     } else {
       // Update details if passed during profile completion
       if (name) user.name = name;
-      if (idNumber) user.idNumber = idNumber;
+      if (idNumber) {
+        user.idNumber = idNumber;
+        if (!user.batch || user.batch === '2026') {
+          const autoB = String(idNumber).trim().slice(0, 4);
+          if (/^\d{4}/.test(autoB)) user.batch = autoB;
+        }
+      }
       if (phone) user.phone = phone;
       if (major) user.major = major;
       if (batch) user.batch = batch;
@@ -1594,6 +1604,8 @@ app.post('/api/admin/signup', async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
+    const derivedBatch = batch || (idNumber && /^\d{4}/.test(String(idNumber).trim()) ? String(idNumber).trim().slice(0, 4) : '2026');
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       email,
@@ -1602,7 +1614,7 @@ app.post('/api/admin/signup', async (req, res) => {
       idNumber: idNumber || "",
       phone: phone || "",
       major: major || "",
-      batch: batch || "",
+      batch: derivedBatch,
       role: email === 'admin@zcchessclub.com' ? 'admin' : 'member'
     });
 

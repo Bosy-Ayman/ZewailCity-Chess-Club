@@ -1949,13 +1949,39 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
                     <div className="form-group">
                       <label><BookOpen size={13} /> Major / Program</label>
-                      <input 
-                        type="text" 
+                      <select 
                         name="major"
-                        value={settingsForm.major} 
+                        value={settingsForm.major || ""} 
                         onChange={handleSettingsChange}
-                        placeholder="e.g. Data Science & AI"
-                      />
+                      >
+                        <option value="">-- Select Your Major / Program --</option>
+                        
+                        <optgroup label="🏛️ School of Engineering">
+                          <option value="Aerospace Engineering">Aerospace Engineering</option>
+                          <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
+                          <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
+                          <option value="Mechatronics Engineering">Mechatronics Engineering</option>
+                          <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
+                          <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
+                        </optgroup>
+
+                        <optgroup label="🔬 School of Science">
+                          <option value="Biomedical Sciences">Biomedical Sciences</option>
+                          <option value="Biotechnology">Biotechnology</option>
+                          <option value="Nano Science">Nano Science</option>
+                          <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
+                        </optgroup>
+
+                        <optgroup label="💻 School of Business & Computing">
+                          <option value="Computer Science and Artificial Intelligence (CSAI)">Computer Science and Artificial Intelligence (CSAI)</option>
+                          <option value="Business Informatics">Business Informatics</option>
+                        </optgroup>
+
+                        <optgroup label="✨ General & Other">
+                          <option value="General / Foundation Year">General / Foundation Year</option>
+                          <option value="Other">Other</option>
+                        </optgroup>
+                      </select>
                     </div>
 
                     <div className="form-group">
