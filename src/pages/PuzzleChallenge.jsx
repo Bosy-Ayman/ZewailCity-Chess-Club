@@ -481,7 +481,8 @@ export default function PuzzleChallenge() {
       );
     }
 
-    return [...rawLeaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const activeScored = rawLeaderboard.filter((entry) => (entry.score || 0) > 0 || (entry.solvedCount || 0) > 0);
+    return [...activeScored].sort((a, b) => (b.score || 0) - (a.score || 0));
   };
 
   const getRosterAvatar = (player) => (

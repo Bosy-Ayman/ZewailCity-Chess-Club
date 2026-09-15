@@ -4346,7 +4346,6 @@ app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     tournament.participants = tournament.participants || [];
-    tournament.leaderboard = tournament.leaderboard || [];
 
     const registeredUser = await User.findOne({ email: new RegExp(`^${normalizedEmail}$`, 'i') }, { name: 1 });
     const displayName = (name && name.trim() && name.trim() !== 'ZC Chess Club')
@@ -4355,15 +4354,6 @@ app.post('/api/puzzle-tournaments/:id/start-attempt', async (req, res) => {
 
     if (!tournament.participants.some(p => p.email && p.email.trim().toLowerCase() === normalizedEmail)) {
       tournament.participants.push({ name: displayName, email: normalizedEmail, registeredAt: new Date() });
-    }
-
-    if (!tournament.leaderboard.some(e => e.email && e.email.trim().toLowerCase() === normalizedEmail)) {
-      tournament.leaderboard.push({
-        name: displayName,
-        email: normalizedEmail,
-        score: 0,
-        solvedCount: 0
-      });
     }
 
     const saved = await tournament.save();
