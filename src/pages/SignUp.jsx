@@ -142,7 +142,7 @@ export default function SignUp() {
       <div className="signup-split-container">
         {/* Left Panel: Signup Form */}
         <div className="signup-form-panel">
-          <div className="signup-card-split premium-card">
+          <div className="signup-card-split">
             <div className="flex items-center justify-center gap-2 mb-2">
               <UserPlus className="text-accent" size={24} />
               <h2 className="signup-title-split m-0">Create Your Account</h2>
