@@ -1105,9 +1105,9 @@ async function checkAndAutoBroadcastPuzzleTournaments() {
     const unbroadcastedLive = await PuzzleTournament.find({ startBroadcasted: { $ne: true } });
     for (const t of unbroadcastedLive) {
       if (!t.startDate || !t.puzzles || t.puzzles.length === 0) continue;
-      const startStr = `${t.startDate}T${t.startTime || '00:00'}:00`;
+      const startStr = `${t.startDate}T${t.startTime || '00:00'}:00Z`;
       const startAt = new Date(startStr);
-      const endStr = t.endDate ? `${t.endDate}T${t.endTime || '23:59'}:59` : null;
+      const endStr = t.endDate ? `${t.endDate}T${t.endTime || '23:59'}:59Z` : null;
       const endAt = endStr ? new Date(endStr) : null;
 
       if (isNaN(startAt.getTime()) || now < startAt) continue;
@@ -1128,7 +1128,7 @@ async function checkAndAutoBroadcastPuzzleTournaments() {
     const closedTournaments = await PuzzleTournament.find({ winnersBroadcasted: { $ne: true } });
     for (const t of closedTournaments) {
       if (!t.endDate) continue;
-      const endStr = `${t.endDate}T${t.endTime || '23:59'}:59`;
+      const endStr = `${t.endDate}T${t.endTime || '23:59'}:59Z`;
       const endAt = new Date(endStr);
       if (isNaN(endAt.getTime()) || now < endAt) continue;
 
@@ -4310,10 +4310,10 @@ app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
 
     const now = new Date();
     const startAt = tournament.startDate
-      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00`)
+      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00Z`)
       : null;
     const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
       : null;
     if (startAt && now >= startAt) return res.status(403).json({ error: 'Registration is closed because this challenge has started.' });
     if (endAt && now > endAt) return res.status(403).json({ error: 'This challenge is closed.' });
@@ -4560,7 +4560,7 @@ app.post('/api/puzzle-tournaments/:id/broadcast-winner', async (req, res) => {
     // Validate that the puzzle challenge is finished (closed - deadline passed)
     const now = new Date();
     const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59`)
+      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
       : null;
 
     if (!endAt) {
