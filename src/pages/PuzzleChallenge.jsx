@@ -323,8 +323,22 @@ export default function PuzzleChallenge() {
     const inLeaderboard = (tournament.leaderboard || []).some(
       (e) => e.email && e.email.trim().toLowerCase() === norm
     );
+    const inParticipants = (tournament.participants || []).some(
+      (p) => p.email && p.email.trim().toLowerCase() === norm
+    );
+
     const localAttemptKey = `puzzle_attempted_${tournament._id}_${norm}`;
     const localCompletedKey = `puzzle_completed_${tournament._id}_${norm}`;
+
+    // If server database has no record of this user in this arena (e.g. arena reset/cleared), purge stale local flags
+    if (!inLeaderboard && !inParticipants) {
+      try {
+        localStorage.removeItem(localAttemptKey);
+        localStorage.removeItem(localCompletedKey);
+      } catch (e) {}
+      return false;
+    }
+
     let hasLocalFlag = false;
     try {
       hasLocalFlag = localStorage.getItem(localAttemptKey) === "true" || localStorage.getItem(localCompletedKey) === "true";
