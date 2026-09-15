@@ -54,11 +54,14 @@ const getMongoUri = () => {
 };
 
 const getMongoOptions = () => ({
-  serverSelectionTimeoutMS: 8000,
+  serverSelectionTimeoutMS: 5000,
   connectTimeoutMS: 10000,
+  socketTimeoutMS: 20000,
   tls: true,
   tlsAllowInvalidCertificates: true,
-  maxPoolSize: 10
+  maxPoolSize: 2, // Essential for Serverless on MongoDB Atlas M0: caps connection footprint to prevent 500 connection limit alert
+  minPoolSize: 0,
+  maxIdleTimeMS: 10000
 });
 
 const connectDB = async (req, res, next) => {
@@ -975,10 +978,11 @@ async function checkAndDispatch15MinuteReminders() {
   }
 }
 
-// Start recurring 15-min reminder checker every 60s
-setInterval(checkAndDispatch15MinuteReminders, 60 * 1000);
-// Also run once 5 seconds after server start
-setTimeout(checkAndDispatch15MinuteReminders, 5000);
+// Start recurring 15-min reminder checker only on long-running servers (not serverless functions)
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+  setInterval(checkAndDispatch15MinuteReminders, 60 * 1000);
+  setTimeout(checkAndDispatch15MinuteReminders, 5000);
+}
 
 // --- Puzzle Tournament Schema & Model ---
 const PuzzleSchema = new mongoose.Schema({
