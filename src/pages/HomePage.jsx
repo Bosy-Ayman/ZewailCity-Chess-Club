@@ -666,6 +666,9 @@ const HomePage = () => {
     return true;
   });
 
+  // Limit preview showcase on homepage to 6 members (allowing users to explore full directory in Community page)
+  const displayedTacticians = filteredTacticians.slice(0, 6);
+
 
   const recentTournaments = [
     {
@@ -1594,10 +1597,10 @@ const HomePage = () => {
           </button>
         </div>
 
-        {/* Tacticians Grid */}
+        {/* Tacticians Grid (Showcase 3-6 preview members on Homepage) */}
         <div className="tacticians-grid">
-          {filteredTacticians.length > 0 ? (
-            filteredTacticians.map((player, idx) => {
+          {displayedTacticians.length > 0 ? (
+            displayedTacticians.map((player, idx) => {
               const isSelf = loggedInEmail && player.email && player.email.toLowerCase() === loggedInEmail.toLowerCase();
               return (
                 <div 
