@@ -221,12 +221,115 @@ export default function PuzzleChallenge() {
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
   const [submitScoreError, setSubmitScoreError] = useState(null);
 
-  // User session cache
+  // User session cache & Access Control
   const isLoggedIn = !!localStorage.getItem("adminToken") || !!localStorage.getItem("userEmail") || !!localStorage.getItem("adminEmail");
-  const userEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || localStorage.getItem("email") || "";
-  const userRole = localStorage.getItem("userRole") || "member";
-  const isAdmin = userRole === "admin" || userRole === "oc" || userRole === "hr";
+  const userEmail = (localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || localStorage.getItem("email") || "").trim().toLowerCase();
+  const userRole = (localStorage.getItem("userRole") || "member").toLowerCase();
+  const isHead = 
+    userRole === "admin" ||
+    userRole === "oc" ||
+    userRole === "hr" ||
+    userRole === "president" ||
+    userRole === "vice_president" ||
+    userRole === "trainer" ||
+    userRole === "media" ||
+    userRole === "pr" ||
+    userRole.includes("head") ||
+    userRole.includes("board") ||
+    userRole.includes("officer");
+  const isAdmin = isHead;
   const userName = localStorage.getItem("userName") || (userEmail ? userEmail.split("@")[0] : "Club Tactician");
+
+  const [certActionLoading, setCertActionLoading] = useState(false);
+  const [certStatusMsg, setCertStatusMsg] = useState("");
+
+  const isCurrentTactician = (entry) => {
+    if (!entry) return false;
+    const emailMatch = entry.email && userEmail && entry.email.trim().toLowerCase() === userEmail;
+    const nameMatch = entry.name && userName && entry.name.trim().toLowerCase() === userName.trim().toLowerCase();
+    return Boolean(emailMatch || nameMatch);
+  };
+
+  const handleEmailTacticianCertificate = async (entry, rankStr, tourney) => {
+    const targetEmail = entry.email || userEmail;
+    const targetName = getPlayerDisplayName(entry);
+    if (!targetEmail) {
+      alert("No email address found for this participant.");
+      return;
+    }
+
+    try {
+      setCertActionLoading(true);
+      setCertStatusMsg(`Generating & emailing PDF certificate to ${targetName}...`);
+      
+      const certResult = await generateWinnerCertificate({
+        playerName: targetName,
+        rank: rankStr,
+        tournamentTitle: tourney?.title || "Puzzle Tactics Arena",
+        tournamentType: "Puzzle Tactics Arena",
+        pointsOrScore: `${entry.score || 0} pts (${entry.solvedCount || 0} solved)`,
+        format: "pdf",
+        download: false
+      });
+
+      const res = await fetch(`${API_BASE}/api/certificates/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: targetEmail,
+          recipientName: targetName,
+          tournamentTitle: tourney?.title || "Puzzle Tactics Arena",
+          tournamentType: "Puzzle Tactics Arena",
+          rank: rankStr,
+          pointsOrScore: `${entry.score || 0} pts`,
+          pdfBase64: certResult?.pdfBase64 || ""
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCertStatusMsg(`✅ Official certificate emailed to ${targetEmail} with PDF attached!`);
+        setTimeout(() => setCertStatusMsg(""), 5000);
+      } else {
+        throw new Error(data.error || "Failed to email certificate");
+      }
+    } catch (err) {
+      setCertStatusMsg(`❌ Error sending certificate: ${err.message}`);
+      setTimeout(() => setCertStatusMsg(""), 6000);
+    } finally {
+      setCertActionLoading(false);
+    }
+  };
+
+  const handleMassSendTournamentCertificates = async (tourney) => {
+    if (!tourney?._id) return;
+    if (!window.confirm(`Email official Certificates of Tactical Appreciation / Excellence with PDF attached to ALL participants in "${tourney.title}"?`)) {
+      return;
+    }
+
+    try {
+      setCertActionLoading(true);
+      setCertStatusMsg("Dispatching official certificates with PDF attached to all tacticians...");
+
+      const res = await fetch(`${API_BASE}/api/puzzle-tournaments/${tourney._id}/send-certificates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCertStatusMsg(`🎉 ${data.message || `Certificates successfully dispatched to ${data.sentCount} tacticians!`}`);
+        setTimeout(() => setCertStatusMsg(""), 6000);
+      } else {
+        throw new Error(data.error || "Failed to dispatch certificates");
+      }
+    } catch (err) {
+      setCertStatusMsg(`❌ Error dispatching certificates: ${err.message}`);
+      setTimeout(() => setCertStatusMsg(""), 6000);
+    } finally {
+      setCertActionLoading(false);
+    }
+  };
 
   const isPlayingRef = useRef(false);
   useEffect(() => {
@@ -2129,6 +2232,62 @@ export default function PuzzleChallenge() {
             {/* TAB 2: OVERALL SCORES & STANDINGS */}
             {solutionsModalTab === "standings" && (
               <div className="standings-tab-content">
+                {/* Header Action Toolbar for Heads / Feedback Status */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: "#f3c144", fontSize: "1.05rem" }}>
+                      🏆 Tactical Arena Standings & Honors
+                    </h3>
+                    <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
+                      {isHead 
+                        ? "Arbiter & Head View: All certificates unlocked. You can mass-dispatch or email individual certificates."
+                        : "Tacticians can view and download their personalized Certificate of Tactical Appreciation / Excellence."}
+                    </p>
+                  </div>
+                  {isHead && (
+                    <button
+                      type="button"
+                      disabled={certActionLoading}
+                      onClick={() => handleMassSendTournamentCertificates(liveTournament)}
+                      style={{
+                        background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                        color: "#12100d",
+                        fontWeight: "900",
+                        border: "none",
+                        padding: "8px 18px",
+                        borderRadius: "8px",
+                        fontSize: "0.82rem",
+                        cursor: certActionLoading ? "wait" : "pointer",
+                        boxShadow: "0 4px 14px rgba(243,193,68,0.35)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}
+                      title="Dispatch official certificates of appreciation with PDF attached to ALL participants"
+                    >
+                      <span>✉️</span>
+                      <span>Email Certificates to All (PDF Attached)</span>
+                    </button>
+                  )}
+                </div>
+
+                {certStatusMsg && (
+                  <div
+                    style={{
+                      padding: "10px 16px",
+                      marginBottom: "14px",
+                      borderRadius: "8px",
+                      background: certStatusMsg.startsWith("❌") ? "rgba(231,76,60,0.15)" : "rgba(72,187,120,0.15)",
+                      border: certStatusMsg.startsWith("❌") ? "1px solid #e74c3c" : "1px solid #48bb78",
+                      color: certStatusMsg.startsWith("❌") ? "#ff7675" : "#68d391",
+                      fontSize: "0.85rem",
+                      fontWeight: "700"
+                    }}
+                  >
+                    {certStatusMsg}
+                  </div>
+                )}
+
                 <div className="leaderboard-table-container">
                   <table className="leaderboard-table">
                     <thead>
@@ -2150,8 +2309,12 @@ export default function PuzzleChallenge() {
                             const puzzleCount = liveTournament.puzzles?.length || 1;
                             const solvePct = Math.round(((entry.solvedCount || 0) / puzzleCount) * 100);
                             const pName = getPlayerDisplayName(entry);
+                            const isMe = isCurrentTactician(entry);
+                            const canViewCert = isHead || isMe;
+                            const rankStr = idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : idx === 2 ? "3rd Place" : `#${idx + 1} Rank Solver`;
+
                             return (
-                              <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
+                              <tr key={idx} className={isMe ? "highlight-user-row" : ""}>
                                 <td className="col-rank">
                                   <span className={`rank-badge rank-${idx + 1}`}>
                                     {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
@@ -2166,7 +2329,7 @@ export default function PuzzleChallenge() {
                                       onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
                                     />
                                     <span className="player-name">{pName}</span>
-                                    {entry.email === userEmail && <span className="you-pill">YOU</span>}
+                                    {isMe && <span className="you-pill">YOU</span>}
                                     {entry.unattempted && (
                                       <span
                                         className="unattempted-pill"
@@ -2197,33 +2360,72 @@ export default function PuzzleChallenge() {
                                 <td className="col-score">
                                   <strong className="score-val">{entry.score || 0} pts</strong>
                                 </td>
-                                <td style={{ textAlign: "center" }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      generateWinnerCertificate({
-                                        playerName: pName,
-                                        rank: idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : idx === 2 ? "3rd Place" : `#${idx + 1} Rank`,
-                                        tournamentTitle: liveTournament.title || "Puzzle Tactics Arena",
-                                        tournamentType: "Puzzle Tactics Arena",
-                                        pointsOrScore: `${entry.score || 0} pts (${entry.solvedCount || 0} solved)`,
-                                        format: "pdf"
-                                      });
-                                    }}
-                                    style={{
-                                      background: "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
-                                      border: "1px solid rgba(243,193,68,0.45)",
-                                      color: "#f3c144",
-                                      padding: "5px 12px",
-                                      borderRadius: "6px",
-                                      fontSize: "0.75rem",
-                                      fontWeight: "800",
-                                      cursor: "pointer"
-                                    }}
-                                    title="Download Official Certificate of Tactical Excellence (PDF)"
-                                  >
-                                    📜 PDF Cert
-                                  </button>
+                                <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                  {canViewCert ? (
+                                    <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          generateWinnerCertificate({
+                                            playerName: pName,
+                                            rank: rankStr,
+                                            tournamentTitle: liveTournament.title || "Puzzle Tactics Arena",
+                                            tournamentType: "Puzzle Tactics Arena",
+                                            pointsOrScore: `${entry.score || 0} pts (${entry.solvedCount || 0} solved)`,
+                                            format: "pdf"
+                                          });
+                                        }}
+                                        style={{
+                                          background: isMe
+                                            ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                            : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                          border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                          color: isMe ? "#12100d" : "#f3c144",
+                                          padding: "5px 11px",
+                                          borderRadius: "6px",
+                                          fontSize: "0.75rem",
+                                          fontWeight: "800",
+                                          cursor: "pointer",
+                                          boxShadow: isMe ? "0 2px 8px rgba(243,193,68,0.4)" : "none"
+                                        }}
+                                        title={isMe ? "Download your personalized official certificate (PDF)" : "Download official tactician certificate (PDF)"}
+                                      >
+                                        📜 {isMe ? "My PDF Cert" : "PDF Cert"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={certActionLoading}
+                                        onClick={() => handleEmailTacticianCertificate(entry, rankStr, liveTournament)}
+                                        style={{
+                                          background: "rgba(255, 255, 255, 0.07)",
+                                          border: "1px solid rgba(255, 255, 255, 0.2)",
+                                          color: "#e2d9cc",
+                                          padding: "5px 9px",
+                                          borderRadius: "6px",
+                                          fontSize: "0.75rem",
+                                          fontWeight: "700",
+                                          cursor: certActionLoading ? "wait" : "pointer"
+                                        }}
+                                        title={`Email official PDF certificate directly to ${entry.email || pName}`}
+                                      >
+                                        ✉️ Email PDF
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        color: "#7a7267",
+                                        fontSize: "0.75rem",
+                                        fontStyle: "italic",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px"
+                                      }}
+                                      title="Certificates are private to the tactician and organizing heads"
+                                    >
+                                      🔒 Private
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );

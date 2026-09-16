@@ -28,12 +28,24 @@ export default function TournamentDetails() {
   const [challengeSent, setChallengeSent] = useState(false);
   const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
 
-  // Check role
-  const userRole = localStorage.getItem("userRole") || "member";
-  const isLoggedIn = !!localStorage.getItem("adminToken");
-  const isStaff = isLoggedIn && (userRole === "admin" || userRole === "oc");
-  const loggedInUserName = localStorage.getItem("userName") || "";
-  const loggedInUserEmail = localStorage.getItem("userEmail") || localStorage.getItem("adminEmail") || "";
+  // Check role & auth
+  const userRole = (localStorage.getItem("userRole") || "member").toLowerCase();
+  const isLoggedIn = !!localStorage.getItem("adminToken") || !!localStorage.getItem("userEmail") || !!localStorage.getItem("adminEmail");
+  const isStaff = isLoggedIn && (
+    userRole === "admin" ||
+    userRole === "oc" ||
+    userRole === "hr" ||
+    userRole === "president" ||
+    userRole === "vice_president" ||
+    userRole === "trainer" ||
+    userRole === "media" ||
+    userRole === "pr" ||
+    userRole.includes("head") ||
+    userRole.includes("board") ||
+    userRole.includes("officer")
+  );
+  const loggedInUserName = (localStorage.getItem("userName") || "").trim();
+  const loggedInUserEmail = (localStorage.getItem("userEmail") || localStorage.getItem("adminEmail") || "").trim().toLowerCase();
 
   // Parse ID
   const queryParams = new URLSearchParams(window.location.search);

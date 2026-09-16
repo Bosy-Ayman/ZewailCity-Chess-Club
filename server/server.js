@@ -668,7 +668,7 @@ const generateClubEmailHtml = ({ title, recipientName, message, actionLabel, act
   `;
 };
 
-const sendEmail = async ({ to, subject, html, text }) => {
+const sendEmail = async ({ to, subject, html, text, attachments }) => {
   try {
     const transporter = getEmailTransporter();
     const fromAddress = process.env.SMTP_FROM || `"Zewail City Chess Club" <${process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg'}>`;
@@ -678,14 +678,19 @@ const sendEmail = async ({ to, subject, html, text }) => {
       return { success: true, simulated: true };
     }
 
-    const info = await transporter.sendMail({
+    const mailOptions = {
       from: fromAddress,
       to,
       subject,
       text: text || subject,
       html
-    });
+    };
 
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
     console.log(`[Email Service - Sent] MessageId: ${info.messageId} to: ${to}`);
     return { success: true, messageId: info.messageId };
   } catch (err) {
@@ -4057,43 +4062,320 @@ app.post('/api/tournaments/:id/broadcast-winner', async (req, res) => {
   }
 });
 
-// POST: Dispatch official winner certificates directly to winner emails with official club stamp
+// --- Server-side Vector PDF Certificate Generator ---
+function generateVectorCertificatePdfBuffer({
+  playerName,
+  rank = "Honored Participant",
+  tournamentTitle = "ZC Tournament",
+  tournamentType = "Chess Tournament",
+  pointsOrScore = "",
+  certCode = "",
+  date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+  isPuzzle = false
+}) {
+  const sanitize = (str) => (str || "").toString().replace(/[()\\]/g, "");
+  const cleanPlayer = sanitize(playerName);
+  const cleanTitle = sanitize(tournamentTitle);
+  const cleanType = sanitize(tournamentType);
+  const rankStr = (rank || "").toString().toLowerCase();
+  const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1";
+  const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2";
+  const isThird = rankStr.includes("3rd") || rankStr === "3";
+  const isPodium = isChamp || isRunnerUp || isThird;
+
+  const mainHeader = isPodium 
+    ? (isPuzzle ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF EXCELLENCE & MERIT")
+    : (isPuzzle ? "CERTIFICATE OF TACTICAL APPRECIATION" : "CERTIFICATE OF PARTICIPATION & APPRECIATION");
+
+  const citation = isPodium
+    ? (isPuzzle 
+        ? "In recognition of extraordinary tactical foresight and speed," 
+        : "In recognition of exceptional strategic mastery and tactical rigor,")
+    : (isPuzzle
+        ? "In grateful appreciation and recognition of tactical dedication,"
+        : "In grateful appreciation of passionate participation and sportsmanship,");
+
+  const rankBadgeText = isChamp ? "CHAMPION (1ST PLACE)" : isRunnerUp ? "RUNNER-UP (2ND PLACE)" : isThird ? "3RD PLACE PODIUM" : (sanitize(rank) || "DISTINGUISHED PARTICIPANT");
+  const subCitation = isPodium ? "finishing as the honored" : "competing with honor and distinction in";
+
+  const stream = `q
+0.05 0.04 0.03 rg 0 0 842 595 re f
+0.95 0.76 0.27 RG 4 w 20 20 802 555 re S
+0.95 0.76 0.27 RG 1 w 28 28 786 539 re S
+BT /F1 15 Tf 0.95 0.76 0.27 rg 305 520 Td (ZEWAIL CITY CHESS CLUB) Tj ET
+BT /F3 20 Tf 1 1 1 rg 210 478 Td (${mainHeader}) Tj ET
+BT /F2 11 Tf 0.68 0.64 0.58 rg 270 440 Td (THIS CERTIFICATE IS PROUDLY CONFERRED UPON) Tj ET
+BT /F3 28 Tf 0.98 0.84 0.28 rg 260 380 Td (${cleanPlayer}) Tj ET
+BT /F2 12 Tf 0.82 0.78 0.72 rg 150 330 Td (${citation}) Tj ET
+BT /F2 12 Tf 0.82 0.78 0.72 rg 280 310 Td (${subCitation}) Tj ET
+0.95 0.76 0.27 RG 1.5 w 230 260 382 34 re S
+BT /F1 13 Tf 0.95 0.76 0.27 rg 250 272 Td (${rankBadgeText} ${pointsOrScore ? ` - ${sanitize(pointsOrScore)}` : ""}) Tj ET
+BT /F3 15 Tf 1 1 1 rg 240 225 Td (in the ${cleanTitle}) Tj ET
+BT /F2 10 Tf 0.65 0.62 0.58 rg 240 195 Td (Format: ${cleanType} - Venue: Zewail City of Science and Technology) Tj ET
+BT /F2 10 Tf 0.65 0.62 0.58 rg 330 175 Td (Date of Conferral: ${sanitize(date)}) Tj ET
+0.95 0.76 0.27 RG 2 w 130 90 40 0 360 arc S
+BT /F1 7 Tf 0.95 0.76 0.27 rg 100 98 Td (ZC CHESS CLUB) Tj ET
+BT /F1 7 Tf 0.95 0.76 0.27 rg 102 82 Td (OFFICIAL SEAL) Tj ET
+0.95 0.76 0.27 RG 1 w 440 90 150 0 re S
+BT /F4 15 Tf 1 0.85 0.35 rg 460 102 Td (A. Salama) Tj ET
+BT /F1 10 Tf 1 1 1 rg 475 75 Td (Alaa Salama) Tj ET
+BT /F2 8 Tf 0.95 0.76 0.27 rg 445 62 Td (CHIEF ARBITER & ORGANIZING HEAD) Tj ET
+0.95 0.76 0.27 RG 1 w 630 90 150 0 re S
+BT /F4 15 Tf 1 0.85 0.35 rg 645 102 Td (A. Elkhodiry) Tj ET
+BT /F1 10 Tf 1 1 1 rg 660 75 Td (Ahmed Elkhodiry) Tj ET
+BT /F2 8 Tf 0.95 0.76 0.27 rg 672 62 Td (CLUB PRESIDENT) Tj ET
+BT /F5 8 Tf 0.95 0.76 0.27 rg 270 30 Td (Official Verification ID: ${certCode} - zc-chess-club.vercel.app) Tj ET
+Q`;
+
+  const header = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+  const obj1 = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+  const obj2 = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 8 0 R /F5 9 0 R >> >> >>\nendobj\n`;
+  const obj4 = `4 0 obj\n<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream\nendobj\n`;
+  const obj5 = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n";
+  const obj6 = "6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
+  const obj7 = "7 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>\nendobj\n";
+  const obj8 = "8 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>\nendobj\n";
+  const obj9 = "9 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n";
+
+  const parts = [header, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9];
+  const offsets = [];
+  offsets[1] = Buffer.byteLength(header);
+  for (let i = 1; i <= 9; i++) {
+    offsets[i + 1] = offsets[i] + Buffer.byteLength(parts[i]);
+  }
+
+  const xrefOffset = offsets[10];
+  let xref = "xref\n0 10\n0000000000 65535 f \n";
+  for (let i = 1; i <= 9; i++) {
+    xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  }
+  const trailer = `trailer\n<< /Size 10 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+
+  return Buffer.from(parts.join("") + xref + trailer, "utf-8");
+}
+
+// POST: Universal single certificate email dispatcher with attached PDF
+app.post('/api/certificates/send-email', async (req, res) => {
+  try {
+    const {
+      recipientEmail,
+      recipientName,
+      tournamentTitle,
+      tournamentType = "Tournament",
+      rank = "Participant",
+      pointsOrScore = "",
+      pdfBase64 = ""
+    } = req.body;
+
+    if (!recipientEmail || !recipientName) {
+      return res.status(400).json({ error: "recipientEmail and recipientName are required" });
+    }
+
+    const cleanName = recipientName.trim();
+    const cleanId = Math.abs(cleanName.split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 7)).toString(16).toUpperCase();
+    const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
+
+    const isPuzzle = (tournamentType || "").toLowerCase().includes("puzzle") || (tournamentType || "").toLowerCase().includes("tactic");
+    const rankStr = (rank || "").toString().toLowerCase();
+    const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1";
+    const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2";
+    const isThird = rankStr.includes("3rd") || rankStr === "3";
+    const isPodium = isChamp || isRunnerUp || isThird;
+
+    const certTitle = isPodium 
+      ? (isPuzzle ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF EXCELLENCE & ACHIEVEMENT")
+      : (isPuzzle ? "CERTIFICATE OF TACTICAL APPRECIATION" : "CERTIFICATE OF PARTICIPATION & APPRECIATION");
+
+    let pdfBuffer;
+    if (pdfBase64 && typeof pdfBase64 === "string" && pdfBase64.length > 50) {
+      pdfBuffer = Buffer.from(pdfBase64, "base64");
+    } else {
+      pdfBuffer = generateVectorCertificatePdfBuffer({
+        playerName: cleanName,
+        rank,
+        tournamentTitle,
+        tournamentType,
+        pointsOrScore,
+        certCode,
+        isPuzzle
+      });
+    }
+
+    const appBaseUrl = getAppBaseUrl();
+    const certHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
+          .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
+          .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
+          .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
+          .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
+          .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
+          .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
+          .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
+          .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="header">
+            <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
+            <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
+            <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Honors & Appreciation</p>
+          </div>
+          <div style="padding: 20px;">
+            <div class="cert-box">
+              <div class="cert-title">📜 ${certTitle}</div>
+              <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
+              <div class="recipient-name">${cleanName}</div>
+              <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
+                ${rank}${pointsOrScore ? ` • ${pointsOrScore}` : ''}
+              </div>
+              <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
+                For passionate dedication and participation in the <strong>${tournamentTitle}</strong> at Zewail City of Science and Technology.
+              </p>
+              <div class="stamp-badge">
+                ★ ZC CHESS ★<br/>
+                <span style="font-size: 16px;">${isPuzzle ? '🧩' : '♟️'}</span><br/>
+                OFFICIAL SEAL<br/>
+                VERIFIED
+              </div>
+              <div style="margin-top: 10px;">
+                <div class="pdf-attached-badge">📎 Official PDF Certificate Attached to this Email</div>
+              </div>
+              <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
+    const mailResult = await sendEmail({
+      to: recipientEmail,
+      subject: `📜 [ZC Chess Club] ${certTitle}: ${tournamentTitle}`,
+      html: certHtml,
+      text: `Congratulations ${cleanName}! Attached is your official ${certTitle} for "${tournamentTitle}". Verification ID: ${certCode}`,
+      attachments: [
+        {
+          filename: `Certificate_${fileSafeName}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf"
+        }
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: `Certificate successfully emailed to ${recipientEmail} with PDF attached!`,
+      mailResult
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to send certificate email", details: err.message });
+  }
+});
+
+// POST: Dispatch official certificates for tournament participants/winners with PDF attached
 app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
   try {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
-    const winners = [];
-    if (tournament.podium && Array.isArray(tournament.podium) && tournament.podium.length > 0) {
+    const targetMode = req.body?.target || "all"; // 'all' (all participants) or 'winners' (podium only)
+    const candidates = [];
+    const seenNames = new Set();
+
+    // 1. Identify Podium Winners
+    const podiumNames = new Map();
+    if (tournament.podium && Array.isArray(tournament.podium)) {
       tournament.podium.forEach((p, idx) => {
         if (p && p.name && p.name !== 'BYE' && p.name !== 'TBD') {
-          winners.push({
+          const rankName = idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : "3rd Place";
+          podiumNames.set(p.name.toLowerCase().trim(), {
             name: p.name,
-            rank: idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : "3rd Place",
+            rank: rankName,
             points: p.points != null ? `${p.points} pts` : ""
           });
         }
       });
     } else if (tournament.winner && tournament.winner !== 'BYE' && tournament.winner !== 'TBD') {
-      winners.push({
+      podiumNames.set(tournament.winner.toLowerCase().trim(), {
         name: tournament.winner,
         rank: "Champion (1st Place)",
         points: ""
       });
     }
 
-    if (winners.length === 0) {
-      return res.status(400).json({ error: "No recorded winners found for this tournament yet." });
+    // 2. Gather recipients
+    if (targetMode === "winners") {
+      podiumNames.forEach(val => candidates.push(val));
+    } else {
+      // Gather all participants (podium + active roster/registrations)
+      podiumNames.forEach(val => {
+        candidates.push(val);
+        seenNames.add(val.name.toLowerCase().trim());
+      });
+
+      const allRoster = [
+        ...(tournament.playersList || []),
+        ...(tournament.registrations || [])
+      ];
+
+      allRoster.forEach(p => {
+        if (p && p.name && p.name !== 'BYE' && p.name !== 'TBD') {
+          const key = p.name.toLowerCase().trim();
+          if (!seenNames.has(key)) {
+            seenNames.add(key);
+            candidates.push({
+              name: p.name,
+              email: p.email || "",
+              rank: "Honored Participant",
+              points: p.points != null ? `${p.points} pts` : ""
+            });
+          }
+        }
+      });
+    }
+
+    if (candidates.length === 0) {
+      return res.status(400).json({ error: "No participants found for certificate dispatch." });
     }
 
     let sentCount = 0;
-    const appBaseUrl = getAppBaseUrl();
+    for (const c of candidates) {
+      let email = c.email;
+      if (!email) {
+        const contact = await findPlayerContact(c.name, tournament);
+        if (contact && contact.email) email = contact.email;
+      }
 
-    for (const w of winners) {
-      const contact = await findPlayerContact(w.name, tournament);
-      if (contact && contact.email) {
-        const certCode = `ZC-CERT-${Math.abs(w.name.split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 7)).toString(16).toUpperCase()}-${new Date().getFullYear()}`;
-        
+      if (email) {
+        const cleanName = c.name.trim();
+        const cleanId = Math.abs(cleanName.split("").reduce((acc, ch) => acc * 31 + ch.charCodeAt(0), 7)).toString(16).toUpperCase();
+        const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
+
+        const isPodium = c.rank.toLowerCase().includes("champ") || c.rank.toLowerCase().includes("runner") || c.rank.toLowerCase().includes("3rd");
+        const certTitle = isPodium ? "CERTIFICATE OF EXCELLENCE" : "CERTIFICATE OF APPRECIATION & PARTICIPATION";
+
+        const pdfBuffer = generateVectorCertificatePdfBuffer({
+          playerName: cleanName,
+          rank: c.rank,
+          tournamentTitle: tournament.title,
+          tournamentType: tournament.type || "Swiss Championship",
+          pointsOrScore: c.points,
+          certCode,
+          isPuzzle: false
+        });
+
+        const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
         const certHtml = `
           <!DOCTYPE html>
           <html>
@@ -4104,10 +4386,10 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
               .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
               .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
               .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
-              .cert-title { font-size: 22px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
-              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 16px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
-              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 20px auto; }
-              .cta-btn { display: inline-block; background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%); color: #12100d !important; font-weight: 900; font-size: 15px; text-decoration: none; padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 18px rgba(243, 193, 68, 0.45); }
+              .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
+              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
+              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
+              .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
               .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
             </style>
           </head>
@@ -4116,18 +4398,18 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
               <div class="header">
                 <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
                 <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
-                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Merit & Championship</p>
+                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Honors & Appreciation</p>
               </div>
               <div style="padding: 20px;">
                 <div class="cert-box">
-                  <div class="cert-title">📜 CERTIFICATE OF EXCELLENCE</div>
-                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This certificate is officially conferred upon</p>
-                  <div class="recipient-name">${w.name}</div>
+                  <div class="cert-title">📜 ${certTitle}</div>
+                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
+                  <div class="recipient-name">${cleanName}</div>
                   <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
-                    ${w.rank}${w.points ? ` • ${w.points}` : ''}
+                    ${c.rank}${c.points ? ` • ${c.points}` : ''}
                   </div>
-                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 16px;">
-                    For exceptional strategic prowess and competitive excellence in the <strong>${tournament.title}</strong> at Zewail City of Science and Technology.
+                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
+                    In recognition and grateful appreciation of competitive excellence and sportsmanship in the <strong>${tournament.title}</strong> at Zewail City of Science and Technology.
                   </p>
                   <div class="stamp-badge">
                     ★ ZC CHESS ★<br/>
@@ -4135,10 +4417,10 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
                     OFFICIAL SEAL<br/>
                     VERIFIED
                   </div>
+                  <div style="margin-top: 10px;">
+                    <div class="pdf-attached-badge">📎 Official PDF Certificate Attached</div>
+                  </div>
                   <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
-                </div>
-                <div style="text-align: center; margin: 24px 0 10px;">
-                  <a href="${appBaseUrl}/tournamentdetails?id=${tournament._id}" class="cta-btn">View & Download Full HD Certificate →</a>
                 </div>
               </div>
               <div class="footer">
@@ -4150,10 +4432,17 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
         `;
 
         await sendEmail({
-          to: contact.email,
-          subject: `📜 [ZC Chess Club] Official Certificate of Achievement: ${tournament.title}`,
+          to: email,
+          subject: `📜 [ZC Chess Club] ${certTitle}: ${tournament.title}`,
           html: certHtml,
-          text: `Congratulations ${w.name}! Here is your official Certificate of Achievement for finishing as ${w.rank} in "${tournament.title}". Verification ID: ${certCode}`
+          text: `Dear ${cleanName},\n\nAttached is your official ${certTitle} for "${tournament.title}".\nVerification ID: ${certCode}\n\nZewail City Chess Club`,
+          attachments: [
+            {
+              filename: `Certificate_${fileSafeName}.pdf`,
+              content: pdfBuffer,
+              contentType: "application/pdf"
+            }
+          ]
         });
 
         sentCount++;
@@ -4162,11 +4451,157 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Official certificates successfully dispatched to ${sentCount} winner(s)!`,
+      message: `Official certificates successfully dispatched to ${sentCount} participant(s) with PDF attached!`,
       sentCount
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to dispatch certificates", details: err.message });
+    res.status(500).json({ error: "Failed to dispatch tournament certificates", details: err.message });
+  }
+});
+
+// POST: Dispatch Puzzle Challenge Certificates of Tactical Appreciation / Excellence to all solvers
+app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
+  try {
+    const tournament = await PuzzleTournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Puzzle tournament not found" });
+
+    // Gather solvers
+    const solvers = [];
+    const seenEmails = new Set();
+
+    if (tournament.solvers && Array.isArray(tournament.solvers)) {
+      tournament.solvers.forEach((s) => {
+        if (s && (s.name || s.email)) {
+          const email = (s.email || "").toLowerCase().trim();
+          if (email && !seenEmails.has(email)) {
+            seenEmails.add(email);
+            solvers.push(s);
+          }
+        }
+      });
+    }
+
+    // Also look in registered participants / attempts if any
+    if (tournament.registrations && Array.isArray(tournament.registrations)) {
+      tournament.registrations.forEach(r => {
+        const email = (r.email || "").toLowerCase().trim();
+        if (email && !seenEmails.has(email)) {
+          seenEmails.add(email);
+          solvers.push({ name: r.name, email: email, score: 0, solvedCount: 0 });
+        }
+      });
+    }
+
+    if (solvers.length === 0) {
+      return res.status(400).json({ error: "No recorded solvers found for this puzzle challenge arena." });
+    }
+
+    // Sort by score desc, time asc
+    solvers.sort((a, b) => (b.score || 0) - (a.score || 0) || (a.timeUsed || 0) - (b.timeUsed || 0));
+
+    let sentCount = 0;
+    for (let idx = 0; idx < solvers.length; idx++) {
+      const solver = solvers[idx];
+      const email = solver.email;
+      if (email) {
+        const cleanName = solver.name || email.split("@")[0];
+        const rankLabel = idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : idx === 2 ? "3rd Place" : `#${idx + 1} Rank Solver`;
+        const isPodium = idx < 3;
+        const certTitle = isPodium ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF TACTICAL APPRECIATION & PARTICIPATION";
+        const cleanId = Math.abs(cleanName.split("").reduce((acc, ch) => acc * 31 + ch.charCodeAt(0), 7)).toString(16).toUpperCase();
+        const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
+
+        const pdfBuffer = generateVectorCertificatePdfBuffer({
+          playerName: cleanName,
+          rank: rankLabel,
+          tournamentTitle: tournament.title,
+          tournamentType: "Puzzle Tactics Arena",
+          pointsOrScore: `${solver.score || 0} pts (${solver.solvedCount || 0} solved)`,
+          certCode,
+          isPuzzle: true
+        });
+
+        const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
+        const certHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
+              .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
+              .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
+              .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
+              .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
+              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
+              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
+              .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
+              .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
+            </style>
+          </head>
+          <body>
+            <div class="wrapper">
+              <div class="header">
+                <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
+                <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
+                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Tactical Appreciation & Merit</p>
+              </div>
+              <div style="padding: 20px;">
+                <div class="cert-box">
+                  <div class="cert-title">📜 ${certTitle}</div>
+                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
+                  <div class="recipient-name">${cleanName}</div>
+                  <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
+                    ${rankLabel} • ${solver.score || 0} pts (${solver.solvedCount || 0} solved)
+                  </div>
+                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
+                    In recognition and grateful appreciation of tactical calculation and dedication in the <strong>${tournament.title}</strong> Puzzle Arena.
+                  </p>
+                  <div class="stamp-badge">
+                    ★ ZC CHESS ★<br/>
+                    <span style="font-size: 16px;">🧩</span><br/>
+                    OFFICIAL SEAL<br/>
+                    VERIFIED
+                  </div>
+                  <div style="margin-top: 10px;">
+                    <div class="pdf-attached-badge">📎 Official PDF Certificate Attached</div>
+                  </div>
+                  <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
+                </div>
+              </div>
+              <div class="footer">
+                <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendEmail({
+          to: email,
+          subject: `📜 [ZC Chess Club] ${certTitle}: ${tournament.title}`,
+          html: certHtml,
+          text: `Dear ${cleanName},\n\nAttached is your official ${certTitle} for "${tournament.title}".\nVerification ID: ${certCode}\n\nZewail City Chess Club`,
+          attachments: [
+            {
+              filename: `Certificate_${fileSafeName}.pdf`,
+              content: pdfBuffer,
+              contentType: "application/pdf"
+            }
+          ]
+        });
+
+        sentCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Official certificates successfully dispatched to ${sentCount} tactician(s) with PDF attached!`,
+      sentCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to dispatch puzzle challenge certificates", details: err.message });
   }
 });
 
