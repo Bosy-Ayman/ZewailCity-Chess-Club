@@ -41,13 +41,18 @@ export default function LoginModal({ onClose }) {
   useEffect(() => {
     const initializeGoogle = () => {
       if (window.google && window.google.accounts) {
+        const btnEl = document.getElementById("google-modal-signin-btn");
+        if (!btnEl) return;
+        const containerW = btnEl.parentElement?.clientWidth || 320;
+        const targetW = Math.max(240, Math.min(containerW, 360));
+
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleLoginSuccess
         });
         window.google.accounts.id.renderButton(
-          document.getElementById("google-modal-signin-btn"),
-          { theme: "filled_blue", size: "large", width: 280, shape: "pill" }
+          btnEl,
+          { theme: "filled_blue", size: "large", width: targetW, shape: "rectangular", logo_alignment: "left" }
         );
       }
     };

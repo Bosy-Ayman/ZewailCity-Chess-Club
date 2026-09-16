@@ -98,23 +98,33 @@ export default function AdminDashboard() {
   // Dynamic container board width calculation for optimal ratio
   const boardWrapperRef = useRef(null);
   const boardDragRef = useRef(0);
-  const [boardWidth, setBoardWidth] = useState(() => Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 480, 480));
+  const [boardWidth, setBoardWidth] = useState(() => {
+    if (typeof window === "undefined") return 400;
+    const vw = window.innerWidth;
+    return Math.max(200, Math.min(vw < 768 ? vw - 48 : 480, 480));
+  });
 
   useEffect(() => {
     const updateBoardWidth = () => {
-      const maxAllowed = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 480, 480);
-      let calculatedW = maxAllowed;
+      let available = 0;
       if (boardWrapperRef.current && boardWrapperRef.current.parentElement) {
         const parentEl = boardWrapperRef.current.parentElement;
         const computedStyle = window.getComputedStyle(parentEl);
         const padLeft = parseFloat(computedStyle.paddingLeft) || 0;
         const padRight = parseFloat(computedStyle.paddingRight) || 0;
-        const available = parentEl.clientWidth - padLeft - padRight;
-        if (available > 0) {
-          calculatedW = Math.min(available, maxAllowed);
-        }
+        available = parentEl.clientWidth - padLeft - padRight;
       }
-      calculatedW = Math.max(260, Math.floor(calculatedW));
+
+      if (!available || available <= 0) {
+        const vw = typeof window !== "undefined" ? window.innerWidth : 400;
+        const estimatedPad = vw < 768 ? 56 : 48;
+        available = vw - estimatedPad;
+      }
+
+      const maxAllowed = Math.min(typeof window !== "undefined" ? window.innerWidth - 24 : 480, 480);
+      let calculatedW = Math.min(available - 2, maxAllowed);
+      calculatedW = Math.max(200, Math.floor(calculatedW));
+
       setBoardWidth((prev) => (Math.abs(prev - calculatedW) >= 1 ? calculatedW : prev));
     };
 
@@ -129,13 +139,15 @@ export default function AdminDashboard() {
     }
 
     const t1 = setTimeout(updateBoardWidth, 50);
-    const t2 = setTimeout(updateBoardWidth, 200);
+    const t2 = setTimeout(updateBoardWidth, 150);
+    const t3 = setTimeout(updateBoardWidth, 350);
     window.addEventListener("resize", updateBoardWidth);
 
     return () => {
       if (resizeObserver) resizeObserver.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       window.removeEventListener("resize", updateBoardWidth);
     };
   }, [activeTab, setupMode, editingPuzzleTournamentId]);

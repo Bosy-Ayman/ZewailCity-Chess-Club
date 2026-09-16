@@ -210,8 +210,19 @@
   display: flex;
   justify-content: center;
   margin-bottom: 16px;
-  max-width: 100%;
-  overflow: hidden;
+  width: 100%;
+  min-height: 44px;
+}
+
+#google-signup-btn {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+#google-signup-btn iframe {
+  border-radius: 10px !important;
+  max-width: 100% !important;
 }
 
 .signup-login-prompt {
