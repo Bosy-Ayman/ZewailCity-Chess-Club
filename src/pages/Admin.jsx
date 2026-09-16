@@ -1045,25 +1045,30 @@ export default function AdminDashboard() {
   };
 
   const handleBroadcastPuzzleWinners = async (tournament) => {
-    if (!isPuzzleChallengeFinished(tournament)) {
-      alert(`⏳ This puzzle challenge is still active and in progress.\n\nOfficial tournament results and winner announcement emails/notifications can only be broadcast after the challenge deadline has passed (${tournament.endDate || "TBD"} ${tournament.endTime || ""}).`);
-      return;
-    }
     if (!tournament.leaderboard || tournament.leaderboard.length === 0) {
       alert("No scores recorded on this puzzle challenge yet.");
       return;
     }
+    const isFinished = isPuzzleChallengeFinished(tournament);
     const sorted = [...tournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
     const champ = sorted[0]?.name || "Tactician";
-    if (!window.confirm(`📢 Broadcast official Champions Podium & winner announcement for "${tournament.title}" to all club members?\n\n🥇 Champion: ${champ} (${sorted[0]?.score || 0} pts)`)) {
+
+    const confirmMsg = isFinished
+      ? `📢 Broadcast official Champions Podium & winner announcement for "${tournament.title}" to all club members?\n\n🥇 Champion: ${champ} (${sorted[0]?.score || 0} pts)`
+      : `⚠️ Note: According to local clock, challenge deadline is ${tournament.endDate || "TBD"} ${tournament.endTime || ""}.\n\nAs Tournament Admin, do you want to officially close this challenge and broadcast results for "${tournament.title}" now?\n\n🥇 Champion: ${champ} (${sorted[0]?.score || 0} pts)`;
+
+    if (!window.confirm(confirmMsg)) {
       return;
     }
+
     try {
       const res = await safeFetchJson(`${API_BASE}/api/puzzle-tournaments/${tournament._id}/broadcast-winner`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true })
       });
       setSuccessMessage(res.message || `🏆 Champions Podium announcement for "${tournament.title}" broadcast to all tacticians!`);
+      setPuzzleTournaments((prev) => prev.map((item) => item._id === tournament._id ? { ...item, winnersBroadcasted: true } : item));
     } catch (err) {
       setErrorMessage(err.message || "Failed to broadcast puzzle champions announcement.");
     }

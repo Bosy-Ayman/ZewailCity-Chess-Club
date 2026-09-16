@@ -837,6 +837,64 @@ async function notifyTournamentPairings(tournament, matchesList) {
   }
 }
 
+// Helper: Parse tournament local date/time (Egypt/Cairo timezone) into a UTC Date object
+function parseTournamentDateTime(dateStr, timeStr, isEnd = false) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const cleanDate = dateStr.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    const direct = new Date(cleanDate);
+    return isNaN(direct.getTime()) ? null : direct;
+  }
+
+  const defaultTime = isEnd ? '23:59:59' : '00:00:00';
+  let time = timeStr ? timeStr.trim() : defaultTime;
+  if (/^\d{1,2}:\d{2}$/.test(time)) {
+    time = `${time}:${isEnd ? '59' : '00'}`;
+  }
+
+  const isoString = `${cleanDate}T${time}`;
+
+  try {
+    const [y, m, d] = cleanDate.split('-').map(Number);
+    const [hh, mm, ss] = time.split(':').map(Number);
+    const utcMock = new Date(Date.UTC(y, m - 1, d, hh || 0, mm || 0, ss || 0));
+
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric',
+      hour12: false
+    });
+
+    const parts = formatter.formatToParts(utcMock);
+    const p = {};
+    for (const part of parts) {
+      p[part.type] = part.value;
+    }
+
+    const cairoHour = parseInt(p.hour, 10) === 24 ? 0 : parseInt(p.hour, 10);
+    const cairoDate = new Date(Date.UTC(
+      parseInt(p.year, 10),
+      parseInt(p.month, 10) - 1,
+      parseInt(p.day, 10),
+      cairoHour,
+      parseInt(p.minute, 10),
+      parseInt(p.second, 10)
+    ));
+
+    const offsetMs = cairoDate.getTime() - utcMock.getTime();
+    const realUtcDate = new Date(utcMock.getTime() - offsetMs);
+    if (!isNaN(realUtcDate.getTime())) {
+      return realUtcDate;
+    }
+  } catch (e) {
+    console.warn('[parseTournamentDateTime error]:', e.message);
+  }
+
+  const fallback = new Date(isoString);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
 // Helper: Parse matchTime string into a valid Date object for countdown checking
 function parseMatchDateTime(matchTimeStr, fallbackDateStr = null) {
   if (!matchTimeStr || typeof matchTimeStr !== 'string') return null;
@@ -1144,12 +1202,10 @@ async function checkAndAutoBroadcastPuzzleTournaments() {
     const unbroadcastedLive = await PuzzleTournament.find({ startBroadcasted: { $ne: true } });
     for (const t of unbroadcastedLive) {
       if (!t.startDate || !t.puzzles || t.puzzles.length === 0) continue;
-      const startStr = `${t.startDate}T${t.startTime || '00:00'}:00Z`;
-      const startAt = new Date(startStr);
-      const endStr = t.endDate ? `${t.endDate}T${t.endTime || '23:59'}:59Z` : null;
-      const endAt = endStr ? new Date(endStr) : null;
+      const startAt = parseTournamentDateTime(t.startDate, t.startTime, false);
+      const endAt = parseTournamentDateTime(t.endDate, t.endTime, true);
 
-      if (isNaN(startAt.getTime()) || now < startAt) continue;
+      if (!startAt || isNaN(startAt.getTime()) || now < startAt) continue;
       if (endAt && now > endAt) {
         // Tournament already concluded without start announcement, mark start as handled
         t.startBroadcasted = true;
@@ -1167,9 +1223,8 @@ async function checkAndAutoBroadcastPuzzleTournaments() {
     const closedTournaments = await PuzzleTournament.find({ winnersBroadcasted: { $ne: true } });
     for (const t of closedTournaments) {
       if (!t.endDate) continue;
-      const endStr = `${t.endDate}T${t.endTime || '23:59'}:59Z`;
-      const endAt = new Date(endStr);
-      if (isNaN(endAt.getTime()) || now < endAt) continue;
+      const endAt = parseTournamentDateTime(t.endDate, t.endTime, true);
+      if (!endAt || isNaN(endAt.getTime()) || now < endAt) continue;
 
       // Arena deadline has passed (Closed)
       if (Array.isArray(t.leaderboard) && t.leaderboard.length > 0) {
@@ -4455,12 +4510,8 @@ app.post('/api/puzzle-tournaments/:id/register', async (req, res) => {
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     const now = new Date();
-    const startAt = tournament.startDate
-      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00Z`)
-      : null;
-    const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
-      : null;
+    const startAt = parseTournamentDateTime(tournament.startDate, tournament.startTime, false);
+    const endAt = parseTournamentDateTime(tournament.endDate, tournament.endTime, true);
     if (startAt && now >= startAt) return res.status(403).json({ error: 'Registration is closed because this challenge has started.' });
     if (endAt && now > endAt) return res.status(403).json({ error: 'This challenge is closed.' });
 
@@ -4640,13 +4691,8 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     const now = new Date();
-    // Append 'Z' so date+time strings are parsed as UTC (matches Vercel/server timezone)
-    const startAt = tournament.startDate
-      ? new Date(`${tournament.startDate}T${tournament.startTime || '00:00'}:00Z`)
-      : null;
-    const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
-      : null;
+    const startAt = parseTournamentDateTime(tournament.startDate, tournament.startTime, false);
+    const endAt = parseTournamentDateTime(tournament.endDate, tournament.endTime, true);
 
     // NOTE: We do NOT block score submission based on start time — the client enforces
     // timing. A hard 403 here causes silent score loss when clocks are slightly off.
@@ -4697,23 +4743,21 @@ app.post('/api/puzzle-tournaments/:id/submit-score', async (req, res) => {
   }
 });
 
-// POST: Broadcast puzzle arena champion alert to all tacticians (only after challenge deadline passed)
-app.post('/api/puzzle-tournaments/:id/broadcast-winner', async (req, res) => {
+// POST: Broadcast puzzle arena champion alert to all tacticians (only after challenge deadline passed or forced by admin)
+app.post('/api/puzzle-tournaments/:id/broadcast-winner', express.json(), async (req, res) => {
   try {
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Puzzle arena not found" });
 
-    // Validate that the puzzle challenge is finished (closed - deadline passed)
+    const { force } = req.body || {};
     const now = new Date();
-    const endAt = tournament.endDate
-      ? new Date(`${tournament.endDate}T${tournament.endTime || '23:59'}:59Z`)
-      : null;
+    const endAt = parseTournamentDateTime(tournament.endDate, tournament.endTime, true);
 
-    if (!endAt) {
+    if (!endAt && !force) {
       return res.status(400).json({ error: "This challenge does not have an end deadline configured and cannot be officially closed yet." });
     }
 
-    if (now < endAt) {
+    if (!force && endAt && now < endAt) {
       return res.status(400).json({
         error: `Cannot broadcast official results until the puzzle challenge is finished (deadline: ${tournament.endDate} ${tournament.endTime || '23:59'}).`
       });
