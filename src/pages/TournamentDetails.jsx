@@ -552,6 +552,226 @@ const isBlackWinner = (result) => {
     }
   };
 
+  // Export Official Tournament Summary Card as PNG Image
+  const handleExportPNG = async () => {
+    if (!tournament) return;
+    const cleanTitle = (tournament.title || "ZC_Chess_Tournament").replace(/[^\w\s-]/g, "").trim();
+
+    const canvas = document.createElement("canvas");
+    const width = 1200;
+    const height = 675;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Background gradient: Dark luxury chess theme
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, "#14110d");
+    bgGrad.addColorStop(0.5, "#0d0b08");
+    bgGrad.addColorStop(1, "#18140e");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle gold accent glow
+    const goldGlow = ctx.createRadialGradient(width / 2, 0, 10, width / 2, 0, 550);
+    goldGlow.addColorStop(0, "rgba(243, 193, 68, 0.2)");
+    goldGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = goldGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    // Outer border & framing
+    ctx.strokeStyle = "rgba(243, 193, 68, 0.65)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(20, 20, width - 40, height - 40);
+
+    ctx.strokeStyle = "rgba(243, 193, 68, 0.22)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(28, 28, width - 56, height - 56);
+
+    // Corner gold accents
+    const drawCorner = (x, y, dx, dy) => {
+      ctx.strokeStyle = "#f3c144";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + dx * 28, y);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x, y + dy * 28);
+      ctx.stroke();
+    };
+    drawCorner(20, 20, 1, 1);
+    drawCorner(width - 20, 20, -1, 1);
+    drawCorner(20, height - 20, 1, -1);
+    drawCorner(width - 20, height - 20, -1, -1);
+
+    // Load and draw club crest logo
+    const logo = new Image();
+    logo.crossOrigin = "anonymous";
+    await new Promise((resolve) => {
+      logo.onload = () => resolve(true);
+      logo.onerror = () => resolve(false);
+      logo.src = "/Icons/chess-clublogo.png";
+      setTimeout(resolve, 350);
+    });
+
+    if (logo.complete && logo.naturalWidth > 0) {
+      ctx.drawImage(logo, 55, 45, 65, 65);
+    } else {
+      ctx.font = "40px sans-serif";
+      ctx.fillText("♟️", 65, 90);
+    }
+
+    // Header texts
+    ctx.font = "bold 16px 'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = "#f3c144";
+    ctx.textAlign = "left";
+    ctx.fillText("ZEWAIL CITY CHESS CLUB", 135, 68);
+
+    ctx.font = "13px 'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillStyle = "#a8a296";
+    ctx.fillText("OFFICIAL CHAMPIONSHIP & TOURNAMENT REPORT", 135, 92);
+
+    // Status Badge on top right
+    const statusText = (tournament.status || "Completed").toUpperCase();
+    const statusBg = tournament.status === "Ongoing" ? "#e67e22" : (tournament.status === "Upcoming" ? "#2ecc71" : "#f3c144");
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.beginPath();
+    ctx.roundRect(width - 215, 48, 160, 36, 18);
+    ctx.fill();
+    ctx.strokeStyle = statusBg;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.font = "bold 13px 'Inter', sans-serif";
+    ctx.fillStyle = statusBg;
+    ctx.textAlign = "center";
+    ctx.fillText(`● ${statusText}`, width - 135, 71);
+
+    // Dividing header line
+    ctx.strokeStyle = "rgba(243, 193, 68, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(55, 125);
+    ctx.lineTo(width - 55, 125);
+    ctx.stroke();
+
+    // Tournament Title
+    ctx.textAlign = "left";
+    ctx.font = "bold 32px 'Inter', sans-serif";
+    ctx.fillStyle = "#ffffff";
+    const titleText = tournament.title || "Championship Tournament";
+    ctx.fillText(titleText.length > 40 ? titleText.substring(0, 38) + "..." : titleText, 55, 172);
+
+    // Metadata pills row (Format, Date, Location, Players)
+    const metaPills = [
+      `🏆 ${tournament.type || "Swiss"}`,
+      `📅 ${tournament.startDate || "2026"}`,
+      `📍 ${tournament.location || "Academic Building"}`,
+      `👥 ${(tournament.playersList || tournament.registrations || []).length} Players`
+    ];
+    let curX = 55;
+    ctx.font = "bold 13px 'Inter', sans-serif";
+    metaPills.forEach((pill) => {
+      const textW = ctx.measureText(pill).width;
+      ctx.fillStyle = "rgba(243, 193, 68, 0.1)";
+      ctx.beginPath();
+      ctx.roundRect(curX, 192, textW + 24, 30, 8);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(243, 193, 68, 0.35)";
+      ctx.stroke();
+
+      ctx.fillStyle = "#f3c144";
+      ctx.fillText(pill, curX + 12, 212);
+      curX += textW + 34;
+    });
+
+    // Podium Showcase Cards
+    const p1 = podiumP1?.name || (tournament.winner || "TBD");
+    const p2 = podiumP2?.name || "TBD";
+    const p3 = podiumP3?.name || "TBD";
+
+    const podiumCards = [
+      { place: "🥇 Champion", name: p1, subtitle: podiumP1?.points ? `${podiumP1.points} pts` : "1st Place", border: "#f3c144", bg: "rgba(243, 193, 68, 0.15)", glow: true },
+      { place: "🥈 2nd Place", name: p2, subtitle: podiumP2?.points ? `${podiumP2.points} pts` : "Runner-up", border: "#c0c0c0", bg: "rgba(192, 192, 192, 0.08)", glow: false },
+      { place: "🥉 3rd Place", name: p3, subtitle: podiumP3?.points ? `${podiumP3.points} pts` : "Podium Finisher", border: "#cd7f32", bg: "rgba(205, 127, 50, 0.08)", glow: false }
+    ];
+
+    const cardW = 330;
+    const cardH = 245;
+    const startX = 55;
+    const startY = 250;
+    const gap = 50;
+
+    podiumCards.forEach((c, idx) => {
+      const cx = startX + idx * (cardW + gap);
+      
+      // Card background
+      ctx.fillStyle = c.bg;
+      ctx.beginPath();
+      ctx.roundRect(cx, startY, cardW, cardH, 16);
+      ctx.fill();
+
+      // Card border
+      ctx.strokeStyle = c.border;
+      ctx.lineWidth = c.glow ? 2.5 : 1.5;
+      ctx.stroke();
+
+      // Header badge
+      ctx.fillStyle = c.border;
+      ctx.font = "bold 16px 'Inter', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(c.place, cx + cardW / 2, startY + 45);
+
+      // Divider inside card
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.beginPath();
+      ctx.moveTo(cx + 20, startY + 65);
+      ctx.lineTo(cx + cardW - 20, startY + 65);
+      ctx.stroke();
+
+      // Player Name
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 20px 'Inter', sans-serif";
+      const displayName = c.name.length > 20 ? c.name.substring(0, 18) + "..." : c.name;
+      ctx.fillText(displayName, cx + cardW / 2, startY + 125);
+
+      // Subtitle / Points
+      ctx.fillStyle = "#a8a296";
+      ctx.font = "14px 'Inter', sans-serif";
+      ctx.fillText(c.subtitle, cx + cardW / 2, startY + 160);
+
+      // Decorative chess icon
+      ctx.font = "24px sans-serif";
+      ctx.fillText(idx === 0 ? "👑" : (idx === 1 ? "⚔️" : "🛡️"), cx + cardW / 2, startY + 208);
+    });
+
+    // Footer bar
+    ctx.strokeStyle = "rgba(243, 193, 68, 0.2)";
+    ctx.beginPath();
+    ctx.moveTo(55, height - 70);
+    ctx.lineTo(width - 55, height - 70);
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#8e8677";
+    ctx.font = "12px 'Inter', sans-serif";
+    ctx.fillText("Official Record Verified • Zewail City of Science and Technology", 55, height - 38);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#f3c144";
+    ctx.font = "bold 12px 'Inter', sans-serif";
+    ctx.fillText("zc-chess-club.vercel.app", width - 55, height - 38);
+
+    // Trigger download as PNG
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `${cleanTitle.replace(/\s+/g, "_")}_Official_Report.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Export Tournament Pairings & Match Results as PGN
   const handleExportPGN = () => {
     if (!tournament) return;
@@ -1003,12 +1223,21 @@ const isBlackWinner = (result) => {
                   )}
                   <button 
                     type="button"
+                    onClick={handleExportPNG}
+                    className="export-tournament-btn png-btn"
+                    title="Download Official Branded Tournament Summary Card as PNG Image"
+                  >
+                    <span>🖼️</span>
+                    <span>Download PNG (Image)</span>
+                  </button>
+                  <button 
+                    type="button"
                     onClick={handleExportPGN}
                     className="export-tournament-btn pgn-btn"
-                    title="Export All Match Pairings as PGN file"
+                    title="Export Match Pairings in Chess PGN format (.pgn)"
                   >
                     <span>♟️</span>
-                    <span>Download PGN</span>
+                    <span>Download PGN (.pgn Moves)</span>
                   </button>
                   <button 
                     type="button"
@@ -1080,7 +1309,7 @@ const isBlackWinner = (result) => {
                     )}
 
                     {/* Advance to next round for Knockout */}
-                    {!isSwissFormat && tournament.matches && tournament.matches.length > 0 && (
+                    {!isSwissFormat && tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
                       <button 
                         className="add-btn" 
                         onClick={handleGenerateNextKnockoutRound}
@@ -1091,7 +1320,7 @@ const isBlackWinner = (result) => {
                     )}
 
                     {/* Swiss pairings generation */}
-                    {isSwissFormat && (
+                    {isSwissFormat && tournament.status !== "Completed" && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
                       <button 
                         className="add-btn" 
                         onClick={handleGenerateNextRound}
@@ -1101,8 +1330,8 @@ const isBlackWinner = (result) => {
                       </button>
                     )}
 
-                    {/* Rollback Last Round button (only visible if tournament has matches) */}
-                    {tournament.matches && tournament.matches.length > 0 && (
+                    {/* Rollback Last Round button (only visible if tournament has matches and tournament is NOT completed) */}
+                    {tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
                       <button 
                         className="add-btn" 
                         onClick={handleRollbackLastRound}
@@ -1112,8 +1341,8 @@ const isBlackWinner = (result) => {
                       </button>
                     )}
 
-                    {/* Reset Tournament Bracket (Knockout only) */}
-                    {!isSwissFormat && tournament.matches && tournament.matches.length > 0 && (
+                    {/* Reset Tournament Bracket (Knockout only, if not completed) */}
+                    {!isSwissFormat && tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
                       <button 
                         className="add-btn" 
                         onClick={handleResetBracket}
@@ -1364,42 +1593,23 @@ const isBlackWinner = (result) => {
                         </div>
                       )}
                     </div>
-                    {isStaff && (
-                      tournament?.rounds > 0 && sortedRounds.length >= tournament.rounds ? (
-                        <button 
-                          onClick={() => setCelebrationModalOpen(true)}
-                          style={{
-                            background: "linear-gradient(135deg, #4dbd74, #28a745)",
-                            color: "#fff",
-                            border: "none",
-                            padding: "8px 18px",
-                            borderRadius: "8px",
-                            fontWeight: "800",
-                            fontSize: "0.85rem",
-                            cursor: "pointer",
-                            boxShadow: "0 4px 12px rgba(77, 189, 116, 0.25)"
-                          }}
-                        >
-                          🎉 Finish Tournament & Show Winners
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={handleGenerateNextRound}
-                          style={{
-                            background: "linear-gradient(135deg, #f3c144, #d4a32a)",
-                            color: "#15120c",
-                            border: "none",
-                            padding: "8px 18px",
-                            borderRadius: "8px",
-                            fontWeight: "800",
-                            fontSize: "0.85rem",
-                            cursor: "pointer",
-                            boxShadow: "0 4px 12px rgba(243, 193, 68, 0.25)"
-                          }}
-                        >
-                          ⚡ Generate Round {nextRoundNum} Pairings ➔
-                        </button>
-                      )
+                    {isStaff && tournament.status !== "Completed" && (!tournament?.rounds || sortedRounds.length < tournament.rounds) && (
+                      <button 
+                        onClick={handleGenerateNextRound}
+                        style={{
+                          background: "linear-gradient(135deg, #f3c144, #d4a32a)",
+                          color: "#15120c",
+                          border: "none",
+                          padding: "8px 18px",
+                          borderRadius: "8px",
+                          fontWeight: "800",
+                          fontSize: "0.85rem",
+                          cursor: "pointer",
+                          boxShadow: "0 4px 12px rgba(243, 193, 68, 0.25)"
+                        }}
+                      >
+                        ⚡ Generate Round {nextRoundNum} Pairings ➔
+                      </button>
                     )}
                   </div>
 
