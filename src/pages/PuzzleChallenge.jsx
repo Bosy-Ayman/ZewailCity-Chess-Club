@@ -528,10 +528,10 @@ export default function PuzzleChallenge() {
   };
 
   // Load a single puzzle
-  const loadPuzzle = (puzzle, timeLimit) => {
+  const loadPuzzle = (puzzle, defaultTimeLimit) => {
     let freshChess;
     try {
-      freshChess = new Chess(puzzle.initialFen);
+      freshChess = new Chess(puzzle?.initialFen);
     } catch (err) {
       console.warn("Invalid puzzle FEN, using default position:", err);
       freshChess = new Chess();
@@ -539,10 +539,13 @@ export default function PuzzleChallenge() {
     boardLocked.current = false;
     setChessGame(freshChess);
     setBoardFen(freshChess.fen());
-    setCorrectMovesList(puzzle.correctMoves || []);
+    setCorrectMovesList(puzzle?.correctMoves || []);
     setCurrentMoveIdx(0);
     setTrials(3);
-    setTimeRemaining(timeLimit || 60);
+    const customLimit = (puzzle && puzzle.timeLimit && Number(puzzle.timeLimit) > 0)
+      ? Number(puzzle.timeLimit)
+      : (defaultTimeLimit || 60);
+    setTimeRemaining(customLimit);
     setGameFeedback("");
     setFeedbackType("");
     setSelectedSquare(null);
@@ -1530,6 +1533,12 @@ export default function PuzzleChallenge() {
                     </strong>
                   </div>
                   <div className="stat-row">
+                    <span>Puzzle Clock:</span>
+                    <strong style={{ color: "#f3c144" }}>
+                      {(activeTournament.puzzles[currentPuzzleIdx]?.timeLimit || activeTournament.timeLimit || 60)}s
+                    </strong>
+                  </div>
+                  <div className="stat-row">
                     <span>Hint:</span>
                     <span style={{ fontSize: "0.85rem", color: "#caba91", maxWidth: "160px", textAlign: "right" }}>
                       {activeTournament.puzzles[currentPuzzleIdx].description || "Calculate best moves"}
@@ -2027,9 +2036,12 @@ export default function PuzzleChallenge() {
                                   </p>
                                 </div>
                               </div>
-                              <div className="puzzle-card-right">
+                              <div className="puzzle-card-right" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                 <span className="moves-count-tag">
                                   {(p.correctMoves || []).length} ply
+                                </span>
+                                <span style={{ fontSize: "0.75rem", color: "#f3c144" }}>
+                                  ⏱️ {p.timeLimit || liveTournament.timeLimit || 60}s
                                 </span>
                                 <span className="arrow-icon">{isActive ? "▶" : "›"}</span>
                               </div>

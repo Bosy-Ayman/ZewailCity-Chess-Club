@@ -552,29 +552,36 @@ async function broadcastWinnerNotification({
 
     // 2. Real Branded Emails for all registered users
     const appBaseUrl = getAppBaseUrl();
-    for (const u of allUsers) {
-      if (!u.email) continue;
-      const html = generateWinnerCelebrationEmailHtml({
-        tournamentTitle,
-        tournamentType: formatBadge,
-        recipientName: u.name || u.email.split('@')[0],
-        winnerName,
-        winnerScoreOrPoints,
-        runnerUpName,
-        runnerUpScoreOrPoints,
-        thirdPlaceName,
-        thirdPlaceScoreOrPoints,
-        actionUrl: targetLink
+    const emailPromises = allUsers
+      .filter(u => u.email)
+      .map(u => {
+        const html = generateWinnerCelebrationEmailHtml({
+          tournamentTitle,
+          tournamentType: formatBadge,
+          recipientName: u.name || u.email.split('@')[0],
+          winnerName,
+          winnerScoreOrPoints,
+          runnerUpName,
+          runnerUpScoreOrPoints,
+          thirdPlaceName,
+          thirdPlaceScoreOrPoints,
+          actionUrl: targetLink
+        });
+
+        return sendEmail({
+          to: u.email,
+          subject: `🏆 [ZC Chess Club] Champion Crowned: ${winnerName} won ${tournamentTitle}!`,
+          html,
+          text: `🏆 CHAMPION CROWNED: ${winnerName} won ${tournamentTitle} (${formatBadge})!\n\n🥇 1st Place: ${winnerName} (${winnerScoreOrPoints || 'Champion'})\n🥈 2nd Place: ${runnerUpName || 'Finalist'}\n🥉 3rd Place: ${thirdPlaceName || '3rd Place'}\n\nView Results: ${appBaseUrl}${targetLink}`
+        });
       });
 
-      sendEmail({
-        to: u.email,
-        subject: `🏆 [ZC Chess Club] Champion Crowned: ${winnerName} won ${tournamentTitle}!`,
-        html,
-        text: `🏆 CHAMPION CROWNED: ${winnerName} won ${tournamentTitle} (${formatBadge})!\n\n🥇 1st Place: ${winnerName} (${winnerScoreOrPoints || 'Champion'})\n🥈 2nd Place: ${runnerUpName || 'Finalist'}\n🥉 3rd Place: ${thirdPlaceName || '3rd Place'}\n\nView Results: ${appBaseUrl}${targetLink}`
-      }).catch(err => console.warn(`Email send error to ${u.email}:`, err.message));
-    }
-    console.log(`[Winner Broadcast] Dispatched podium email to ${allUsers.length} members.`);
+    const sendResults = await Promise.allSettled(emailPromises);
+    const successCount = sendResults.filter(r => r.status === 'fulfilled' && r.value?.success && !r.value?.simulated).length;
+    const simulatedCount = sendResults.filter(r => r.status === 'fulfilled' && r.value?.simulated).length;
+    const failedCount = sendResults.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success)).length;
+
+    console.log(`[Winner Broadcast] Podium emails summary: ${successCount} dispatched live, ${simulatedCount} simulated, ${failedCount} failed of ${allUsers.length} members.`);
   } catch (err) {
     console.warn('[Winner Broadcast Error]', err.message);
   }
@@ -583,21 +590,31 @@ async function broadcastWinnerNotification({
 // --- Email Service & SMTP Transporter ---
 const getEmailTransporter = () => {
   if (!nodemailer) return null;
-  const user = process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg';
-  const pass = process.env.SMTP_PASS;
+  const user = (process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg').trim();
+  const pass = (process.env.SMTP_PASS || '').trim();
 
   if (!pass) {
+    console.warn('[Email Service Notice] SMTP_PASS environment variable is not defined on server. Emails are logged in simulated mode.');
     return null;
   }
 
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const isSecure = process.env.SMTP_SECURE === 'true' || port === 465;
+
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '465', 10),
-    secure: process.env.SMTP_SECURE === 'false' ? false : true,
+    port: port,
+    secure: isSecure,
     auth: {
       user: user,
       pass: pass
-    }
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000
   });
 };
 
@@ -1107,7 +1124,8 @@ const PuzzleSchema = new mongoose.Schema({
   initialFen: { type: String, required: true },
   mateIn: { type: Number, required: true, min: 0, max: 10, default: 1 },
   correctMoves: [{ type: String, required: true }],
-  description: { type: String, default: "" }
+  description: { type: String, default: "" },
+  timeLimit: { type: Number, default: null } // Custom seconds for this specific puzzle (e.g. 45, 90, 120)
 });
 
 const PuzzleTournamentSchema = new mongoose.Schema({
@@ -1168,25 +1186,27 @@ async function broadcastPuzzleStartNotification(tournament) {
     const puzzleCount = (tournament.puzzles || []).length;
     const puzzleText = `${puzzleCount} tactical puzzle${puzzleCount > 1 ? 's' : ''}`;
 
-    for (const u of allUsers) {
-      if (!u.email) continue;
-      const emailHtml = generateClubEmailHtml({
-        title: `♟️ Tactics Arena Live: ${tournament.title}`,
-        recipientName: u.name || u.email.split('@')[0],
-        message: `A new Puzzle Challenge tournament is now officially live and open for participation!\n\n• Challenge Arena: ${tournament.title}\n• Begins: ${tournament.startDate}${tournament.startTime ? ` at ${tournament.startTime}` : ''}\n• Ends: ${tournament.endDate || 'TBD'}${tournament.endTime ? ` at ${tournament.endTime}` : ''}\n• Time Limit: ${tournament.timeLimit || 60}s per puzzle\n• Challenge Size: ${puzzleText}\n\nEach tactician gets 1 official attempt with 3 trials per puzzle. Speed bonuses are awarded for rapid calculation.\n\nGood luck!`,
-        actionLabel: '⚡ Enter Puzzle Arena Now →',
-        actionUrl: '/puzzlechallenge',
-        senderName: 'ZC Chess Club Arbiters'
+    const emailPromises = allUsers
+      .filter(u => u.email)
+      .map(u => {
+        const emailHtml = generateClubEmailHtml({
+          title: `♟️ Puzzle Arena Live: ${tournament.title}`,
+          recipientName: u.name || u.email.split('@')[0],
+          message: `A new Puzzle Challenge tournament is now officially live and open for participation!\n\n• Challenge Arena: ${tournament.title}\n• Begins: ${tournament.startDate}${tournament.startTime ? ` at ${tournament.startTime}` : ''}\n• Ends: ${tournament.endDate || 'TBD'}${tournament.endTime ? ` at ${tournament.endTime}` : ''}\n• Time Limit: ${tournament.timeLimit || 60}s per puzzle\n• Challenge Size: ${puzzleText}\n\nEach tactician gets 1 official attempt with 3 trials per puzzle. Speed bonuses are awarded for rapid calculation.\n\nGood luck!`,
+          actionLabel: '⚡ Enter Puzzle Arena Now →',
+          actionUrl: '/puzzlechallenge',
+          senderName: 'ZC Chess Club Arbiters'
+        });
+
+        return sendEmail({
+          to: u.email,
+          subject: `[ZC Chess Club] ♟️ Challenge Live: "${tournament.title}" is now open!`,
+          html: emailHtml,
+          text: `♟️ Tactics Arena Live: "${tournament.title}" is now open! Play at /puzzlechallenge`
+        });
       });
 
-      sendEmail({
-        to: u.email,
-        subject: `[ZC Chess Club] ♟️ Challenge Live: "${tournament.title}" is now open!`,
-        html: emailHtml,
-        text: `♟️ Tactics Arena Live: "${tournament.title}" is now open! Play at /puzzlechallenge`
-      }).catch(e => console.warn(`Start email to ${u.email} failed:`, e.message));
-    }
-
+    await Promise.allSettled(emailPromises);
     console.log(`[Puzzle Start Broadcast] Dispatched start alert emails for "${tournament.title}" to ${allUsers.length} tacticians!`);
   } catch (err) {
     console.warn('[Puzzle Start Broadcast Error]:', err.message);
@@ -3442,7 +3462,7 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
 });
 
 
-// Helper to generate standard tournament bracket seed pairings (1 vs 8, 4 vs 5, 2 vs 7, 3 vs 6)
+// Helper to determine match winner across single-game, 2-game match, and Armageddon results
 const getKnockoutSeedOrder = (size) => {
   let roundsCount = Math.log2(size) - 1;
   let order = [1, 2];
@@ -4627,9 +4647,9 @@ app.delete('/api/puzzle-tournaments/:id', async (req, res) => {
 });
 
 // POST: add a puzzle to an existing tournament
-app.post('/api/puzzle-tournaments/:id/puzzles', async (req, res) => {
+app.post('/api/puzzle-tournaments/:id/puzzles', express.json(), async (req, res) => {
   try {
-    const { initialFen, mateIn, correctMoves, description } = req.body;
+    const { initialFen, mateIn, correctMoves, description, timeLimit } = req.body;
     if (!initialFen || !correctMoves || correctMoves.length === 0) {
       return res.status(400).json({ error: 'initialFen and correctMoves are required' });
     }
@@ -4641,7 +4661,8 @@ app.post('/api/puzzle-tournaments/:id/puzzles', async (req, res) => {
       initialFen,
       mateIn: mateIn !== undefined ? mateIn : 1,
       correctMoves,
-      description: description || ""
+      description: description || "",
+      timeLimit: timeLimit !== undefined && timeLimit !== null && timeLimit !== "" ? Number(timeLimit) : null
     });
 
     const saved = await tournament.save();

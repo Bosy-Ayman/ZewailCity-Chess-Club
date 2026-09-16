@@ -62,6 +62,7 @@ export default function AdminDashboard() {
   const [activePuzzleMateIn, setActivePuzzleMateIn] = useState(1);
   const [activePuzzleMoves, setActivePuzzleMoves] = useState([]);
   const [activePuzzleDesc, setActivePuzzleDesc] = useState("");
+  const [activePuzzleTimeLimit, setActivePuzzleTimeLimit] = useState("");
   const [setupMode, setSetupMode] = useState(true); // true = setup pieces; false = record solution moves
   const [selectedPiece, setSelectedPiece] = useState(null); // { type: 'p'|'r'..., color: 'w'|'b' } or 'clear'
   const [chessInstance, setChessInstance] = useState(new Chess());
@@ -852,7 +853,8 @@ export default function AdminDashboard() {
       initialFen: initialPuzzleFen,
       mateIn: activePuzzleMateIn,
       correctMoves: activePuzzleMoves,
-      description: activePuzzleDesc || (activePuzzleMateIn === 0 ? "Find the Best Move" : `Mate in ${activePuzzleMateIn}`)
+      description: activePuzzleDesc || (activePuzzleMateIn === 0 ? "Find the Best Move" : `Mate in ${activePuzzleMateIn}`),
+      timeLimit: activePuzzleTimeLimit ? Number(activePuzzleTimeLimit) : null
     };
     
     // If editing an existing tournament, directly save it to the backend tournament!
@@ -890,6 +892,7 @@ export default function AdminDashboard() {
     setInitialPuzzleFen("");
     setActivePuzzleMoves([]);
     setActivePuzzleDesc("");
+    setActivePuzzleTimeLimit("");
     setSetupMode(true);
     setSelectedPiece(null);
   };
@@ -936,6 +939,7 @@ export default function AdminDashboard() {
     setActivePuzzleMateIn(p.mateIn !== undefined && p.mateIn !== null ? p.mateIn : 1);
     setActivePuzzleMoves(p.correctMoves || []);
     setActivePuzzleDesc(p.description || "");
+    setActivePuzzleTimeLimit(p.timeLimit ? String(p.timeLimit) : "");
     setInitialPuzzleFen(p.initialFen);
     setSetupMode(false);
     setPuzzlesList(puzzlesList.filter((_, i) => i !== index));
@@ -1089,6 +1093,7 @@ export default function AdminDashboard() {
     setInitialPuzzleFen("");
     setActivePuzzleMoves([]);
     setActivePuzzleDesc("");
+    setActivePuzzleTimeLimit("");
     setSetupMode(true);
     setSelectedPiece(null);
   };
@@ -2785,9 +2790,14 @@ export default function AdminDashboard() {
                       {puzzlesList.map((p, index) => (
                         <div key={index} className="puzzle-item-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#17140f", border: "1px solid rgba(243, 193, 68, 0.2)", borderRadius: "10px", padding: "12px 16px" }}>
                           <div className="puzzle-item-info" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <span className="puzzle-item-title" style={{ color: "#fff", fontWeight: "bold" }}>
-                              Puzzle #{index + 1} - {p.mateIn === 0 ? "Find the Best Move" : `Mate in ${p.mateIn}`}
-                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                              <span className="puzzle-item-title" style={{ color: "#fff", fontWeight: "bold" }}>
+                                Puzzle #{index + 1} - {p.mateIn === 0 ? "Find the Best Move" : `Mate in ${p.mateIn}`}
+                              </span>
+                              <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: p.timeLimit ? "rgba(243, 193, 68, 0.2)" : "rgba(255, 255, 255, 0.08)", color: p.timeLimit ? "#f3c144" : "#caba91", border: `1px solid ${p.timeLimit ? 'rgba(243, 193, 68, 0.4)' : 'rgba(255, 255, 255, 0.15)'}` }}>
+                                ⏱️ {p.timeLimit ? `${p.timeLimit}s (custom)` : `${puzzleTimeLimit || 60}s (default)`}
+                              </span>
+                            </div>
                             <span className="puzzle-item-desc" style={{ color: "#caba91", fontSize: "0.85rem" }}>
                               {p.description || "Solve the tactic"}
                             </span>
@@ -3006,6 +3016,22 @@ export default function AdminDashboard() {
                             placeholder="e.g. Find the killer bishop sacrifice on h7..."
                             disabled={!setupMode}
                           />
+                        </div>
+
+                        <div className="form-group">
+                          <label>Time Limit for this Puzzle (Seconds, Optional)</label>
+                          <input
+                            type="number"
+                            min="5"
+                            max="600"
+                            value={activePuzzleTimeLimit}
+                            onChange={(e) => setActivePuzzleTimeLimit(e.target.value)}
+                            placeholder={`Default: ${puzzleTimeLimit || 60}s (leave blank to inherit)`}
+                            disabled={!setupMode}
+                          />
+                          <small style={{ color: "#caba91", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
+                            Custom countdown for this specific puzzle. Leave blank to use challenge default ({puzzleTimeLimit || 60}s).
+                          </small>
                         </div>
 
                         <div className="form-group" style={{ marginTop: "10px" }}>
