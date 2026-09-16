@@ -4177,12 +4177,13 @@ async function generateVectorCertificatePdfBuffer({
     if (fs.existsSync(stampPath)) {
       const stampBytes = fs.readFileSync(stampPath);
       const stampImage = await pdfDoc.embedPng(stampBytes);
-      const dims = stampImage.scale(0.35);
+      const desiredWidth = 100;
+      const desiredHeight = (stampImage.height / stampImage.width) * desiredWidth;
       page.drawImage(stampImage, {
-        x: 421 - dims.width / 2,
-        y: 105 - dims.height / 2,
-        width: dims.width,
-        height: dims.height,
+        x: 421 - desiredWidth / 2,
+        y: 105 - desiredHeight / 2,
+        width: desiredWidth,
+        height: desiredHeight,
         opacity: 0.85
       });
     } else {
