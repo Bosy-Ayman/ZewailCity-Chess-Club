@@ -175,11 +175,13 @@ export const getHistoricalTournamentsForUser = (user) => {
           id: t.id,
           title: t.title,
           type: t.type,
+          category: t.category || "tournament",
           date: t.date,
           location: t.location,
           image: t.image,
           description: t.description,
           award: w.title,
+          place: w.place,
           isChampion: w.place === 1
         });
       }

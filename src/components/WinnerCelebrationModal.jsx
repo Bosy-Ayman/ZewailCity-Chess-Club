@@ -4,7 +4,6 @@ import Confetti from "react-confetti";
 import { X } from "lucide-react";
 import { chessAudio } from "../utils/chessAudio";
 import { getPlayerAvatarUrl } from "../utils/api";
-import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import "./WinnerCelebrationModal.css";
 
 /**
@@ -39,42 +38,6 @@ export default function WinnerCelebrationModal({
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const loggedInEmail = (localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || localStorage.getItem("email") || "").trim().toLowerCase();
-  const loggedInName = (localStorage.getItem("userName") || (loggedInEmail ? loggedInEmail.split("@")[0] : "")).trim().toLowerCase();
-  const userRole = (localStorage.getItem("userRole") || "member").toLowerCase();
-  const isStaffUser = 
-    isStaff ||
-    userRole === "admin" ||
-    userRole === "oc" ||
-    userRole === "hr" ||
-    userRole === "president" ||
-    userRole === "vice_president" ||
-    userRole === "trainer" ||
-    userRole === "media" ||
-    userRole === "pr" ||
-    userRole.includes("head") ||
-    userRole.includes("board") ||
-    userRole.includes("officer");
-
-  const isCurrentPlayer = (player) => {
-    if (!player) return false;
-    const emailMatch = player.email && loggedInEmail && player.email.trim().toLowerCase() === loggedInEmail;
-    const nameMatch = player.name && loggedInName && player.name.trim().toLowerCase() === loggedInName;
-    return Boolean(emailMatch || nameMatch);
-  };
-
-  const handleDownloadCert = (player, rank, format = "pdf") => {
-    if (!player || !player.name) return;
-    generateWinnerCertificate({
-      playerName: player.name,
-      rank: rank,
-      tournamentTitle: tournamentTitle,
-      tournamentType: tournamentType,
-      pointsOrScore: getScoreDisplay(player, rank),
-      format: format
-    });
-  };
 
   const windowW = typeof window !== "undefined" ? window.innerWidth : 1200;
   const windowH = typeof window !== "undefined" ? window.innerHeight : 900;
@@ -200,16 +163,6 @@ export default function WinnerCelebrationModal({
                 >
                   View Profile ↗
                 </button>
-                {(isStaffUser || isCurrentPlayer(runnerUp)) && (
-                  <button
-                    type="button"
-                    className="podium-profile-link cert-btn"
-                    style={{ marginTop: "6px", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.4)", color: "#f3c144", fontWeight: "700" }}
-                    onClick={() => handleDownloadCert(runnerUp, "Runner-Up (2nd Place)")}
-                  >
-                    📜 Certificate
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -291,16 +244,6 @@ export default function WinnerCelebrationModal({
                 >
                   Congratulate Profile ↗
                 </button>
-                {(isStaffUser || isCurrentPlayer(winner)) && (
-                  <button
-                    type="button"
-                    className="podium-profile-link"
-                    style={{ marginTop: "6px", background: "linear-gradient(135deg, #f3c144 0%, #d4a32a 100%)", color: "#15120c", fontWeight: "800", border: "none" }}
-                    onClick={() => handleDownloadCert(winner, "Champion (1st Place)")}
-                  >
-                    📜 Champion Certificate
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -332,16 +275,6 @@ export default function WinnerCelebrationModal({
                 >
                   View Profile ↗
                 </button>
-                {(isStaffUser || isCurrentPlayer(thirdPlace)) && (
-                  <button
-                    type="button"
-                    className="podium-profile-link cert-btn"
-                    style={{ marginTop: "6px", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.4)", color: "#f3c144", fontWeight: "700" }}
-                    onClick={() => handleDownloadCert(thirdPlace, "3rd Place")}
-                  >
-                    📜 Certificate
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -349,47 +282,6 @@ export default function WinnerCelebrationModal({
 
         {/* Action Controls */}
         <div className="winner-celebration-actions">
-          {winner && winner.name && (isStaffUser || isCurrentPlayer(winner)) && (
-            <button
-              type="button"
-              className="action-btn"
-              style={{ background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)", color: "#12100d", fontWeight: "900", border: "none" }}
-              onClick={() => handleDownloadCert(winner, "Champion (1st Place)", "pdf")}
-            >
-              📜 {isCurrentPlayer(winner) ? "Download My Certificate (PDF)" : "Download Certificate (PDF)"}
-            </button>
-          )}
-          {runnerUp && runnerUp.name && !isStaffUser && isCurrentPlayer(runnerUp) && (
-            <button
-              type="button"
-              className="action-btn"
-              style={{ background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)", color: "#12100d", fontWeight: "900", border: "none" }}
-              onClick={() => handleDownloadCert(runnerUp, "Runner-Up (2nd Place)", "pdf")}
-            >
-              📜 Download My Certificate (PDF)
-            </button>
-          )}
-          {thirdPlace && thirdPlace.name && !isStaffUser && isCurrentPlayer(thirdPlace) && (
-            <button
-              type="button"
-              className="action-btn"
-              style={{ background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)", color: "#12100d", fontWeight: "900", border: "none" }}
-              onClick={() => handleDownloadCert(thirdPlace, "3rd Place", "pdf")}
-            >
-              📜 Download My Certificate (PDF)
-            </button>
-          )}
-          {winner && winner.name && (isStaffUser || isCurrentPlayer(winner)) && (
-            <button
-              type="button"
-              className="action-btn"
-              style={{ background: "rgba(243,193,68,0.12)", border: "1px solid rgba(243,193,68,0.4)", color: "#f3c144", fontWeight: "700" }}
-              onClick={() => handleDownloadCert(winner, "Champion (1st Place)", "png")}
-            >
-              🖼️ PNG Image
-            </button>
-          )}
-
           {onViewBracketOrStandings && (
             <button
               type="button"
@@ -399,7 +291,7 @@ export default function WinnerCelebrationModal({
                 onViewBracketOrStandings();
               }}
             >
-              📊 View Full Standings
+              📊 View Tactical Standings & Honors
             </button>
           )}
 

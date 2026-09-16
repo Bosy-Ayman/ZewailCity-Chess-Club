@@ -443,6 +443,10 @@ const generateWinnerCelebrationEmailHtml = ({
           <div class="cta-container">
             <a href="${targetUrl}" class="cta-btn">View Official Standings & Podium →</a>
           </div>
+
+          <div style="text-align: center; margin: 24px auto 8px;">
+            <img src="https://zc-chess-club.vercel.app/Icons/official-stamp.png" alt="Official Zewail City Chess Club Seal" width="95" height="95" style="display: inline-block; transform: rotate(-5.2deg); filter: drop-shadow(0 4px 12px rgba(243, 193, 68, 0.4));" />
+          </div>
         </div>
         <div class="footer">
           <p>© ${new Date().getFullYear()} Zewail City Chess Club. All rights reserved.</p>
@@ -4155,6 +4159,171 @@ Q`;
   return Buffer.from(parts.join("") + xref + trailer, "utf-8");
 }
 
+const generateOfficialCertificateEmailHtml = ({
+  recipientName,
+  certTitle,
+  rank = "Participant",
+  pointsOrScore = "",
+  tournamentTitle = "ZC Chess Event",
+  tournamentType = "Tournament",
+  date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+  certCode = "",
+  actionUrl = ""
+}) => {
+  const appBaseUrl = getAppBaseUrl();
+  const targetUrl = actionUrl ? (actionUrl.startsWith("http") ? actionUrl : `${appBaseUrl}${actionUrl}`) : `${appBaseUrl}/history?tab=events`;
+  const isPuzzle = (tournamentType || "").toLowerCase().includes("puzzle") || (tournamentType || "").toLowerCase().includes("tactic");
+  const rankStr = (rank || "").toString().toLowerCase();
+  const isPodium = rankStr.includes("champ") || rankStr.includes("runner") || rankStr.includes("3rd") || rankStr.includes("1st") || rankStr.includes("2nd");
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${certTitle}</title>
+      <style>
+        body { margin: 0; padding: 0; background-color: #0c0a08; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f2ece1; -webkit-font-smoothing: antialiased; }
+        .email-container { max-width: 620px; margin: 24px auto; background-color: #14110b; border: 1.5px solid #d4a32a; border-radius: 14px; overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,0.85); }
+        .crest-header { background: radial-gradient(circle at 50% 0%, #292014 0%, #120f0a 100%); padding: 32px 24px 20px; text-align: center; border-bottom: 2px solid #f3c144; }
+        .crest-logo { width: 56px; height: 56px; border-radius: 10px; display: block; margin: 0 auto 10px; box-shadow: 0 4px 14px rgba(243, 193, 68, 0.35); }
+        .crest-org { color: #f3c144; font-size: 16px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+        .crest-sub { color: #a39b8c; font-size: 12px; margin: 4px 0 0; letter-spacing: 1px; text-transform: uppercase; }
+        
+        .main-body { padding: 36px 28px 28px; }
+        .formal-salutation { font-size: 15px; color: #d4ccbd; margin: 0 0 16px; line-height: 1.6; }
+        .cert-card { background: linear-gradient(145deg, #1b160e 0%, #100d08 100%); border: 1.5px solid rgba(243, 193, 68, 0.5); border-radius: 12px; padding: 26px 20px; text-align: center; margin: 20px 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+        .cert-category-tag { display: inline-block; background: rgba(243, 193, 68, 0.12); border: 1px solid rgba(243, 193, 68, 0.35); color: #f3c144; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 14px; border-radius: 999px; margin-bottom: 12px; }
+        .cert-headline { color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 8px; letter-spacing: 0.5px; }
+        .conferred-line { color: #9e9585; font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px; margin: 12px 0 6px; }
+        .recipient-display { color: #f3c144; font-size: 26px; font-weight: 800; margin: 0 0 12px; font-family: 'Georgia', serif; }
+        .citation-body { color: #d1c7b7; font-size: 14px; line-height: 1.6; margin: 0 auto 16px; max-width: 480px; }
+        
+        .honor-pill { display: inline-block; background: linear-gradient(135deg, rgba(243, 193, 68, 0.22) 0%, rgba(212, 163, 42, 0.12) 100%); border: 1.5px solid #f3c144; color: #ffffff; font-weight: 800; font-size: 14px; padding: 7px 22px; border-radius: 999px; margin-bottom: 18px; }
+        
+        .metadata-table { width: 100%; border-top: 1px solid rgba(243, 193, 68, 0.2); margin-top: 16px; padding-top: 14px; font-size: 12px; color: #a39b8c; text-align: left; }
+        .metadata-table td { padding: 4px 0; }
+        
+        .attachment-banner { background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.4); border-radius: 10px; padding: 14px 18px; margin: 24px 0 20px; text-align: center; }
+        .attachment-title { color: #2ecc71; font-weight: 800; font-size: 14px; margin: 0 0 3px; }
+        .attachment-sub { color: #a8bba8; font-size: 12px; margin: 0; }
+        
+        .signatures-row { width: 100%; margin: 26px 0 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 20px; }
+        .sig-name-script { font-family: 'Brush Script MT', 'Dancing Script', 'Georgia', cursive; font-size: 22px; color: #ffd768; font-style: italic; margin-bottom: 4px; }
+        .sig-name-print { color: #ffffff; font-size: 13px; font-weight: 700; margin: 0; }
+        .sig-role { color: #f3c144; font-size: 10px; font-weight: 700; text-transform: uppercase; margin: 2px 0 0; }
+        
+        .cta-box { text-align: center; margin: 28px 0 10px; }
+        .portal-btn { display: inline-block; background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%); color: #12100d !important; font-weight: 900; font-size: 14px; text-decoration: none; padding: 13px 34px; border-radius: 999px; box-shadow: 0 4px 18px rgba(243, 193, 68, 0.4); letter-spacing: 0.5px; }
+        
+        .footer-sec { background: #0c0a08; border-top: 1px solid rgba(255,255,255,0.06); padding: 22px 20px; text-align: center; color: #787063; font-size: 11px; line-height: 1.5; }
+      </style>
+    </head>
+    <body>
+      <div class="email-container">
+        <!-- Header -->
+        <div class="crest-header">
+          <img class="crest-logo" src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Crest" />
+          <h1 class="crest-org">Zewail City Chess Club</h1>
+          <p class="crest-sub">Official Office of Arbiters & Club Presidency</p>
+        </div>
+
+        <!-- Content -->
+        <div class="main-body">
+          <p class="formal-salutation">
+            Dear <strong>${recipientName}</strong>,
+          </p>
+          <p class="formal-salutation">
+            On behalf of the Highboard and the Tournament Organizing Committee of <strong>Zewail City Chess Club</strong>, we are pleased to officially confer upon you this Certificate of Honors in recognition of your dedication, competitive excellence, and sportsmanship.
+          </p>
+
+          <!-- Certificate Visual Box -->
+          <div class="cert-card">
+            <span class="cert-category-tag">${isPuzzle ? "Tactics Arena Award" : "Tournament Honors"}</span>
+            <h2 class="cert-headline">${certTitle}</h2>
+            <div class="conferred-line">Conferred Upon</div>
+            <div class="recipient-display">${recipientName}</div>
+            
+            <div class="honor-pill">
+              ${rank}${pointsOrScore ? ` • ${pointsOrScore}` : ''}
+            </div>
+
+            <p class="citation-body">
+              ${isPodium
+                ? `Awarded for exceptional tactical calculation, strategic rigor, and outstanding competitive achievement in <strong>${tournamentTitle}</strong>.`
+                : `Awarded with sincere appreciation for dedicated participation, sporting integrity, and strategic passion in <strong>${tournamentTitle}</strong>.`}
+            </p>
+
+            <!-- Official Stamp Badge -->
+            <div style="text-align: center; margin: 22px auto 16px;">
+              <img src="https://zc-chess-club.vercel.app/Icons/official-stamp.png" alt="Official Zewail City Chess Club Stamp" width="125" height="125" style="display: inline-block; transform: rotate(-5.2deg); filter: drop-shadow(0 6px 16px rgba(243, 193, 68, 0.4));" />
+              <div style="color: #f3c144; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 6px;">★ Official Arbiter &amp; Presidential Seal ★</div>
+            </div>
+
+            <table class="metadata-table" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="35%"><strong>Event:</strong></td>
+                <td>${tournamentTitle}</td>
+              </tr>
+              <tr>
+                <td><strong>Format / Venue:</strong></td>
+                <td>${tournamentType} • Zewail City of Science and Technology</td>
+              </tr>
+              <tr>
+                <td><strong>Date of Conferral:</strong></td>
+                <td>${date}</td>
+              </tr>
+              <tr>
+                <td><strong>Verification Code:</strong></td>
+                <td style="font-family: monospace; color: #f3c144;">${certCode}</td>
+              </tr>
+              <tr>
+                <td><strong>Issued Timestamp:</strong></td>
+                <td style="font-family: monospace; color: #a39b8c;">${new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" })}</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Attachment Notice -->
+          <div class="attachment-banner">
+            <div class="attachment-title">📎 Official Certificate Attached (PDF Document)</div>
+            <p class="attachment-sub">A high-resolution, vector-rendered official PDF certificate bearing the Arbiter Seal and President Signature has been attached to this email for your permanent records and portfolio.</p>
+          </div>
+
+          <!-- Handwritten Signatures -->
+          <table class="signatures-row" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="50%" align="center" valign="top">
+                <div class="sig-name-script">Alaa Salama</div>
+                <p class="sig-name-print">Alaa Salama</p>
+                <p class="sig-role">${isPuzzle ? "Puzzle Arbiter & Organizing Head" : "Chief Arbiter & Organizing Head"}</p>
+              </td>
+              <td width="50%" align="center" valign="top">
+                <div class="sig-name-script">Ahmed Elkhodiry</div>
+                <p class="sig-name-print">Ahmed Elkhodiry</p>
+                <p class="sig-role">Club President</p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- CTA -->
+          <div class="cta-box">
+            <a href="${targetUrl}" class="portal-btn">View Event Archive & Standings →</a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-sec">
+          <p style="margin: 0 0 4px;">© ${new Date().getFullYear()} Zewail City Chess Club. All rights reserved.</p>
+          <p style="margin: 0;">Zewail City of Science, Technology and Innovation • Giza, Egypt</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
 // POST: Universal single certificate email dispatcher with attached PDF
 app.post('/api/certificates/send-email', async (req, res) => {
   try {
@@ -4202,68 +4371,22 @@ app.post('/api/certificates/send-email', async (req, res) => {
       });
     }
 
-    const appBaseUrl = getAppBaseUrl();
-    const certHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
-          .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
-          .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
-          .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
-          .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
-          .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
-          .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
-          .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
-          .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
-        </style>
-      </head>
-      <body>
-        <div class="wrapper">
-          <div class="header">
-            <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
-            <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
-            <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Honors & Appreciation</p>
-          </div>
-          <div style="padding: 20px;">
-            <div class="cert-box">
-              <div class="cert-title">📜 ${certTitle}</div>
-              <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
-              <div class="recipient-name">${cleanName}</div>
-              <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
-                ${rank}${pointsOrScore ? ` • ${pointsOrScore}` : ''}
-              </div>
-              <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
-                For passionate dedication and participation in the <strong>${tournamentTitle}</strong> at Zewail City of Science and Technology.
-              </p>
-              <div class="stamp-badge">
-                ★ ZC CHESS ★<br/>
-                <span style="font-size: 16px;">${isPuzzle ? '🧩' : '♟️'}</span><br/>
-                OFFICIAL SEAL<br/>
-                VERIFIED
-              </div>
-              <div style="margin-top: 10px;">
-                <div class="pdf-attached-badge">📎 Official PDF Certificate Attached to this Email</div>
-              </div>
-              <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
-            </div>
-          </div>
-          <div class="footer">
-            <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const certHtml = generateOfficialCertificateEmailHtml({
+      recipientName: cleanName,
+      certTitle,
+      rank,
+      pointsOrScore,
+      tournamentTitle,
+      tournamentType,
+      certCode
+    });
 
     const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
     const mailResult = await sendEmail({
       to: recipientEmail,
       subject: `📜 [ZC Chess Club] ${certTitle}: ${tournamentTitle}`,
       html: certHtml,
-      text: `Congratulations ${cleanName}! Attached is your official ${certTitle} for "${tournamentTitle}". Verification ID: ${certCode}`,
+      text: `Dear ${cleanName},\n\nAttached is your official ${certTitle} for "${tournamentTitle}".\nVerification ID: ${certCode}\n\nZewail City Chess Club`,
       attachments: [
         {
           filename: `Certificate_${fileSafeName}.pdf`,
@@ -4275,7 +4398,7 @@ app.post('/api/certificates/send-email', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Certificate successfully emailed to ${recipientEmail} with PDF attached!`,
+      message: `Official certificate successfully emailed to ${recipientEmail} with PDF attached!`,
       mailResult
     });
   } catch (err) {
@@ -4363,7 +4486,7 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
         const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
 
         const isPodium = c.rank.toLowerCase().includes("champ") || c.rank.toLowerCase().includes("runner") || c.rank.toLowerCase().includes("3rd");
-        const certTitle = isPodium ? "CERTIFICATE OF EXCELLENCE" : "CERTIFICATE OF APPRECIATION & PARTICIPATION";
+        const certTitle = isPodium ? "CERTIFICATE OF EXCELLENCE & ACHIEVEMENT" : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
 
         const pdfBuffer = generateVectorCertificatePdfBuffer({
           playerName: cleanName,
@@ -4376,60 +4499,15 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
         });
 
         const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
-        const certHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
-              .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
-              .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
-              .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
-              .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
-              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
-              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
-              .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
-              .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
-            </style>
-          </head>
-          <body>
-            <div class="wrapper">
-              <div class="header">
-                <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
-                <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
-                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Honors & Appreciation</p>
-              </div>
-              <div style="padding: 20px;">
-                <div class="cert-box">
-                  <div class="cert-title">📜 ${certTitle}</div>
-                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
-                  <div class="recipient-name">${cleanName}</div>
-                  <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
-                    ${c.rank}${c.points ? ` • ${c.points}` : ''}
-                  </div>
-                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
-                    In recognition and grateful appreciation of competitive excellence and sportsmanship in the <strong>${tournament.title}</strong> at Zewail City of Science and Technology.
-                  </p>
-                  <div class="stamp-badge">
-                    ★ ZC CHESS ★<br/>
-                    <span style="font-size: 16px;">♟️</span><br/>
-                    OFFICIAL SEAL<br/>
-                    VERIFIED
-                  </div>
-                  <div style="margin-top: 10px;">
-                    <div class="pdf-attached-badge">📎 Official PDF Certificate Attached</div>
-                  </div>
-                  <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
-                </div>
-              </div>
-              <div class="footer">
-                <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
+        const certHtml = generateOfficialCertificateEmailHtml({
+          recipientName: cleanName,
+          certTitle,
+          rank: c.rank,
+          pointsOrScore: c.points,
+          tournamentTitle: tournament.title,
+          tournamentType: tournament.type || "Swiss Championship",
+          certCode
+        });
 
         await sendEmail({
           to: email,
@@ -4522,60 +4600,15 @@ app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
         });
 
         const fileSafeName = cleanName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
-        const certHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
-              .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
-              .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
-              .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
-              .cert-title { font-size: 20px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
-              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 14px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
-              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 18px auto; }
-              .pdf-attached-badge { background: rgba(72, 187, 120, 0.15); border: 1px solid #48bb78; color: #48bb78; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; margin: 16px auto; display: inline-block; }
-              .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
-            </style>
-          </head>
-          <body>
-            <div class="wrapper">
-              <div class="header">
-                <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
-                <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
-                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Tactical Appreciation & Merit</p>
-              </div>
-              <div style="padding: 20px;">
-                <div class="cert-box">
-                  <div class="cert-title">📜 ${certTitle}</div>
-                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This official certificate is proudly conferred upon</p>
-                  <div class="recipient-name">${cleanName}</div>
-                  <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
-                    ${rankLabel} • ${solver.score || 0} pts (${solver.solvedCount || 0} solved)
-                  </div>
-                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 14px;">
-                    In recognition and grateful appreciation of tactical calculation and dedication in the <strong>${tournament.title}</strong> Puzzle Arena.
-                  </p>
-                  <div class="stamp-badge">
-                    ★ ZC CHESS ★<br/>
-                    <span style="font-size: 16px;">🧩</span><br/>
-                    OFFICIAL SEAL<br/>
-                    VERIFIED
-                  </div>
-                  <div style="margin-top: 10px;">
-                    <div class="pdf-attached-badge">📎 Official PDF Certificate Attached</div>
-                  </div>
-                  <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
-                </div>
-              </div>
-              <div class="footer">
-                <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
+        const certHtml = generateOfficialCertificateEmailHtml({
+          recipientName: cleanName,
+          certTitle,
+          rank: rankLabel,
+          pointsOrScore: `${solver.score || 0} pts (${solver.solvedCount || 0} solved)`,
+          tournamentTitle: tournament.title,
+          tournamentType: "Puzzle Tactics Arena",
+          certCode
+        });
 
         await sendEmail({
           to: email,
@@ -4597,13 +4630,14 @@ app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Official certificates successfully dispatched to ${sentCount} tactician(s) with PDF attached!`,
+      message: `Official puzzle certificates successfully dispatched to ${sentCount} participant(s) with PDF attached!`,
       sentCount
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to dispatch puzzle challenge certificates", details: err.message });
+    res.status(500).json({ error: "Failed to dispatch puzzle certificates", details: err.message });
   }
 });
+
 
 // GET: user's tournaments
 app.get('/api/users/:email/tournaments', async (req, res) => {

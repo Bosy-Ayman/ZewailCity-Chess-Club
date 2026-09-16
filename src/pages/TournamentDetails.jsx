@@ -1220,32 +1220,7 @@ const isBlackWinner = (result) => {
                       <span>Championship Podium</span>
                     </button>
                   )}
-                  {(tournament.status === "Completed" || podiumP1) && (
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const winnerName = podiumP1?.name || tournament.winner || "Champion";
-                        generateWinnerCertificate({
-                          playerName: winnerName,
-                          rank: "Champion (1st Place)",
-                          tournamentTitle: tournament.title || "ZC Chess Tournament",
-                          tournamentType: tournament.type || "Swiss",
-                          pointsOrScore: podiumP1?.points != null ? `${podiumP1.points}` : ""
-                        });
-                      }}
-                      className="export-tournament-btn cert-btn"
-                      style={{
-                        background: "linear-gradient(135deg, rgba(243, 193, 68, 0.22) 0%, rgba(212, 163, 42, 0.12) 100%)",
-                        border: "1.5px solid #f3c144",
-                        color: "#f3c144",
-                        fontWeight: "800"
-                      }}
-                      title="Download Official Winner Certificate with Club Stamp"
-                    >
-                      <span>📜</span>
-                      <span>Champion Certificate</span>
-                    </button>
-                  )}
+                  {/* Certificate download is available in the player standings table below */}
                   {!isStaff && tournament.status === "Upcoming" && !tournament?.registrations?.some(r => r.email?.toLowerCase() === loggedInUserEmail?.toLowerCase()) && !tournament?.playersList?.some(p => p.name?.toLowerCase() === loggedInUserName?.toLowerCase()) && (
                     <button 
                       type="button"
@@ -1515,131 +1490,236 @@ const isBlackWinner = (result) => {
                           <th>Byes</th>
                           <th>Rating</th>
                           <th>Major</th>
+                          <th style={{ textAlign: "center" }}>Honors Certificate</th>
                           {isStaff && <th>Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {swissStandings.map((p, idx) => (
-                          <tr key={idx} style={{ background: idx === 0 ? "rgba(243, 193, 68, 0.08)" : "transparent" }}>
-                            <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
-                              {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
-                            </td>
-                            <td style={{ fontWeight: "600", color: "#fff" }}>
-                              <div 
-                                className="tournament-player-cell"
-                                onClick={() => openPlayerPreview(p.name, p)}
-                                title={`Click to view ${p.name}'s Profile Card`}
-                              >
-                                <div className="player-avatar-ring">
-                                  <img
-                                    src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
-                                    alt={p.name}
-                                    className="player-avatar-mini"
-                                    onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                                  />
-                                </div>
-                                <span className="player-name-text">{p.name}</span>
-                              </div>
-                            </td>
-                            <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
-                            <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
-                            <td>{p.played}</td>
-                            <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
-                            <td>{p.rating}</td>
-                            <td>{p.major}</td>
-                            {isStaff && (
-                              <td>
-                                <button
-                                  onClick={() => handleRemovePlayer(p.name)}
-                                  style={{
-                                    background: "rgba(217, 83, 79, 0.15)",
-                                    color: "#d9534f",
-                                    border: "1px solid #d9534f",
-                                    padding: "3px 8px",
-                                    borderRadius: "4px",
-                                    fontSize: "0.75rem",
-                                    fontWeight: "bold",
-                                    cursor: "pointer",
-                                    transition: "all 0.2s"
-                                  }}
-                                >
-                                  Remove
-                                </button>
+                        {swissStandings.map((p, idx) => {
+                          const isMe = Boolean(
+                            (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                            (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                          );
+                          const canViewCert = isStaff || isMe;
+                          const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
+
+                          return (
+                            <tr key={idx} style={{ background: idx === 0 ? "rgba(243, 193, 68, 0.08)" : "transparent" }}>
+                              <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
+                                {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
                               </td>
-                            )}
-                          </tr>
-                        ))}
+                              <td style={{ fontWeight: "600", color: "#fff" }}>
+                                <div 
+                                  className="tournament-player-cell"
+                                  onClick={() => openPlayerPreview(p.name, p)}
+                                  title={`Click to view ${p.name}'s Profile Card`}
+                                >
+                                  <div className="player-avatar-ring">
+                                    <img
+                                      src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                      alt={p.name}
+                                      className="player-avatar-mini"
+                                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                    />
+                                  </div>
+                                  <span className="player-name-text">{p.name}</span>
+                                  {isMe && (
+                                    <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
+                              <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
+                              <td>{p.played}</td>
+                              <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                              <td>{p.rating}</td>
+                              <td>{p.major}</td>
+                              <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                {canViewCert ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      generateWinnerCertificate({
+                                        playerName: p.name,
+                                        rank: rankStr,
+                                        tournamentTitle: tournament?.title || "ZC Chess Tournament",
+                                        tournamentType: tournament?.type || "Swiss Championship",
+                                        pointsOrScore: p.points != null ? `${p.points} pts` : "",
+                                        format: "pdf"
+                                      });
+                                    }}
+                                    style={{
+                                      background: isMe
+                                        ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                        : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                      border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                      color: isMe ? "#12100d" : "#f3c144",
+                                      padding: "5px 12px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.78rem",
+                                      fontWeight: "800",
+                                      cursor: "pointer",
+                                      boxShadow: isMe ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px"
+                                    }}
+                                    title={isMe ? "Download your official diploma certificate (PDF)" : `Download official diploma certificate for ${p.name}`}
+                                  >
+                                    <span>📜</span>
+                                    <span>{isMe ? "My Certificate" : "Certificate (PDF)"}</span>
+                                  </button>
+                                ) : (
+                                  <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }} title="Certificates are private to the player and organizing heads">
+                                    🔒 Private
+                                  </span>
+                                )}
+                              </td>
+                              {isStaff && (
+                                <td>
+                                  <button
+                                    onClick={() => handleRemovePlayer(p.name)}
+                                    style={{
+                                      background: "rgba(217, 83, 79, 0.15)",
+                                      color: "#d9534f",
+                                      border: "1px solid #d9534f",
+                                      padding: "3px 8px",
+                                      borderRadius: "4px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: "bold",
+                                      cursor: "pointer",
+                                      transition: "all 0.2s"
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
                   {/* Mobile Standings Cards View */}
                   <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
-                    {swissStandings.map((p, idx) => (
-                      <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243, 193, 68, 0.5)" : "rgba(57, 52, 40, 0.6)" }}>
-                        <div className="mobile-card-header">
-                          <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
-                            {idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
-                          </span>
-                          <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
-                        </div>
+                    {swissStandings.map((p, idx) => {
+                      const isMe = Boolean(
+                        (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                        (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                      );
+                      const canViewCert = isStaff || isMe;
+                      const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
 
-                        <div 
-                          className="mobile-player-cell"
-                          onClick={() => openPlayerPreview(p.name, p)}
-                          title={`Click to view ${p.name}'s Profile Card`}
-                        >
-                          <img
-                            src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
-                            alt={p.name}
-                            className="player-avatar-mini"
-                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                          />
-                          <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
-                        </div>
+                      return (
+                        <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243, 193, 68, 0.5)" : "rgba(57, 52, 40, 0.6)" }}>
+                          <div className="mobile-card-header">
+                            <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
+                              {idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
+                            </span>
+                            <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
+                          </div>
 
-                        <div className="mobile-card-details">
-                          <div className="detail-item">
-                            <span className="detail-label">Record</span>
-                            <span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span>
+                          <div 
+                            className="mobile-player-cell"
+                            onClick={() => openPlayerPreview(p.name, p)}
+                            title={`Click to view ${p.name}'s Profile Card`}
+                          >
+                            <img
+                              src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                              alt={p.name}
+                              className="player-avatar-mini"
+                              onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                            />
+                            <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
+                            {isMe && (
+                              <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
+                            )}
                           </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Played</span>
-                            <span className="detail-val">{p.played}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Rating</span>
-                            <span className="detail-val">{p.rating}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Major</span>
-                            <span className="detail-val">{p.major}</span>
-                          </div>
-                          {p.byes > 0 && (
+
+                          <div className="mobile-card-details">
                             <div className="detail-item">
-                              <span className="detail-label">Byes</span>
-                              <span className="detail-val" style={{ color: "#f3c144" }}>{p.byes} BYE</span>
+                              <span className="detail-label">Record</span>
+                              <span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Played</span>
+                              <span className="detail-val">{p.played}</span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Rating</span>
+                              <span className="detail-val">{p.rating}</span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Major</span>
+                              <span className="detail-val">{p.major}</span>
+                            </div>
+                            {p.byes > 0 && (
+                              <div className="detail-item">
+                                <span className="detail-label">Byes</span>
+                                <span className="detail-val gold">{p.byes} BYE</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {canViewCert && (
+                            <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "10px", textAlign: "right" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  generateWinnerCertificate({
+                                    playerName: p.name,
+                                    rank: rankStr,
+                                    tournamentTitle: tournament?.title || "ZC Chess Tournament",
+                                    tournamentType: tournament?.type || "Swiss Championship",
+                                    pointsOrScore: p.points != null ? `${p.points} pts` : "",
+                                    format: "pdf"
+                                  });
+                                }}
+                                style={{
+                                  background: isMe
+                                    ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                    : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                  border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                  color: isMe ? "#12100d" : "#f3c144",
+                                  padding: "6px 14px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.8rem",
+                                  fontWeight: "800",
+                                  cursor: "pointer",
+                                  width: "100%",
+                                  justifyContent: "center",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px"
+                                }}
+                              >
+                                <span>📜</span>
+                                <span>{isMe ? "Download My Certificate (PDF)" : `Certificate (${p.name})`}</span>
+                              </button>
                             </div>
                           )}
-                        </div>
 
-                        {isStaff && (
-                          <button
-                            onClick={() => handleRemovePlayer(p.name)}
-                            className="mobile-full-btn"
-                            style={{
-                              background: "rgba(217, 83, 79, 0.15)",
-                              color: "#d9534f",
-                              border: "1px solid #d9534f",
-                              borderRadius: "8px",
-                              fontWeight: "bold"
-                            }}
-                          >
-                            Remove Participant
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                          {isStaff && (
+                            <button
+                              onClick={() => handleRemovePlayer(p.name)}
+                              className="mobile-full-btn"
+                              style={{
+                                marginTop: "10px",
+                                background: "rgba(217, 83, 79, 0.15)",
+                                color: "#d9534f",
+                                border: "1px solid #d9534f",
+                                borderRadius: "8px",
+                                fontWeight: "bold"
+                              }}
+                            >
+                              Remove Participant
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Swiss Round-by-Round Results */}

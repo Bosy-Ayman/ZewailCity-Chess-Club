@@ -4,6 +4,7 @@ import Footer from "../components/Footer";
 import { safeFetchJson, safeSetLocalStorage, compressImage } from "../utils/api";
 import { getUserTournamentAchievements, getHistoricalTournamentsForUser, ALL_HISTORICAL_PLAYERS } from "../utils/tournamentWinners";
 import { findCommonFreeSlots, timeStringToMinutes, minutesToTimeString } from "../utils/availabilityMatcher";
+import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import { 
   Trophy, 
   Award, 
@@ -1971,7 +1972,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   <div>
                     <h3 className="section-title">🏆 Historical Championships & Hall of Fame</h3>
                     <p className="section-subtitle">
-                      Official tournaments completed prior to website launch (held via Challonge & campus events)
+                      Official tournaments and puzzle challenges completed — your full competitive record with scores, ranks, and official certificates
                     </p>
                   </div>
                   <a href="/history?tab=halloffame" className="btn-browse-tournaments">
@@ -1980,58 +1981,252 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   </a>
                 </div>
 
-                <div className="tournament-grid-dashboard">
-                  {tournamentAchievements.historicalList.map((ht, idx) => (
-                    <div key={idx} className="tournament-card-dashboard glass-panel historical-card" style={{ borderColor: ht.isChampion ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.1)" }}>
-                      <div className="t-header">
-                        <div>
-                          <div className="t-format-pill" style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.3)" }}>
-                            📜 Historical Archive
+                {/* Desktop Table View */}
+                <div className="historical-records-table-wrap" style={{ overflowX: "auto", marginBottom: "24px" }}>
+                  <table className="historical-records-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 6px" }}>
+                    <thead>
+                      <tr style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#8a8070" }}>
+                        <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700 }}>Event</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Category</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Rank</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Award</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Date</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Location</th>
+                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Certificate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournamentAchievements.historicalList.map((ht, idx) => {
+                        const rankLabel = ht.place === 1 ? "🥇 1st" : ht.place === 2 ? "🥈 2nd" : ht.place === 3 ? "🥉 3rd" : `#${ht.place}`;
+                        const certRankStr = ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`;
+                        const categoryLabel = (ht.category || "tournament") === "puzzle" ? "🧩 Puzzle" : "♟️ Tournament";
+                        const canDownloadCert = isOwnProfile || isAdmin;
+
+                        return (
+                          <tr
+                            key={`hist-row-${idx}`}
+                            style={{
+                              background: ht.isChampion
+                                ? "linear-gradient(135deg, rgba(243,193,68,0.08) 0%, rgba(30,27,22,0.95) 100%)"
+                                : "rgba(255,255,255,0.03)",
+                              borderLeft: ht.isChampion ? "3px solid #f3c144" : "3px solid transparent",
+                              transition: "all 0.2s ease"
+                            }}
+                          >
+                            <td style={{ padding: "12px 14px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: ht.isChampion ? "#f3c144" : "#e2e8f0" }}>{ht.title}</span>
+                                <span style={{ fontSize: "0.75rem", color: "#7a7267" }}>{ht.type}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                              <span style={{
+                                display: "inline-block",
+                                padding: "3px 10px",
+                                borderRadius: "12px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                background: (ht.category || "tournament") === "puzzle" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.15)",
+                                color: (ht.category || "tournament") === "puzzle" ? "#a78bfa" : "#60a5fa",
+                                border: (ht.category || "tournament") === "puzzle" ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(59,130,246,0.3)"
+                              }}>
+                                {categoryLabel}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                              <span style={{
+                                display: "inline-block",
+                                padding: "4px 12px",
+                                borderRadius: "8px",
+                                fontSize: "0.85rem",
+                                fontWeight: 900,
+                                background: ht.place === 1 ? "linear-gradient(135deg, rgba(243,193,68,0.25), rgba(212,163,42,0.12))" : ht.place === 2 ? "rgba(192,192,192,0.15)" : ht.place === 3 ? "rgba(205,127,50,0.15)" : "rgba(255,255,255,0.08)",
+                                color: ht.place === 1 ? "#f3c144" : ht.place === 2 ? "#c0c0c0" : ht.place === 3 ? "#cd7f32" : "#94a3b8",
+                                border: ht.place === 1 ? "1px solid rgba(243,193,68,0.4)" : "1px solid rgba(255,255,255,0.1)"
+                              }}>
+                                {rankLabel}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.82rem", color: "#cbd5e1", fontWeight: 600 }}>
+                              {ht.award}
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.82rem", color: "#94a3b8" }}>
+                              {new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.8rem", color: "#8a8070" }}>
+                              {ht.location}
+                            </td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
+                              {canDownloadCert ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    generateWinnerCertificate({
+                                      playerName: profile?.name || "Player",
+                                      rank: certRankStr,
+                                      tournamentTitle: ht.title,
+                                      tournamentType: ht.type,
+                                      date: new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+                                      location: ht.location || "Zewail City of Science and Technology",
+                                      format: "pdf"
+                                    });
+                                  }}
+                                  style={{
+                                    background: isOwnProfile
+                                      ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                      : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                    border: isOwnProfile ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                    color: isOwnProfile ? "#12100d" : "#f3c144",
+                                    padding: "5px 12px",
+                                    borderRadius: "6px",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    boxShadow: isOwnProfile ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    transition: "all 0.2s ease"
+                                  }}
+                                  title={isOwnProfile ? "Download your official diploma certificate (PDF)" : `Download certificate for ${profile?.name}`}
+                                >
+                                  <span>📜</span>
+                                  <span>{isOwnProfile ? "My Certificate" : "Certificate"}</span>
+                                </button>
+                              ) : (
+                                <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }} title="Certificates are private to the player">
+                                  🔒 Private
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View (shown below md breakpoint via CSS) */}
+                <div className="historical-records-mobile">
+                  {tournamentAchievements.historicalList.map((ht, idx) => {
+                    const rankLabel = ht.place === 1 ? "🥇 1st" : ht.place === 2 ? "🥈 2nd" : ht.place === 3 ? "🥉 3rd" : `#${ht.place}`;
+                    const certRankStr = ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`;
+                    const categoryLabel = (ht.category || "tournament") === "puzzle" ? "🧩 Puzzle" : "♟️ Tournament";
+                    const canDownloadCert = isOwnProfile || isAdmin;
+
+                    return (
+                      <div
+                        key={`hist-mobile-${idx}`}
+                        className="tournament-card-dashboard glass-panel historical-card"
+                        style={{
+                          borderColor: ht.isChampion ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.1)",
+                          borderLeft: ht.isChampion ? "3px solid #f3c144" : undefined
+                        }}
+                      >
+                        <div className="t-header">
+                          <div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "6px" }}>
+                              <span className="t-format-pill" style={{ background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.3)" }}>
+                                📜 Historical
+                              </span>
+                              <span style={{
+                                display: "inline-block",
+                                padding: "2px 8px",
+                                borderRadius: "10px",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                background: (ht.category || "tournament") === "puzzle" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.15)",
+                                color: (ht.category || "tournament") === "puzzle" ? "#a78bfa" : "#60a5fa",
+                                border: (ht.category || "tournament") === "puzzle" ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(59,130,246,0.3)"
+                              }}>
+                                {categoryLabel}
+                              </span>
+                            </div>
+                            <h3 className="t-title">{ht.title}</h3>
                           </div>
-                          <h3 className="t-title">{ht.title}</h3>
                         </div>
-                        <span className="t-status approved" style={{ background: ht.isChampion ? "linear-gradient(135deg, rgba(243, 193, 68, 0.25), rgba(212, 163, 42, 0.15))" : "rgba(255,255,255,0.1)", color: ht.isChampion ? "#f3c144" : "#e2e8f0", borderColor: ht.isChampion ? "rgba(243, 193, 68, 0.5)" : "rgba(255,255,255,0.2)" }}>
-                          {ht.award}
-                        </span>
-                      </div>
 
-                      <p style={{ fontSize: "0.86rem", color: "#cbd5e1", margin: "12px 0", lineHeight: 1.5 }}>
-                        {ht.description}
-                      </p>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
+                          <span style={{
+                            display: "inline-block",
+                            padding: "4px 14px",
+                            borderRadius: "8px",
+                            fontSize: "0.88rem",
+                            fontWeight: 900,
+                            background: ht.place === 1 ? "linear-gradient(135deg, rgba(243,193,68,0.25), rgba(212,163,42,0.12))" : ht.place === 2 ? "rgba(192,192,192,0.15)" : ht.place === 3 ? "rgba(205,127,50,0.15)" : "rgba(255,255,255,0.08)",
+                            color: ht.place === 1 ? "#f3c144" : ht.place === 2 ? "#c0c0c0" : ht.place === 3 ? "#cd7f32" : "#94a3b8",
+                            border: ht.place === 1 ? "1px solid rgba(243,193,68,0.4)" : "1px solid rgba(255,255,255,0.1)"
+                          }}>
+                            {rankLabel}
+                          </span>
+                          <span style={{ fontSize: "0.82rem", color: "#cbd5e1", fontWeight: 600 }}>
+                            {ht.award}
+                          </span>
+                        </div>
 
-                      <div className="t-info-grid" style={{ marginBottom: "16px" }}>
-                        <div className="t-info-col">
-                          <span className="info-label">Date</span>
-                          <span className="info-value">📅 {ht.date}</span>
+                        <div className="t-info-grid" style={{ marginBottom: "12px" }}>
+                          <div className="t-info-col">
+                            <span className="info-label">Date</span>
+                            <span className="info-value">📅 {new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+                          </div>
+                          <div className="t-info-col">
+                            <span className="info-label">Location</span>
+                            <span className="info-value">📍 {ht.location}</span>
+                          </div>
+                          <div className="t-info-col">
+                            <span className="info-label">Format</span>
+                            <span className="info-value">⚡ {ht.type}</span>
+                          </div>
                         </div>
-                        <div className="t-info-col">
-                          <span className="info-label">Location</span>
-                          <span className="info-value">📍 {ht.location}</span>
-                        </div>
-                        <div className="t-info-col">
-                          <span className="info-label">Format</span>
-                          <span className="info-value">⚡ {ht.type}</span>
+
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "12px" }}>
+                          {canDownloadCert && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                generateWinnerCertificate({
+                                  playerName: profile?.name || "Player",
+                                  rank: ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`,
+                                  tournamentTitle: ht.title,
+                                  tournamentType: ht.type,
+                                  date: new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+                                  location: ht.location || "Zewail City of Science and Technology",
+                                  format: "pdf"
+                                });
+                              }}
+                              style={{
+                                background: isOwnProfile
+                                  ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                  : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                border: isOwnProfile ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                color: isOwnProfile ? "#12100d" : "#f3c144",
+                                padding: "7px 14px",
+                                borderRadius: "6px",
+                                fontSize: "0.8rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                boxShadow: isOwnProfile ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px"
+                              }}
+                              title="Download official diploma certificate (PDF)"
+                            >
+                              <span>📜</span>
+                              <span>{isOwnProfile ? "My Certificate" : "Certificate"}</span>
+                            </button>
+                          )}
+                          <a
+                            href={`/history?tab=events&q=${encodeURIComponent(profile?.name?.split(' ')[0] || "")}`}
+                            className="btn-browse-tournaments"
+                            style={{ padding: "7px 14px", fontSize: "0.8rem", textDecoration: "none" }}
+                          >
+                            <span>📜 Timeline ➔</span>
+                          </a>
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "14px" }}>
-                        <a 
-                          href={`/history?tab=events&q=${encodeURIComponent(profile?.name?.split(' ')[0] || "")}`} 
-                          className="btn-primary-action" 
-                          style={{ padding: "8px 16px", fontSize: "0.82rem", textDecoration: "none" }}
-                        >
-                          <span>📜 View in Tournament Timeline ➔</span>
-                        </a>
-                        <a 
-                          href="/history?tab=halloffame" 
-                          className="btn-browse-tournaments" 
-                          style={{ padding: "8px 16px", fontSize: "0.82rem", textDecoration: "none" }}
-                        >
-                          <span>👑 Hall of Fame</span>
-                        </a>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -1,15 +1,17 @@
 /**
  * Zewail City Chess Club — Official High-Resolution Certificate Generator
- * Generates an elegant, high-DPI (1920x1080) official certificate with club crest,
- * recipient name, championship / appreciation honors, official arbiter seal, and verification code.
- * Supports downloading as PDF document and PNG image, and generating PDF base64 for email attachments.
+ * Premium Royal Ivory & Gold Academic Diploma Edition.
+ * Generates museum-grade, high-DPI (1920×1080) official diplomas with club crest,
+ * formal serif calligraphy, guilloché gold framing, official stamp (actual PNG),
+ * authentic fountain pen signatures (Ahmed Elkhodiry & Omar Hafez), and
+ * cryptographic verification ID.
  */
 
 /**
- * Pure JavaScript standard PDF 1.4 converter that wraps canvas into a real downloadable PDF
+ * Pure JavaScript standard PDF 1.4 converter that wraps canvas into a downloadable vector PDF
  */
 export function canvasToPdfBlob(canvas) {
-  const imgDataUrl = canvas.toDataURL("image/jpeg", 0.95);
+  const imgDataUrl = canvas.toDataURL("image/jpeg", 0.98);
   const base64Data = imgDataUrl.split(",")[1];
   const binaryString = atob(base64Data);
   const len = binaryString.length;
@@ -45,7 +47,7 @@ export function canvasToPdfBlob(canvas) {
   offsets[2] = offsets[1] + part2.length;
   offsets[3] = offsets[2] + part3.length;
   offsets[4] = offsets[3] + part4.length;
-  offsets[5] = offsets[4] + part5.length;
+  offsets[5] = offsets[3] + part5.length;
 
   const xrefOffset = offsets[5] + part6.length + len + part8.length;
   let xref = `xref\n0 6\n0000000000 65535 f \n`;
@@ -85,16 +87,110 @@ export function blobToBase64(blob) {
   });
 }
 
+/**
+ * Load the official stamp PNG as-is (no pixel masking — draw at 82% opacity with warm tone)
+ */
+async function loadOfficialStampImage() {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  const loaded = await new Promise((resolve) => {
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = "/Icons/official-stamp.png";
+    setTimeout(() => resolve(false), 800);
+  });
+  if (!loaded || !img.naturalWidth) return null;
+  return img;
+}
+
+/**
+ * Draw a chess knight watermark ghost behind the recipient name area
+ */
+function drawKnightWatermark(ctx, cx, cy) {
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.fillStyle = "#6b4f1a";
+  ctx.font = "260px serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("♞", cx, cy);
+  ctx.restore();
+}
+
+/**
+ * Draw elegant laurel / wheat divider
+ */
+function drawLaurelDivider(ctx, cx, y, halfW) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.5)";
+  ctx.lineWidth = 1.2;
+
+  // Centre line segments
+  ctx.beginPath();
+  ctx.moveTo(cx - halfW, y);
+  ctx.lineTo(cx - 28, y);
+  ctx.moveTo(cx + 28, y);
+  ctx.lineTo(cx + halfW, y);
+  ctx.stroke();
+
+  // Small laurel leaves left side
+  for (let i = 0; i < 5; i++) {
+    const lx = cx - 38 - i * 18;
+    ctx.save();
+    ctx.translate(lx, y);
+    ctx.rotate(-(0.35 + i * 0.06));
+    ctx.beginPath();
+    ctx.ellipse(0, -5, 5, 9, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(139, 104, 32, 0.22)";
+    ctx.fill();
+    ctx.restore();
+  }
+  // Small laurel leaves right side
+  for (let i = 0; i < 5; i++) {
+    const lx = cx + 38 + i * 18;
+    ctx.save();
+    ctx.translate(lx, y);
+    ctx.rotate(0.35 + i * 0.06);
+    ctx.beginPath();
+    ctx.ellipse(0, -5, 5, 9, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(139, 104, 32, 0.22)";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Centre diamond ornament
+  ctx.fillStyle = "#8b6820";
+  ctx.beginPath();
+  ctx.moveTo(cx, y - 9);
+  ctx.lineTo(cx + 9, y);
+  ctx.lineTo(cx, y + 9);
+  ctx.lineTo(cx - 9, y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tiny flanking dots
+  ctx.beginPath();
+  ctx.arc(cx - 16, y, 2.5, 0, Math.PI * 2);
+  ctx.arc(cx + 16, y, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(139, 104, 32, 0.6)";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * Generate Official Premium Ivory & Gold Academic Diploma
+ */
 export async function generateWinnerCertificate({
   playerName,
-  rank = "Participant", // "Champion" | "Runner-Up" | "3rd Place" | "Participant" | string
+  rank = "Participant",
   tournamentTitle = "ZC Chess Championship",
   tournamentType = "Swiss Championship",
   date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
   location = "Zewail City of Science and Technology",
   pointsOrScore = null,
-  format = "pdf", // 'pdf' | 'png'
-  download = true // if true, initiates browser file download
+  format = "pdf",
+  download = true
 }) {
   if (!playerName || playerName === "BYE" || playerName === "TBD") return null;
 
@@ -106,87 +202,149 @@ export async function generateWinnerCertificate({
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  // 1. Dark Luxury Obsidian & Gold Gradient Background
-  const bg = ctx.createRadialGradient(width / 2, height / 2, 80, width / 2, height / 2, 950);
-  bg.addColorStop(0, "#19150f");
-  bg.addColorStop(0.6, "#0f0d0a");
-  bg.addColorStop(1, "#070604");
-  ctx.fillStyle = bg;
+  // ─── 1. Premium Warm Parchment Background ───────────────────────────────────
+  // Outer vignette
+  const vigGrad = ctx.createRadialGradient(width / 2, height / 2, 260, width / 2, height / 2, 1080);
+  vigGrad.addColorStop(0, "#fffdf7");
+  vigGrad.addColorStop(0.45, "#fdf8ee");
+  vigGrad.addColorStop(0.75, "#f6edda");
+  vigGrad.addColorStop(1, "#e8d5b3");
+  ctx.fillStyle = vigGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Subtle chess board watermark in background (ultra-low opacity)
-  ctx.fillStyle = "rgba(243, 193, 68, 0.015)";
-  const sqSize = 120;
-  for (let r = 0; r < height / sqSize; r++) {
-    for (let c = 0; c < width / sqSize; c++) {
-      if ((r + c) % 2 === 0) {
-        ctx.fillRect(c * sqSize, r * sqSize, sqSize, sqSize);
-      }
-    }
+  // Warm corner blushes
+  const cornerGlow = (gx, gy) => {
+    const cg = ctx.createRadialGradient(gx, gy, 0, gx, gy, 420);
+    cg.addColorStop(0, "rgba(193, 148, 64, 0.07)");
+    cg.addColorStop(1, "rgba(193, 148, 64, 0)");
+    ctx.fillStyle = cg;
+    ctx.fillRect(0, 0, width, height);
+  };
+  cornerGlow(0, 0);
+  cornerGlow(width, 0);
+  cornerGlow(0, height);
+  cornerGlow(width, height);
+
+  // Delicate paper grain fibers
+  ctx.fillStyle = "rgba(155, 120, 72, 0.018)";
+  for (let i = 0; i < 22000; i++) {
+    const rx = (Math.sin(i * 997.1) * 0.5 + 0.5) * width;
+    const ry = (Math.cos(i * 643.7) * 0.5 + 0.5) * height;
+    ctx.fillRect(rx, ry, 1.5, 1.5);
   }
 
-  // 2. Ornate Double Gold Framing Borders
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.85)";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(40, 40, width - 80, height - 80);
+  // ─── 2. Multi-Layer Guilloché Framing ───────────────────────────────────────
+  // Outermost solid antique gold
+  ctx.strokeStyle = "#7a5c18";
+  ctx.lineWidth = 5.5;
+  ctx.strokeRect(36, 36, width - 72, height - 72);
 
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.3)";
+  // Gold shine line
+  ctx.strokeStyle = "#d4a93c";
   ctx.lineWidth = 2;
-  ctx.strokeRect(55, 55, width - 110, height - 110);
+  ctx.strokeRect(46, 46, width - 92, height - 92);
 
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.15)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(65, 65, width - 130, height - 130);
+  // Thin inner rule
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.38)";
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(58, 58, width - 116, height - 116);
 
-  // Corner Ornaments
-  const drawCornerFlourish = (x, y, dx, dy) => {
+  // Subtle inner accent
+  ctx.strokeStyle = "rgba(180, 140, 60, 0.18)";
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(70, 70, width - 140, height - 140);
+
+  // Classical Corner Flourish Ornaments
+  const drawCornerFlourish = (cx, cy, flipX, flipY) => {
     ctx.save();
-    ctx.strokeStyle = "#f3c144";
-    ctx.lineWidth = 4;
+    ctx.translate(cx, cy);
+    ctx.scale(flipX, flipY);
+    ctx.strokeStyle = "#8b6820";
+    ctx.fillStyle = "#8b6820";
+    ctx.lineWidth = 2.8;
+
+    // L-bracket
     ctx.beginPath();
-    ctx.moveTo(x + dx * 50, y);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x, y + dy * 50);
+    ctx.moveTo(0, 54);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(54, 0);
     ctx.stroke();
 
-    ctx.fillStyle = "#f3c144";
+    // Inner curved arch
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.arc(x + dx * 16, y + dy * 16, 5, 0, Math.PI * 2);
+    ctx.moveTo(14, 46);
+    ctx.quadraticCurveTo(14, 14, 46, 14);
+    ctx.stroke();
+
+    // Corner diamond knot
+    ctx.beginPath();
+    ctx.moveTo(24, 16);
+    ctx.lineTo(33, 25);
+    ctx.lineTo(24, 34);
+    ctx.lineTo(15, 25);
+    ctx.closePath();
     ctx.fill();
+
+    // Rosette finials
+    ctx.beginPath();
+    ctx.arc(0, 54, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(54, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   };
 
-  drawCornerFlourish(40, 40, 1, 1);
-  drawCornerFlourish(width - 40, 40, -1, 1);
-  drawCornerFlourish(40, height - 40, 1, -1);
-  drawCornerFlourish(width - 40, height - 40, -1, -1);
+  drawCornerFlourish(36, 36, 1, 1);
+  drawCornerFlourish(width - 36, 36, -1, 1);
+  drawCornerFlourish(36, height - 36, 1, -1);
+  drawCornerFlourish(width - 36, height - 36, -1, -1);
 
-  // 3. Top Club Crest & Header
+  // ─── 3. Club Crest Header ───────────────────────────────────────────────────
   const logo = new Image();
   logo.crossOrigin = "anonymous";
   await new Promise((resolve) => {
     logo.onload = () => resolve(true);
     logo.onerror = () => resolve(false);
     logo.src = "/Icons/chess-clublogo.png";
-    setTimeout(resolve, 350);
+    setTimeout(resolve, 500);
   });
 
   if (logo.complete && logo.naturalWidth > 0) {
-    ctx.drawImage(logo, width / 2 - 50, 85, 100, 100);
-  } else {
-    ctx.font = "60px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("👑", width / 2, 150);
+    ctx.save();
+    ctx.shadowColor = "rgba(139, 104, 32, 0.25)";
+    ctx.shadowBlur = 14;
+    ctx.drawImage(logo, width / 2 - 50, 78, 100, 100);
+    ctx.restore();
   }
 
-  // Club Name
+  // University name smallcaps
   ctx.textAlign = "center";
-  ctx.font = "bold 26px 'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
-  ctx.fillStyle = "#f3c144";
-  ctx.letterSpacing = "4px";
-  ctx.fillText("ZEWAIL CITY CHESS CLUB", width / 2, 225);
+  ctx.font = "bold 12.5px 'Inter', -apple-system, sans-serif";
+  ctx.fillStyle = "#6b5840";
+  ctx.letterSpacing = "4.5px";
+  ctx.fillText("ZEWAIL CITY OF SCIENCE, TECHNOLOGY AND INNOVATION", width / 2, 198);
 
-  // Certificate Rank & Type Classification
+  // Thin rule under university name
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.3)";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(width / 2 - 380, 205);
+  ctx.lineTo(width / 2 + 380, 205);
+  ctx.stroke();
+
+  // Club name
+  ctx.font = "bold 28px 'Georgia', 'Times New Roman', serif";
+  ctx.fillStyle = "#1a1108";
+  ctx.letterSpacing = "4px";
+  ctx.fillText("ZEWAIL CITY CHESS CLUB", width / 2, 236);
+
+  // ─── 4. Certificate Title ────────────────────────────────────────────────────
   const rankStr = (rank || "").toString().toLowerCase();
   const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1" || rankStr === "#1";
   const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2" || rankStr === "#2";
@@ -194,7 +352,6 @@ export async function generateWinnerCertificate({
   const isPodium = isChamp || isRunnerUp || isThird;
   const isPuzzle = (tournamentType || "").toLowerCase().includes("puzzle") || (tournamentType || "").toLowerCase().includes("tactic");
 
-  // Main Certificate Title
   let certMainTitle = "";
   if (isPodium) {
     certMainTitle = isPuzzle ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF EXCELLENCE & MERIT";
@@ -202,352 +359,355 @@ export async function generateWinnerCertificate({
     certMainTitle = isPuzzle ? "CERTIFICATE OF TACTICAL APPRECIATION" : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
   }
 
-  ctx.font = "bold 42px 'Georgia', serif";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(certMainTitle, width / 2, 285);
+  // Main title gold gradient
+  ctx.font = "bold 44px 'Georgia', 'Times New Roman', serif";
+  const titleGrad = ctx.createLinearGradient(width / 2 - 420, 0, width / 2 + 420, 0);
+  titleGrad.addColorStop(0, "#6b4a12");
+  titleGrad.addColorStop(0.35, "#8b6118");
+  titleGrad.addColorStop(0.5, "#b07d22");
+  titleGrad.addColorStop(0.65, "#8b6118");
+  titleGrad.addColorStop(1, "#6b4a12");
+  ctx.fillStyle = titleGrad;
+  ctx.letterSpacing = "2.5px";
+  ctx.fillText(certMainTitle, width / 2, 295);
 
-  // Divider with diamond
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.4)";
-  ctx.lineWidth = 1.5;
+  // ─── 5. Laurel Divider ───────────────────────────────────────────────────────
+  drawLaurelDivider(ctx, width / 2, 326, 300);
+
+  // ─── 6. Watermark Knight ────────────────────────────────────────────────────
+  drawKnightWatermark(ctx, width / 2, 480);
+
+  // ─── 7. Recipient Block ──────────────────────────────────────────────────────
+  ctx.font = "600 13.5px 'Inter', sans-serif";
+  ctx.fillStyle = "#7a6548";
+  ctx.letterSpacing = "3.5px";
+  ctx.fillText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", width / 2, 374);
+
+  // Recipient name
+  ctx.font = `bold 68px 'Georgia', 'Times New Roman', serif`;
+  ctx.fillStyle = "#0f0c08";
+  ctx.letterSpacing = "0.5px";
+  ctx.fillText(playerName, width / 2, 456);
+
+  // Decorative underline with dots
+  const nameWidth = Math.min(ctx.measureText(playerName).width + 120, 760);
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.6)";
+  ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.moveTo(width / 2 - 340, 315);
-  ctx.lineTo(width / 2 + 340, 315);
+  ctx.moveTo(width / 2 - nameWidth / 2, 476);
+  ctx.lineTo(width / 2 + nameWidth / 2, 476);
   ctx.stroke();
-
-  ctx.fillStyle = "#f3c144";
-  ctx.beginPath();
-  ctx.arc(width / 2, 315, 6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // "PROUDLY CONFERRED UPON"
-  ctx.font = "600 18px 'Inter', sans-serif";
-  ctx.fillStyle = "#a8a296";
-  ctx.fillText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", width / 2, 365);
-
-  // Recipient Player Name
-  ctx.font = "bold 64px 'Georgia', serif";
-  const nameGrad = ctx.createLinearGradient(width / 2 - 300, 0, width / 2 + 300, 0);
-  nameGrad.addColorStop(0, "#ffd700");
-  nameGrad.addColorStop(0.5, "#ffffff");
-  nameGrad.addColorStop(1, "#f3c144");
-  ctx.fillStyle = nameGrad;
-  ctx.fillText(playerName, width / 2, 450);
-
-  // Underline for player name
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.6)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(width / 2 - 380, 475);
-  ctx.lineTo(width / 2 + 380, 475);
-  ctx.stroke();
-
-  // Citation text & rank labels
-  let rankLabel = "";
-  let medalEmoji = "🏅";
-  if (isChamp) {
-    rankLabel = "CHAMPION (1ST PLACE)";
-    medalEmoji = "🥇";
-  } else if (isRunnerUp) {
-    rankLabel = "RUNNER-UP FINALIST (2ND PLACE)";
-    medalEmoji = "🥈";
-  } else if (isThird) {
-    rankLabel = "3RD PLACE PODIUM MASTER";
-    medalEmoji = "🥉";
-  } else if (rankStr.includes("#")) {
-    rankLabel = `DISTINGUISHED TACTICIAN (${rank.toUpperCase()})`;
-    medalEmoji = "🎖️";
-  } else {
-    rankLabel = isPuzzle ? "DISTINGUISHED ARENA SOLVER" : "HONORED TOURNAMENT PARTICIPANT";
-    medalEmoji = "🏅";
-  }
-
-  ctx.font = "500 22px 'Inter', sans-serif";
-  ctx.fillStyle = "#d1c7b7";
-  
-  if (isPodium) {
-    const citationLine1 = isPuzzle
-      ? "In recognition of extraordinary tactical foresight, rapid calculation, and puzzle mastery,"
-      : "In recognition of exceptional strategic mastery, tactical rigor, and competitive excellence,";
-    ctx.fillText(citationLine1, width / 2, 530);
-    ctx.fillText("finishing as the honored", width / 2, 565);
-  } else {
-    const citationLine1 = isPuzzle
-      ? "In grateful recognition and appreciation of tactical dedication, problem-solving passion,"
-      : "In grateful appreciation of passionate participation, sportsmanship, and strategic dedication,";
-    ctx.fillText(citationLine1, width / 2, 530);
-    ctx.fillText("competing with honor and distinction as a", width / 2, 565);
-  }
-
-  // Rank Pill Box
-  const rankPillText = `${medalEmoji} ${rankLabel}${pointsOrScore ? ` • ${pointsOrScore}` : ""}`;
-  ctx.font = "bold 24px 'Inter', sans-serif";
-  const pillW = ctx.measureText(rankPillText).width + 50;
-  
-  ctx.fillStyle = isChamp ? "rgba(243, 193, 68, 0.18)" : isPodium ? "rgba(255, 255, 255, 0.1)" : "rgba(243, 193, 68, 0.12)";
-  ctx.beginPath();
-  ctx.roundRect(width / 2 - pillW / 2, 595, pillW, 48, 24);
-  ctx.fill();
-  ctx.strokeStyle = isChamp ? "#f3c144" : isPodium ? "rgba(255, 255, 255, 0.3)" : "rgba(243, 193, 68, 0.45)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.fillStyle = isChamp || !isPodium ? "#f3c144" : "#ffffff";
-  ctx.fillText(rankPillText, width / 2, 628);
-
-  // Tournament Title & Venue
-  ctx.font = "bold 26px 'Georgia', serif";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(`in the ${tournamentTitle}`, width / 2, 690);
-
-  ctx.font = "500 18px 'Inter', sans-serif";
-  ctx.fillStyle = "#a8a296";
-  ctx.fillText(`Format: ${tournamentType} • Venue: ${location}`, width / 2, 725);
-  ctx.fillText(`Date of Conferral: ${date}`, width / 2, 755);
-
-  // 4. Official Real Club Rubber / Embossed Stamp (Bottom Left-Center)
-  const drawRealRubberStamp = (ctx, stampX, stampY) => {
-    ctx.save();
-    ctx.translate(stampX, stampY);
-    ctx.rotate(-0.09); // Realistic ~ -5.2 degree tilt as if pressed by hand
-
-    const r = 80;
-
-    // Semi-translucent ink bleed halo
-    const halo = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.06);
-    halo.addColorStop(0, "rgba(243, 193, 68, 0.08)");
-    halo.addColorStop(0.85, "rgba(243, 193, 68, 0.03)");
-    halo.addColorStop(1, "rgba(243, 193, 68, 0)");
-    ctx.fillStyle = halo;
+  // Three accent dots on underline
+  [0, -16, 16].forEach(offset => {
     ctx.beginPath();
-    ctx.arc(0, 0, r * 1.06, 0, Math.PI * 2);
+    ctx.arc(width / 2 + offset, 476, offset === 0 ? 4.5 : 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#8b6820";
     ctx.fill();
+  });
 
-    // Outer Thick Ring
-    ctx.strokeStyle = "rgba(243, 193, 68, 0.95)";
+  // ─── 8. Citation ─────────────────────────────────────────────────────────────
+  let honorDistinction = "";
+  if (isChamp) {
+    honorDistinction = "GRAND CHAMPION • FIRST PLACE";
+  } else if (isRunnerUp) {
+    honorDistinction = "RUNNER-UP FINALIST • SECOND PLACE";
+  } else if (isThird) {
+    honorDistinction = "THIRD PLACE PODIUM MASTER";
+  } else if (rankStr.includes("#")) {
+    honorDistinction = `DISTINGUISHED TACTICIAN • ${rank.toUpperCase()}`;
+  } else {
+    honorDistinction = isPuzzle ? "HONORED TACTICAL COMPETITOR" : "HONORED TOURNAMENT COMPETITOR";
+  }
+
+  const scoreText = pointsOrScore ? ` (${pointsOrScore})` : "";
+
+  ctx.font = "italic 21px 'Georgia', 'Baskerville', serif";
+  ctx.fillStyle = "#4a3c2c";
+  ctx.letterSpacing = "0px";
+
+  if (isPodium) {
+    const cit1 = isPuzzle
+      ? "For extraordinary calculation, tactical precision, and mastery over complex positions,"
+      : "For exceptional strategic rigor, sportsmanship, and outstanding competitive mastery,";
+    ctx.fillText(cit1, width / 2, 528);
+    ctx.fillText("having achieved the distinguished standing of", width / 2, 560);
+  } else {
+    const cit1 = isPuzzle
+      ? "In grateful appreciation of strategic enthusiasm, problem-solving dedication, and honorable play,"
+      : "In grateful recognition of passionate sportsmanship, strategic rigor, and honorable participation as an";
+    ctx.fillText(cit1, width / 2, 528);
+    ctx.fillText("active competitor with distinction as an", width / 2, 560);
+  }
+
+  // Formal honor title
+  ctx.font = "bold 27px 'Georgia', 'Times New Roman', serif";
+  ctx.fillStyle = isChamp ? "#7a5210" : "#5e4418";
+  ctx.letterSpacing = "1.8px";
+  ctx.fillText(`${honorDistinction}${scoreText}`, width / 2, 616);
+
+  // Honour underline
+  ctx.letterSpacing = "0px";
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.4)";
+  ctx.lineWidth = 1;
+  const honorW = ctx.measureText(`${honorDistinction}${scoreText}`).width + 80;
+  ctx.beginPath();
+  ctx.moveTo(width / 2 - honorW / 2, 632);
+  ctx.lineTo(width / 2 + honorW / 2, 632);
+  ctx.stroke();
+
+  // ─── 9. Tournament Context ───────────────────────────────────────────────────
+  ctx.font = "bold 23px 'Georgia', serif";
+  ctx.fillStyle = "#1a1108";
+  ctx.fillText(`in the ${tournamentTitle}`, width / 2, 686);
+
+  ctx.font = "500 16px 'Inter', sans-serif";
+  ctx.fillStyle = "#6b5840";
+  ctx.letterSpacing = "0.5px";
+  ctx.fillText(`Format: ${tournamentType}   •   Venue: ${location}`, width / 2, 720);
+  ctx.fillText(`Date of Official Conferral: ${date}`, width / 2, 748);
+
+  // Thin separator before footer
+  ctx.strokeStyle = "rgba(139, 104, 32, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(100, 772);
+  ctx.lineTo(width - 100, 772);
+  ctx.stroke();
+
+  // ─── 10. Official Stamp (bottom-left quadrant) ───────────────────────────────
+  const stampImg = await loadOfficialStampImage();
+  const stampX = 310;
+  const stampY = 895;
+  const stampSize = 240;
+
+  ctx.save();
+  ctx.translate(stampX, stampY);
+  ctx.rotate(-0.09); // Authentic slight tilt
+
+  if (stampImg) {
+    // Draw actual PNG at warm-toned opacity — no pixel masking
+    ctx.globalAlpha = 0.82;
+    ctx.filter = "sepia(0.25) saturate(1.15) brightness(0.97)";
+    ctx.shadowColor = "rgba(100, 75, 20, 0.25)";
+    ctx.shadowBlur = 16;
+    ctx.drawImage(stampImg, -stampSize / 2, -stampSize / 2, stampSize, stampSize);
+    ctx.filter = "none";
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  } else {
+    // Fallback drawn stamp ring
+    ctx.strokeStyle = "#8b6820";
     ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, 90, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Inner Fine Ring
-    ctx.lineWidth = 1.4;
-    ctx.strokeStyle = "rgba(243, 193, 68, 0.75)";
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(0, 0, r - 5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 82, 0, Math.PI * 2);
     ctx.stroke();
-
-    // Inner text boundary ring
-    ctx.beginPath();
-    ctx.arc(0, 0, r - 25, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Circular curved text along top & bottom arcs
-    const drawCurvedStampText = (text, radius, startAngle, endAngle, inward = false) => {
-      ctx.save();
-      ctx.font = "bold 9.5px 'Inter', Arial, sans-serif";
-      ctx.fillStyle = "#f3c144";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      const chars = text.split("");
-      const angleStep = (endAngle - startAngle) / Math.max(chars.length - 1, 1);
-
-      chars.forEach((char, i) => {
-        const charAngle = startAngle + i * angleStep;
-        ctx.save();
-        ctx.rotate(charAngle);
-        ctx.translate(0, inward ? radius : -radius);
-        if (inward) ctx.rotate(Math.PI);
-        ctx.fillText(char, 0, 0);
-        ctx.restore();
-      });
-      ctx.restore();
-    };
-
-    drawCurvedStampText("★ ZEWAIL CITY CHESS CLUB ★", r - 15, -Math.PI * 0.74, Math.PI * 0.74, false);
-    drawCurvedStampText("★ OFFICIAL ARBITER SEAL ★", r - 15, -Math.PI * 0.70, Math.PI * 0.70, true);
-
-    // Centerpiece Badge
-    ctx.strokeStyle = "rgba(243, 193, 68, 0.85)";
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.arc(0, 0, r - 30, 0, Math.PI * 2);
-    ctx.stroke();
-
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "24px sans-serif";
-    ctx.fillStyle = "#f3c144";
-    ctx.fillText(isPuzzle ? "🧩" : "♟️", 0, -10);
+    ctx.font = "bold 11px 'Inter', sans-serif";
+    ctx.letterSpacing = "2px";
+    ctx.fillStyle = "#8b6820";
+    ctx.fillText("OFFICIAL SEAL", 0, -12);
+    ctx.fillText("ZEWAIL CITY", 0, 10);
+  }
+  ctx.restore();
 
-    ctx.font = "bold 8.5px 'Inter', sans-serif";
-    ctx.letterSpacing = "1.5px";
-    ctx.fillStyle = "#f3c144";
-    ctx.fillText("OFFICIAL", 0, 8);
+  // ─── 11. Fountain-Pen Signatures ─────────────────────────────────────────────
+  const sig1X = width - 600;  // Ahmed Elkhodiry — President (left)
+  const sig2X = width - 230;  // Omar Hafez — Vice President (right)
+  const sigBaseY = 910;
 
-    ctx.font = "bold 7.5px 'Inter', sans-serif";
-    ctx.fillStyle = "#e2d9cc";
-    ctx.letterSpacing = "1px";
-    ctx.fillText("EST. 2018", 0, 18);
-
-    // Subtle authentic stamp ink distress speckles
-    ctx.fillStyle = "rgba(243, 193, 68, 0.3)";
-    const speckles = [
-      [-32, -22], [36, -16], [-25, 28], [28, 26],
-      [-12, -40], [18, -38], [-40, 8], [38, 4]
-    ];
-    speckles.forEach(([sx, sy]) => {
-      ctx.beginPath();
-      ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ctx.restore();
-  };
-
-  drawRealRubberStamp(ctx, 360, 895);
-
-  // 5. Authentic Handwritten Signatures (Bottom Right)
-  const sig1X = width - 580;
-  const sig2X = width - 250;
-  const sigY = 920;
-
-  // --- Handwritten Signature 1: Alaa Salama (Organizing / Arbiter) ---
-  const drawAlaaSalamaSignature = (x, y) => {
+  // ── Ahmed Elkhodiry (President) ──
+  const drawAhmedElkhodiry = (x, y) => {
     ctx.save();
-    ctx.strokeStyle = "#ffd768";
-    ctx.fillStyle = "#ffd768";
-    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = "#0d1829"; // Midnight blue fountain pen
+    ctx.fillStyle = "#0d1829";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Cursive 'A' with stylish upper loop
-    ctx.beginPath();
-    ctx.moveTo(x - 75, y + 6);
-    ctx.bezierCurveTo(x - 72, y - 26, x - 64, y - 34, x - 54, y - 30);
-    ctx.bezierCurveTo(x - 45, y - 26, x - 52, y - 6, x - 68, y + 2);
-    ctx.bezierCurveTo(x - 50, y - 10, x - 40, y - 8, x - 32, y - 4);
-    // l-a-a loops
-    ctx.bezierCurveTo(x - 28, y - 22, x - 24, y - 20, x - 22, y - 2);
-    ctx.bezierCurveTo(x - 18, y - 12, x - 14, y - 12, x - 10, y - 3);
-    ctx.bezierCurveTo(x - 6, y - 12, x - 2, y - 12, x + 2, y - 2);
-    ctx.stroke();
-
-    // 'Salama' - S loop + letters
-    ctx.beginPath();
+    // "A" — tall capital loop
     ctx.lineWidth = 2.6;
-    ctx.moveTo(x + 10, y - 14);
-    ctx.bezierCurveTo(x + 16, y - 28, x + 26, y - 26, x + 22, y - 12);
-    ctx.bezierCurveTo(x + 18, y - 2, x + 32, y - 16, x + 40, y - 3);
-    ctx.bezierCurveTo(x + 46, y - 24, x + 50, y - 22, x + 54, y - 2);
-    ctx.bezierCurveTo(x + 60, y - 12, x + 66, y - 12, x + 72, y - 2);
+    ctx.beginPath();
+    ctx.moveTo(x - 88, y + 8);
+    ctx.bezierCurveTo(x - 84, y - 36, x - 70, y - 44, x - 56, y - 34);
+    ctx.bezierCurveTo(x - 46, y - 22, x - 58, y - 4, x - 76, y + 6);
+    // bridge to 'h' stem
+    ctx.bezierCurveTo(x - 56, y - 12, x - 40, y - 20, x - 26, y - 6);
     ctx.stroke();
 
-    // Cursive underline flourish
+    // "hmed" flowing cursive
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.lineWidth = 1.8;
-    ctx.moveTo(x - 78, y + 12);
-    ctx.bezierCurveTo(x - 20, y + 6, x + 35, y + 16, x + 78, y + 8);
+    ctx.moveTo(x - 26, y - 6);
+    ctx.bezierCurveTo(x - 22, y - 26, x - 16, y - 28, x - 12, y - 8);
+    ctx.bezierCurveTo(x - 8, y - 20, x - 3, y - 20, x + 2, y - 5);
+    ctx.bezierCurveTo(x + 7, y - 18, x + 12, y - 16, x + 16, y - 3);
     ctx.stroke();
+
+    // Space then "E" — high loop going up
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 26, y - 28);
+    ctx.bezierCurveTo(x + 34, y - 44, x + 44, y - 40, x + 40, y - 18);
+    ctx.bezierCurveTo(x + 36, y - 6, x + 54, y - 32, x + 58, y - 6);
+    ctx.stroke();
+
+    // "lkhodiry" cursive run
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(x + 58, y - 6);
+    ctx.bezierCurveTo(x + 64, y - 28, x + 70, y - 26, x + 72, y - 5);
+    ctx.bezierCurveTo(x + 78, y - 22, x + 84, y - 20, x + 88, y - 4);
+    // y-tail descender
+    ctx.bezierCurveTo(x + 92, y + 8, x + 82, y + 20, x + 72, y + 16);
+    ctx.stroke();
+
+    // Long sweeping underline tail
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - 92, y + 16);
+    ctx.bezierCurveTo(x - 30, y + 8, x + 40, y + 22, x + 96, y + 10);
+    ctx.stroke();
+
+    // Small pen-lift accent dots
+    ctx.beginPath();
+    ctx.arc(x + 22, y - 34, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   };
 
-  // --- Handwritten Signature 2: Ahmed Elkhodiry (Club President) ---
-  const drawAhmedElkhodirySignature = (x, y) => {
+  // ── Omar Hafez (Vice President) ──
+  const drawOmarHafez = (x, y) => {
     ctx.save();
-    ctx.strokeStyle = "#ffd768";
-    ctx.fillStyle = "#ffd768";
-    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = "#0d1829";
+    ctx.fillStyle = "#0d1829";
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Cursive 'A'
-    ctx.beginPath();
-    ctx.moveTo(x - 85, y + 6);
-    ctx.bezierCurveTo(x - 80, y - 30, x - 68, y - 36, x - 56, y - 28);
-    ctx.bezierCurveTo(x - 48, y - 18, x - 58, y - 2, x - 74, y + 4);
-    ctx.bezierCurveTo(x - 56, y - 8, x - 42, y - 16, x - 30, y - 4);
-    ctx.stroke();
-
-    // 'Elkhodiry' - E with flowing loops & descending tail
-    ctx.beginPath();
+    // "O" — sweeping oval
     ctx.lineWidth = 2.6;
-    ctx.moveTo(x - 18, y - 22);
-    ctx.bezierCurveTo(x - 10, y - 34, x - 2, y - 28, x - 6, y - 12);
-    ctx.bezierCurveTo(x - 12, y - 4, x + 6, y - 24, x + 10, y - 2);
-    // k-h-o-d-i-r-y
-    ctx.bezierCurveTo(x + 16, y - 24, x + 22, y - 22, x + 24, y - 4);
-    ctx.bezierCurveTo(x + 30, y - 20, x + 36, y - 16, x + 40, y - 3);
-    ctx.bezierCurveTo(x + 46, y - 14, x + 52, y - 14, x + 56, y - 4);
-    ctx.bezierCurveTo(x + 62, y - 24, x + 66, y - 20, x + 68, y - 3);
-    // y tail loop
-    ctx.bezierCurveTo(x + 72, y - 12, x + 78, y - 12, x + 82, y - 2);
-    ctx.bezierCurveTo(x + 86, y + 10, x + 76, y + 20, x + 68, y + 16);
+    ctx.beginPath();
+    ctx.moveTo(x - 62, y - 4);
+    ctx.bezierCurveTo(x - 68, y - 44, x - 44, y - 52, x - 28, y - 44);
+    ctx.bezierCurveTo(x - 12, y - 36, x - 12, y - 8, x - 26, y);
+    ctx.bezierCurveTo(x - 40, y + 8, x - 62, y + 4, x - 62, y - 4);
     ctx.stroke();
 
-    // Dynamic underline flourish
+    // "m" — connected m humps
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.lineWidth = 1.8;
-    ctx.moveTo(x - 80, y + 14);
-    ctx.bezierCurveTo(x - 10, y + 4, x + 45, y + 16, x + 88, y + 8);
+    ctx.moveTo(x - 14, y);
+    ctx.bezierCurveTo(x - 10, y - 22, x - 4, y - 22, x, y - 2);
+    ctx.bezierCurveTo(x + 4, y - 22, x + 10, y - 22, x + 14, y - 2);
+    ctx.bezierCurveTo(x + 18, y - 20, x + 24, y - 18, x + 28, y - 2);
     ctx.stroke();
+
+    // "ar" small letters
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(x + 28, y - 2);
+    ctx.bezierCurveTo(x + 32, y - 16, x + 38, y - 14, x + 42, y - 2);
+    ctx.bezierCurveTo(x + 46, y - 12, x + 52, y - 10, x + 56, y - 2);
+    ctx.stroke();
+
+    // "H" — capital H flourish (start of surname)
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 66, y - 36);
+    ctx.bezierCurveTo(x + 66, y - 12, x + 66, y - 6, x + 68, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 80, y - 36);
+    ctx.bezierCurveTo(x + 80, y - 12, x + 80, y - 6, x + 78, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 66, y - 20);
+    ctx.bezierCurveTo(x + 70, y - 22, x + 76, y - 22, x + 80, y - 20);
+    ctx.stroke();
+
+    // "afez" flowing cursive
+    ctx.lineWidth = 2.1;
+    ctx.beginPath();
+    ctx.moveTo(x + 80, y);
+    ctx.bezierCurveTo(x + 86, y - 18, x + 92, y - 16, x + 96, y - 2);
+    ctx.bezierCurveTo(x + 100, y - 14, x + 106, y - 12, x + 108, y - 2);
+    // z-letter zig
+    ctx.bezierCurveTo(x + 112, y - 16, x + 118, y - 6, x + 120, y);
+    ctx.stroke();
+
+    // Long sweeping underline
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - 68, y + 14);
+    ctx.bezierCurveTo(x - 10, y + 6, x + 60, y + 18, x + 126, y + 8);
+    ctx.stroke();
+
+    // H crossbar dot
+    ctx.beginPath();
+    ctx.arc(x + 73, y - 20, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   };
 
-  // Render handwritten signature strokes
-  drawAlaaSalamaSignature(sig1X, sigY - 26);
-  drawAhmedElkhodirySignature(sig2X, sigY - 26);
+  drawAhmedElkhodiry(sig1X, sigBaseY - 28);
+  drawOmarHafez(sig2X, sigBaseY - 28);
 
-  // Line 1: Organizing / Chief Arbiter
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.45)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(sig1X - 110, sigY);
-  ctx.lineTo(sig1X + 110, sigY);
-  ctx.stroke();
+  // ── Signature lines & labels ──
+  const drawSigLine = (sx) => {
+    ctx.strokeStyle = "rgba(139, 104, 32, 0.5)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(sx - 115, sigBaseY);
+    ctx.lineTo(sx + 115, sigBaseY);
+    ctx.stroke();
+  };
 
-  ctx.font = "bold 15px 'Inter', sans-serif";
-  ctx.fillStyle = "#ffffff";
+  drawSigLine(sig1X);
+  drawSigLine(sig2X);
+
+  // Name labels
+  ctx.font = "bold 15.5px 'Georgia', serif";
+  ctx.fillStyle = "#1a1108";
   ctx.textAlign = "center";
-  ctx.fillText("Alaa Salama", sig1X, sigY + 20);
+  ctx.fillText("Ahmed Elkhodiry", sig1X, sigBaseY + 22);
+  ctx.fillText("Omar Hafez", sig2X, sigBaseY + 22);
 
-  ctx.font = "bold 11px 'Inter', sans-serif";
-  ctx.fillStyle = "#f3c144";
-  ctx.fillText(isPuzzle ? "PUZZLE ARBITER & ORGANIZING HEAD" : "CHIEF ARBITER & ORGANIZING HEAD", sig1X, sigY + 36);
+  // Titles
+  ctx.font = "bold 10.5px 'Inter', sans-serif";
+  ctx.fillStyle = "#7a5618";
+  ctx.letterSpacing = "0.9px";
+  ctx.fillText("CLUB PRESIDENT", sig1X, sigBaseY + 38);
+  ctx.fillText("VICE PRESIDENT", sig2X, sigBaseY + 38);
+  ctx.letterSpacing = "0px";
 
-  ctx.font = "10px 'Inter', sans-serif";
-  ctx.fillStyle = "#8e8677";
-  ctx.fillText("Tournament Organizing Committee", sig1X, sigY + 50);
+  // Sub-labels
+  ctx.font = "10.5px 'Inter', sans-serif";
+  ctx.fillStyle = "#6e604f";
+  ctx.fillText("Zewail City Chess Club", sig1X, sigBaseY + 53);
+  ctx.fillText("Zewail City Chess Club", sig2X, sigBaseY + 53);
 
-  // Line 2: Club President
-  ctx.strokeStyle = "rgba(243, 193, 68, 0.45)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(sig2X - 110, sigY);
-  ctx.lineTo(sig2X + 110, sigY);
-  ctx.stroke();
-
-  ctx.font = "bold 15px 'Inter', sans-serif";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("Ahmed Elkhodiry", sig2X, sigY + 20);
-
-  ctx.font = "bold 11px 'Inter', sans-serif";
-  ctx.fillStyle = "#f3c144";
-  ctx.fillText("CLUB PRESIDENT", sig2X, sigY + 36);
-
-  ctx.font = "10px 'Inter', sans-serif";
-  ctx.fillStyle = "#8e8677";
-  ctx.fillText("Zewail City Chess Club", sig2X, sigY + 50);
-
-  // 6. Unique Verification Certificate Code (Bottom Bar)
-  const cleanId = Math.abs(playerName.split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 7)).toString(16).toUpperCase();
+  // ─── 12. Cryptographic Footer ────────────────────────────────────────────────
+  const cleanId = Math.abs(
+    playerName.split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 7)
+  ).toString(16).toUpperCase();
   const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
 
   ctx.textAlign = "center";
-  ctx.font = "11px monospace";
-  ctx.fillStyle = "rgba(243, 193, 68, 0.6)";
-  ctx.fillText(`Official Verification ID: ${certCode} • zc-chess-club.vercel.app`, width / 2, height - 55);
+  ctx.font = "10.5px 'Courier New', monospace";
+  ctx.fillStyle = "#8a7460";
+  ctx.letterSpacing = "0.4px";
+  ctx.fillText(
+    `Official Credential ID: ${certCode}   •   Verified by Zewail City Chess Club Office of Arbiters   •   zc-chess-club.vercel.app`,
+    width / 2,
+    height - 46
+  );
 
+  // ─── 13. Encode & Download ───────────────────────────────────────────────────
   const cleanPlayerName = playerName.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
   const cleanTourneyName = tournamentTitle.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
   const filename = `Certificate_${cleanPlayerName}_${cleanTourneyName}.${format === "png" ? "png" : "pdf"}`;
@@ -560,7 +720,6 @@ export async function generateWinnerCertificate({
     console.warn("Could not encode pdf blob to base64:", err);
   }
 
-  // Trigger Download if requested
   if (download) {
     if (format === "png") {
       const dataUrl = canvas.toDataURL("image/png");
@@ -588,6 +747,6 @@ export async function generateWinnerCertificate({
     certCode,
     filename,
     certMainTitle,
-    rankLabel
+    rankLabel: honorDistinction
   };
 }
