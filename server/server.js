@@ -1,4 +1,6 @@
 const express = require('express');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
@@ -4067,7 +4069,7 @@ app.post('/api/tournaments/:id/broadcast-winner', async (req, res) => {
 });
 
 // --- Server-side Vector PDF Certificate Generator ---
-function generateVectorCertificatePdfBuffer({
+async function generateVectorCertificatePdfBuffer({
   playerName,
   rank = "Honored Participant",
   tournamentTitle = "ZC Tournament",
@@ -4102,106 +4104,100 @@ function generateVectorCertificatePdfBuffer({
   const rankBadgeText = isChamp ? "CHAMPION (1ST PLACE)" : isRunnerUp ? "RUNNER-UP (2ND PLACE)" : isThird ? "3RD PLACE PODIUM" : (sanitize(rank) || "DISTINGUISHED PARTICIPANT");
   const subCitation = isPodium ? "finishing as the honored" : "competing with honor and distinction in";
 
-  function getTextWidth(text, fontSize) {
-    let width = 0;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (c === ' ') width += 0.28 * fontSize;
-      else if (c >= 'A' && c <= 'Z') width += 0.65 * fontSize;
-      else if (c >= '0' && c <= '9') width += 0.55 * fontSize;
-      else width += 0.5 * fontSize;
-    }
-    return width;
-  }
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([842, 595]);
+  
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const fontTimesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const fontCourier = await pdfDoc.embedFont(StandardFonts.Courier);
 
-  function centerText(text, fontSize, y, font, r, g, b, centerX = 421) {
-    const width = getTextWidth(text, fontSize);
-    const x = centerX - (width / 2);
-    return `BT ${font} ${fontSize} Tf ${r} ${g} ${b} rg ${x.toFixed(2)} ${y} Td (${text}) Tj ET`;
-  }
-
-  let boardStream = "0.08 0.07 0.05 rg\n";
-  const startX = 261;
-  const startY = 160;
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      if ((row + col) % 2 === 1) {
-        boardStream += `${startX + col * 40} ${startY + row * 40} 40 40 re f\n`;
+  // Background
+  page.drawRectangle({ x: 0, y: 0, width: 842, height: 595, color: rgb(0.05, 0.04, 0.03) });
+  
+  // Chessboard Watermark
+  for (let y = 0; y < 595; y += 40) {
+    for (let x = 0; x < 842; x += 40) {
+      if ((Math.floor(x/40) + Math.floor(y/40)) % 2 === 1) {
+        page.drawRectangle({ x, y, width: 40, height: 40, color: rgb(0.08, 0.07, 0.05) });
       }
     }
   }
 
+  // Borders
+  page.drawRectangle({ x: 20, y: 20, width: 802, height: 555, borderColor: rgb(0.95, 0.76, 0.27), borderWidth: 4 });
+  page.drawRectangle({ x: 28, y: 28, width: 786, height: 539, borderColor: rgb(0.95, 0.76, 0.27), borderWidth: 1 });
+
+  const drawCenteredText = (text, y, font, size, color, centerX = 421) => {
+    const width = font.widthOfTextAtSize(text, size);
+    page.drawText(text, { x: centerX - width / 2, y, font, size, color });
+    return width;
+  };
+
+  const gold = rgb(0.95, 0.76, 0.27);
+  const white = rgb(1, 1, 1);
+  const offWhite = rgb(0.82, 0.78, 0.72);
+  const grey = rgb(0.68, 0.64, 0.58);
+
+  drawCenteredText("ZEWAIL CITY CHESS CLUB", 520, fontBold, 18, gold);
+  drawCenteredText(mainHeader, 470, fontTimesBold, 24, white);
+  drawCenteredText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", 430, fontRegular, 12, grey);
+  
+  drawCenteredText(cleanPlayer, 370, fontTimesBold, 36, rgb(0.98, 0.84, 0.28));
+  
+  drawCenteredText(citation, 320, fontRegular, 14, offWhite);
+  drawCenteredText(subCitation, 300, fontRegular, 14, offWhite);
+  drawCenteredText("in the " + cleanTitle, 260, fontTimesBold, 20, white);
+
   const rankText = `${rankBadgeText} ${pointsOrScore ? `- ${sanitize(pointsOrScore)}` : ""}`;
-  const rankWidth = getTextWidth(rankText, 16) + 40;
+  const rankWidth = fontBold.widthOfTextAtSize(rankText, 15) + 40;
   const rankX = 421 - (rankWidth / 2);
+  
+  page.drawRectangle({ x: rankX, y: 205, width: rankWidth, height: 34, borderColor: gold, borderWidth: 1.5 });
+  drawCenteredText(rankText, 216, fontBold, 15, gold);
 
-  const stream = `q
-0.05 0.04 0.03 rg 0 0 842 595 re f
-${boardStream}
-0.95 0.76 0.27 RG 4 w 20 20 802 555 re S
-1 w 28 28 786 539 re S
+  drawCenteredText(`Format: ${cleanType} - Venue: Zewail City of Science and Technology`, 175, fontRegular, 11, grey);
+  drawCenteredText(`Date of Conferral: ${sanitize(date)}`, 155, fontRegular, 11, grey);
 
-${centerText("ZEWAIL CITY CHESS CLUB", 18, 520, "/F1", 0.95, 0.76, 0.27)}
-${centerText(mainHeader, 24, 470, "/F3", 1, 1, 1)}
-${centerText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", 12, 430, "/F2", 0.68, 0.64, 0.58)}
-${centerText(cleanPlayer, 36, 370, "/F3", 0.98, 0.84, 0.28)}
-${centerText(citation, 14, 320, "/F2", 0.82, 0.78, 0.72)}
-${centerText(subCitation, 14, 300, "/F2", 0.82, 0.78, 0.72)}
-${centerText("in the " + cleanTitle, 20, 260, "/F3", 1, 1, 1)}
+  // Signatures
+  page.drawLine({ start: { x: 130, y: 95 }, end: { x: 290, y: 95 }, thickness: 1, color: gold });
+  drawCenteredText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 107, fontTimesItalic, 18, rgb(1, 0.85, 0.35), 210);
+  drawCenteredText(isPuzzle ? "PUZZLE ARBITER" : "CLUB PRESIDENT", 75, fontRegular, 9, gold, 210);
 
-0.95 0.76 0.27 RG 1.5 w ${rankX.toFixed(2)} 205 ${rankWidth.toFixed(2)} 34 re S
-${centerText(rankText, 15, 215, "/F1", 0.95, 0.76, 0.27)}
+  page.drawLine({ start: { x: 552, y: 95 }, end: { x: 712, y: 95 }, thickness: 1, color: gold });
+  drawCenteredText("Omar Hafez", 107, fontTimesItalic, 18, rgb(1, 0.85, 0.35), 632);
+  drawCenteredText("VICE PRESIDENT", 75, fontRegular, 9, gold, 632);
 
-${centerText(`Format: ${cleanType} - Venue: Zewail City of Science and Technology`, 11, 175, "/F2", 0.65, 0.62, 0.58)}
-${centerText(`Date of Conferral: ${sanitize(date)}`, 11, 155, "/F2", 0.65, 0.62, 0.58)}
+  drawCenteredText(`Official Verification ID: ${certCode} - zc-chess-club.vercel.app`, 30, fontCourier, 9, rgb(0.6, 0.5, 0.4));
 
-0.95 0.76 0.27 RG 2 w
-421 55 m 471 105 l 421 155 l 371 105 l h S
-1 w
-421 65 m 461 105 l 421 145 l 381 105 l h S
-${centerText("ZC CHESS", 10, 110, "/F1", 0.95, 0.76, 0.27, 421)}
-${centerText("CLUB", 10, 97, "/F1", 0.95, 0.76, 0.27, 421)}
-${centerText("SEAL", 8, 85, "/F1", 0.95, 0.76, 0.27, 421)}
-
-0.95 0.76 0.27 RG 1 w 130 95 160 0 re S
-${centerText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 18, 107, "/F4", 1, 0.85, 0.35, 210)}
-${centerText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 11, 80, "/F1", 1, 1, 1, 210)}
-${centerText(isPuzzle ? "PUZZLE ARBITER" : "CLUB PRESIDENT", 9, 67, "/F2", 0.95, 0.76, 0.27, 210)}
-
-0.95 0.76 0.27 RG 1 w 552 95 160 0 re S
-${centerText("Omar Hafez", 18, 107, "/F4", 1, 0.85, 0.35, 632)}
-${centerText("Omar Hafez", 11, 80, "/F1", 1, 1, 1, 632)}
-${centerText("VICE PRESIDENT", 9, 67, "/F2", 0.95, 0.76, 0.27, 632)}
-
-${centerText(`Official Verification ID: ${certCode} - zc-chess-club.vercel.app`, 9, 30, "/F5", 0.6, 0.5, 0.4)}
-Q`;
-
-  const header = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
-  const obj1 = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
-  const obj2 = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
-  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 8 0 R /F5 9 0 R >> >> >>\nendobj\n`;
-  const obj4 = `4 0 obj\n<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream\nendobj\n`;
-  const obj5 = "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n";
-  const obj6 = "6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
-  const obj7 = "7 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>\nendobj\n";
-  const obj8 = "8 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic >>\nendobj\n";
-  const obj9 = "9 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n";
-
-  const parts = [header, obj1, obj2, obj3, obj4, obj5, obj6, obj7, obj8, obj9];
-  const offsets = [];
-  offsets[1] = Buffer.byteLength(header);
-  for (let i = 1; i <= 9; i++) {
-    offsets[i + 1] = offsets[i] + Buffer.byteLength(parts[i]);
+  // Stamp Embedding
+  try {
+    const stampPath = path.join(__dirname, '../public/Icons/official-stamp.png');
+    if (fs.existsSync(stampPath)) {
+      const stampBytes = fs.readFileSync(stampPath);
+      const stampImage = await pdfDoc.embedPng(stampBytes);
+      const dims = stampImage.scale(0.35);
+      page.drawImage(stampImage, {
+        x: 421 - dims.width / 2,
+        y: 105 - dims.height / 2,
+        width: dims.width,
+        height: dims.height,
+        opacity: 0.85
+      });
+    } else {
+      // Fallback seal if PNG not found
+      page.drawRectangle({ x: 371, y: 105, width: 100, height: 100, borderColor: gold, borderWidth: 2 });
+      drawCenteredText("ZC CHESS", 110, fontBold, 10, gold, 421);
+      drawCenteredText("CLUB", 97, fontBold, 10, gold, 421);
+      drawCenteredText("SEAL", 85, fontBold, 8, gold, 421);
+    }
+  } catch (err) {
+    console.warn("Could not embed official stamp:", err);
   }
 
-  const xrefOffset = offsets[10];
-  let xref = "xref\n0 10\n0000000000 65535 f \n";
-  for (let i = 1; i <= 9; i++) {
-    xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
-  }
-  const trailer = `trailer\n<< /Size 10 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-
-  return Buffer.from(parts.join("") + xref + trailer, "utf-8");
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
 
 const generateOfficialCertificateEmailHtml = ({
@@ -4405,7 +4401,7 @@ app.post('/api/certificates/send-email', async (req, res) => {
     if (pdfBase64 && typeof pdfBase64 === "string" && pdfBase64.length > 50) {
       pdfBuffer = Buffer.from(pdfBase64, "base64");
     } else {
-      pdfBuffer = generateVectorCertificatePdfBuffer({
+      pdfBuffer = await generateVectorCertificatePdfBuffer({
         playerName: cleanName,
         rank,
         tournamentTitle,
@@ -4533,7 +4529,7 @@ app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
         const isPodium = c.rank.toLowerCase().includes("champ") || c.rank.toLowerCase().includes("runner") || c.rank.toLowerCase().includes("3rd");
         const certTitle = isPodium ? "CERTIFICATE OF EXCELLENCE & ACHIEVEMENT" : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
 
-        const pdfBuffer = generateVectorCertificatePdfBuffer({
+        const pdfBuffer = await generateVectorCertificatePdfBuffer({
           playerName: cleanName,
           rank: c.rank,
           tournamentTitle: tournament.title,
@@ -4634,7 +4630,7 @@ app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
         const cleanId = Math.abs(cleanName.split("").reduce((acc, ch) => acc * 31 + ch.charCodeAt(0), 7)).toString(16).toUpperCase();
         const certCode = `ZC-CERT-${cleanId}-${new Date().getFullYear()}`;
 
-        const pdfBuffer = generateVectorCertificatePdfBuffer({
+        const pdfBuffer = await generateVectorCertificatePdfBuffer({
           playerName: cleanName,
           rank: rankLabel,
           tournamentTitle: tournament.title,
