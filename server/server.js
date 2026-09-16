@@ -4102,33 +4102,78 @@ function generateVectorCertificatePdfBuffer({
   const rankBadgeText = isChamp ? "CHAMPION (1ST PLACE)" : isRunnerUp ? "RUNNER-UP (2ND PLACE)" : isThird ? "3RD PLACE PODIUM" : (sanitize(rank) || "DISTINGUISHED PARTICIPANT");
   const subCitation = isPodium ? "finishing as the honored" : "competing with honor and distinction in";
 
+  function getTextWidth(text, fontSize) {
+    let width = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === ' ') width += 0.28 * fontSize;
+      else if (c >= 'A' && c <= 'Z') width += 0.65 * fontSize;
+      else if (c >= '0' && c <= '9') width += 0.55 * fontSize;
+      else width += 0.5 * fontSize;
+    }
+    return width;
+  }
+
+  function centerText(text, fontSize, y, font, r, g, b, centerX = 421) {
+    const width = getTextWidth(text, fontSize);
+    const x = centerX - (width / 2);
+    return `BT ${font} ${fontSize} Tf ${r} ${g} ${b} rg ${x.toFixed(2)} ${y} Td (${text}) Tj ET`;
+  }
+
+  let boardStream = "0.08 0.07 0.05 rg\n";
+  const startX = 261;
+  const startY = 160;
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      if ((row + col) % 2 === 1) {
+        boardStream += `${startX + col * 40} ${startY + row * 40} 40 40 re f\n`;
+      }
+    }
+  }
+
+  const rankText = `${rankBadgeText} ${pointsOrScore ? `- ${sanitize(pointsOrScore)}` : ""}`;
+  const rankWidth = getTextWidth(rankText, 16) + 40;
+  const rankX = 421 - (rankWidth / 2);
+
   const stream = `q
 0.05 0.04 0.03 rg 0 0 842 595 re f
+${boardStream}
 0.95 0.76 0.27 RG 4 w 20 20 802 555 re S
-0.95 0.76 0.27 RG 1 w 28 28 786 539 re S
-BT /F1 15 Tf 0.95 0.76 0.27 rg 305 520 Td (ZEWAIL CITY CHESS CLUB) Tj ET
-BT /F3 20 Tf 1 1 1 rg 210 478 Td (${mainHeader}) Tj ET
-BT /F2 11 Tf 0.68 0.64 0.58 rg 270 440 Td (THIS CERTIFICATE IS PROUDLY CONFERRED UPON) Tj ET
-BT /F3 28 Tf 0.98 0.84 0.28 rg 260 380 Td (${cleanPlayer}) Tj ET
-BT /F2 12 Tf 0.82 0.78 0.72 rg 150 330 Td (${citation}) Tj ET
-BT /F2 12 Tf 0.82 0.78 0.72 rg 280 310 Td (${subCitation}) Tj ET
-0.95 0.76 0.27 RG 1.5 w 230 260 382 34 re S
-BT /F1 13 Tf 0.95 0.76 0.27 rg 250 272 Td (${rankBadgeText} ${pointsOrScore ? ` - ${sanitize(pointsOrScore)}` : ""}) Tj ET
-BT /F3 15 Tf 1 1 1 rg 240 225 Td (in the ${cleanTitle}) Tj ET
-BT /F2 10 Tf 0.65 0.62 0.58 rg 240 195 Td (Format: ${cleanType} - Venue: Zewail City of Science and Technology) Tj ET
-BT /F2 10 Tf 0.65 0.62 0.58 rg 330 175 Td (Date of Conferral: ${sanitize(date)}) Tj ET
-0.95 0.76 0.27 RG 2 w 130 90 40 0 360 arc S
-BT /F1 7 Tf 0.95 0.76 0.27 rg 100 98 Td (ZC CHESS CLUB) Tj ET
-BT /F1 7 Tf 0.95 0.76 0.27 rg 102 82 Td (OFFICIAL SEAL) Tj ET
-0.95 0.76 0.27 RG 1 w 440 90 150 0 re S
-BT /F4 15 Tf 1 0.85 0.35 rg 460 102 Td (A. Salama) Tj ET
-BT /F1 10 Tf 1 1 1 rg 475 75 Td (Alaa Salama) Tj ET
-BT /F2 8 Tf 0.95 0.76 0.27 rg 445 62 Td (CHIEF ARBITER & ORGANIZING HEAD) Tj ET
-0.95 0.76 0.27 RG 1 w 630 90 150 0 re S
-BT /F4 15 Tf 1 0.85 0.35 rg 645 102 Td (A. Elkhodiry) Tj ET
-BT /F1 10 Tf 1 1 1 rg 660 75 Td (Ahmed Elkhodiry) Tj ET
-BT /F2 8 Tf 0.95 0.76 0.27 rg 672 62 Td (CLUB PRESIDENT) Tj ET
-BT /F5 8 Tf 0.95 0.76 0.27 rg 270 30 Td (Official Verification ID: ${certCode} - zc-chess-club.vercel.app) Tj ET
+1 w 28 28 786 539 re S
+
+${centerText("ZEWAIL CITY CHESS CLUB", 18, 520, "/F1", 0.95, 0.76, 0.27)}
+${centerText(mainHeader, 24, 470, "/F3", 1, 1, 1)}
+${centerText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", 12, 430, "/F2", 0.68, 0.64, 0.58)}
+${centerText(cleanPlayer, 36, 370, "/F3", 0.98, 0.84, 0.28)}
+${centerText(citation, 14, 320, "/F2", 0.82, 0.78, 0.72)}
+${centerText(subCitation, 14, 300, "/F2", 0.82, 0.78, 0.72)}
+${centerText("in the " + cleanTitle, 20, 260, "/F3", 1, 1, 1)}
+
+0.95 0.76 0.27 RG 1.5 w ${rankX.toFixed(2)} 205 ${rankWidth.toFixed(2)} 34 re S
+${centerText(rankText, 15, 215, "/F1", 0.95, 0.76, 0.27)}
+
+${centerText(`Format: ${cleanType} - Venue: Zewail City of Science and Technology`, 11, 175, "/F2", 0.65, 0.62, 0.58)}
+${centerText(`Date of Conferral: ${sanitize(date)}`, 11, 155, "/F2", 0.65, 0.62, 0.58)}
+
+0.95 0.76 0.27 RG 2 w
+421 55 m 471 105 l 421 155 l 371 105 l h S
+1 w
+421 65 m 461 105 l 421 145 l 381 105 l h S
+${centerText("ZC CHESS", 10, 110, "/F1", 0.95, 0.76, 0.27, 421)}
+${centerText("CLUB", 10, 97, "/F1", 0.95, 0.76, 0.27, 421)}
+${centerText("SEAL", 8, 85, "/F1", 0.95, 0.76, 0.27, 421)}
+
+0.95 0.76 0.27 RG 1 w 130 95 160 0 re S
+${centerText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 18, 107, "/F4", 1, 0.85, 0.35, 210)}
+${centerText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 11, 80, "/F1", 1, 1, 1, 210)}
+${centerText(isPuzzle ? "PUZZLE ARBITER" : "CLUB PRESIDENT", 9, 67, "/F2", 0.95, 0.76, 0.27, 210)}
+
+0.95 0.76 0.27 RG 1 w 552 95 160 0 re S
+${centerText("Omar Hafez", 18, 107, "/F4", 1, 0.85, 0.35, 632)}
+${centerText("Omar Hafez", 11, 80, "/F1", 1, 1, 1, 632)}
+${centerText("VICE PRESIDENT", 9, 67, "/F2", 0.95, 0.76, 0.27, 632)}
+
+${centerText(`Official Verification ID: ${certCode} - zc-chess-club.vercel.app`, 9, 30, "/F5", 0.6, 0.5, 0.4)}
 Q`;
 
   const header = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
