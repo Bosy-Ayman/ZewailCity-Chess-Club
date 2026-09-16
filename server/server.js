@@ -360,7 +360,7 @@ const generateWinnerCelebrationEmailHtml = ({
     <body>
       <div class="wrapper">
         <div class="header">
-          <div class="trophy-icon">🏆</div>
+          <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="48" height="48" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
           <h1 class="logo-title">Zewail City Chess Club</h1>
           <span class="event-badge">${tournamentType || 'Championship Tournament'}</span>
         </div>
@@ -644,7 +644,7 @@ const generateClubEmailHtml = ({ title, recipientName, message, actionLabel, act
     <body>
       <div class="wrapper">
         <div class="header">
-          <div style="font-size: 32px; line-height: 1;">♟️</div>
+          <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="48" height="48" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
           <p class="logo-text">Zewail City Chess Club</p>
         </div>
         <div class="content">

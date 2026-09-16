@@ -2378,22 +2378,32 @@
 
 .mockup-email-header {
   background: linear-gradient(135deg, #241f15 0%, #15120c 100%);
-  padding: 20px;
+  padding: 22px 20px;
   text-align: center;
   border-bottom: 2px solid #f3c144;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-.mockup-logo-icon {
-  font-size: 28px;
-  line-height: 1;
+.mockup-logo-img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 8px;
+  filter: drop-shadow(0 4px 12px rgba(243, 193, 68, 0.4));
+  margin: 0 auto;
 }
 
 .mockup-logo-title {
   color: #f3c144;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 1.5px;
-  margin-top: 4px;
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .mockup-email-body {
