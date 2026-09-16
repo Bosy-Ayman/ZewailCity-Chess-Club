@@ -1879,6 +1879,104 @@
   justify-content: center;
 }
 
+/* ========== GAMEPLAY BOARD TOOLBAR (TURN & FLIP) ========== */
+.gameplay-board-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 440px;
+  gap: 10px;
+  padding: 4px 2px;
+  box-sizing: border-box;
+}
+
+.turn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.turn-badge.turn-white {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+.turn-badge.turn-black {
+  background: linear-gradient(135deg, rgba(26, 22, 17, 0.95), rgba(12, 10, 8, 0.98));
+  border: 1px solid rgba(243, 193, 68, 0.45);
+  color: #f3c144;
+  text-shadow: 0 0 8px rgba(243, 193, 68, 0.25);
+}
+
+.turn-badge .turn-marker {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.flip-board-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(243, 193, 68, 0.25);
+  color: #e8e2d6;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.flip-board-btn:hover {
+  background: rgba(243, 193, 68, 0.15);
+  border-color: #f3c144;
+  color: #f3c144;
+  transform: translateY(-1px);
+}
+
+.flip-board-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.flip-board-btn .flip-icon {
+  font-size: 0.88rem;
+  transition: transform 0.3s ease;
+}
+
+.flip-board-btn:hover .flip-icon {
+  transform: rotate(180deg);
+}
+
+.solution-flip-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(243, 193, 68, 0.3);
+  color: #e8e2d6;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.solution-flip-btn:hover {
+  background: rgba(243, 193, 68, 0.15);
+  border-color: #f3c144;
+  color: #f3c144;
+}
+
 .game-board-wrapper {
   width: fit-content;
   max-width: 100%;
@@ -3197,6 +3295,25 @@
 
   .roster-player-name {
     font-size: 0.86rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .gameplay-board-toolbar {
+    gap: 6px;
+    padding: 2px 0;
+  }
+
+  .turn-badge {
+    padding: 5px 10px;
+    font-size: 0.74rem;
+    gap: 5px;
+  }
+
+  .flip-board-btn {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    gap: 4px;
   }
 }
 

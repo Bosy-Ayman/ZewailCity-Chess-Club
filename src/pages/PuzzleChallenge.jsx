@@ -133,10 +133,16 @@ export default function PuzzleChallenge() {
   // Chess Instance State
   const [chessGame, setChessGame] = useState(new Chess());
   const [boardFen, setBoardFen] = useState("");
+  const [boardOrientation, setBoardOrientation] = useState("white"); // 'white' | 'black'
+  const [solutionBoardOrientation, setSolutionBoardOrientation] = useState("white"); // 'white' | 'black'
   const [correctMovesList, setCorrectMovesList] = useState([]);
   const [currentMoveIdx, setCurrentMoveIdx] = useState(0); // tracks index in correctMovesList
   const [selectedSquare, setSelectedSquare] = useState(null);
   const [optionSquares, setOptionSquares] = useState({});
+
+  const toggleFlipBoard = () => {
+    setBoardOrientation((prev) => (prev === "white" ? "black" : "white"));
+  };
 
   const timerRef = useRef(null);
   const boardLocked = useRef(false); // blocks input while opponent replies or puzzle advances
@@ -550,6 +556,10 @@ export default function PuzzleChallenge() {
     setFeedbackType("");
     setSelectedSquare(null);
     setOptionSquares({});
+
+    // Automatically orient board to the player's side to move
+    const sideToMove = freshChess.turn() === "b" ? "black" : "white";
+    setBoardOrientation(sideToMove);
   };
 
   // Helper to compute Lichess-style legal move dot overlay styles
@@ -1497,10 +1507,33 @@ export default function PuzzleChallenge() {
                     ></div>
                   </div>
                 </div>
+
+                {/* Turn Indicator & Flip Board Toolbar */}
+                <div className="gameplay-board-toolbar">
+                  {(() => {
+                    const isWhite = chessGame ? chessGame.turn() === "w" : true;
+                    return (
+                      <div className={`turn-badge ${isWhite ? "turn-white" : "turn-black"}`}>
+                        <span className="turn-marker">{isWhite ? "⚪" : "⚫"}</span>
+                        <span className="turn-text">{isWhite ? "White to Move" : "Black to Move"}</span>
+                      </div>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    className="flip-board-btn"
+                    onClick={toggleFlipBoard}
+                    title={`Flip board orientation (Currently viewing: ${boardOrientation === "white" ? "White" : "Black"} at bottom)`}
+                  >
+                    <span className="flip-icon">🔄</span>
+                    <span>Flip Board ({boardOrientation === "white" ? "White" : "Black"})</span>
+                  </button>
+                </div>
                 
                 <div className="game-board-wrapper" ref={boardContainerRef}>
                   <Chessboard
                     position={boardFen}
+                    boardOrientation={boardOrientation}
                     onPieceDrop={onPieceDrop}
                     onSquareClick={handleSquareClick}
                     onPieceDragBegin={onPieceDragBegin}
@@ -1530,6 +1563,12 @@ export default function PuzzleChallenge() {
                       {activeTournament.puzzles[currentPuzzleIdx].mateIn === 0
                         ? "Find the Best Move"
                         : `Mate in ${activeTournament.puzzles[currentPuzzleIdx].mateIn} ${activeTournament.puzzles[currentPuzzleIdx].mateIn === 1 ? "Move" : "Moves"}`}
+                    </strong>
+                  </div>
+                  <div className="stat-row">
+                    <span>To Move:</span>
+                    <strong style={{ color: chessGame && chessGame.turn() === "w" ? "#ffffff" : "#f3c144" }}>
+                      {chessGame && chessGame.turn() === "w" ? "⚪ White" : "⚫ Black"}
                     </strong>
                   </div>
                   <div className="stat-row">
@@ -1927,11 +1966,20 @@ export default function PuzzleChallenge() {
                               <div className="turn-indicator">
                                 {isWhiteTurn ? "⚪ White to move" : "⚫ Black to move"}
                               </div>
+                              <button
+                                type="button"
+                                className="solution-flip-btn"
+                                onClick={() => setSolutionBoardOrientation(prev => prev === "white" ? "black" : "white")}
+                                title="Flip board perspective"
+                              >
+                                🔄 Flip ({solutionBoardOrientation === "white" ? "White" : "Black"})
+                              </button>
                             </div>
 
                             <div className="solution-board-wrapper">
                               <Chessboard
                                 position={currentFen}
+                                boardOrientation={solutionBoardOrientation}
                                 boardWidth={Math.min(320, typeof window !== "undefined" ? Math.max(260, window.innerWidth - 64) : 320)}
                                 arePiecesDraggable={false}
                                 customDarkSquareStyle={{ backgroundColor: "#b58863" }}
