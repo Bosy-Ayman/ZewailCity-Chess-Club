@@ -1880,9 +1880,9 @@
 }
 
 .game-board-wrapper {
-  width: 100%;
-  max-width: 440px;
-  aspect-ratio: 1;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
   border: 3px solid rgba(243, 193, 68, 0.15);
   border-radius: 12px;
   box-shadow:
@@ -1896,6 +1896,9 @@
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .game-board-wrapper:hover {

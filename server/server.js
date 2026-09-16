@@ -291,6 +291,30 @@ async function createNotification({ recipientEmail, type, actorName, actorEmail,
   }
 }
 
+// Dynamic resolution for application base URL in emails & notifications
+const getAppBaseUrl = () => {
+  if (process.env.CLIENT_URL && process.env.CLIENT_URL.trim()) {
+    const url = process.env.CLIENT_URL.trim();
+    return url.startsWith('http') ? url.replace(/\/+$/, '') : `https://${url.replace(/\/+$/, '')}`;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL && process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()) {
+    const url = process.env.VERCEL_PROJECT_PRODUCTION_URL.trim();
+    return url.startsWith('http') ? url.replace(/\/+$/, '') : `https://${url.replace(/\/+$/, '')}`;
+  }
+  if (process.env.VERCEL_URL && process.env.VERCEL_URL.trim()) {
+    const url = process.env.VERCEL_URL.trim();
+    return url.startsWith('http') ? url.replace(/\/+$/, '') : `https://${url.replace(/\/+$/, '')}`;
+  }
+  if (process.env.VERCEL_BRANCH_URL && process.env.VERCEL_BRANCH_URL.trim()) {
+    const url = process.env.VERCEL_BRANCH_URL.trim();
+    return url.startsWith('http') ? url.replace(/\/+$/, '') : `https://${url.replace(/\/+$/, '')}`;
+  }
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    return 'https://zc-chess-club.vercel.app';
+  }
+  return 'http://localhost:3000';
+};
+
 const generateWinnerCelebrationEmailHtml = ({
   tournamentTitle,
   tournamentType,
@@ -303,7 +327,7 @@ const generateWinnerCelebrationEmailHtml = ({
   thirdPlaceScoreOrPoints,
   actionUrl
 }) => {
-  const appBaseUrl = process.env.CLIENT_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const appBaseUrl = getAppBaseUrl();
   const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${appBaseUrl}${actionUrl}`) : appBaseUrl;
 
   return `
@@ -527,6 +551,7 @@ async function broadcastWinnerNotification({
     console.log(`[Winner Broadcast] In-App alerts dispatched to ${notifDocs.length} tacticians!`);
 
     // 2. Real Branded Emails for all registered users
+    const appBaseUrl = getAppBaseUrl();
     for (const u of allUsers) {
       if (!u.email) continue;
       const html = generateWinnerCelebrationEmailHtml({
@@ -546,7 +571,7 @@ async function broadcastWinnerNotification({
         to: u.email,
         subject: `🏆 [ZC Chess Club] Champion Crowned: ${winnerName} won ${tournamentTitle}!`,
         html,
-        text: `🏆 CHAMPION CROWNED: ${winnerName} won ${tournamentTitle} (${formatBadge})!\n\n🥇 1st Place: ${winnerName} (${winnerScoreOrPoints || 'Champion'})\n🥈 2nd Place: ${runnerUpName || 'Finalist'}\n🥉 3rd Place: ${thirdPlaceName || '3rd Place'}\n\nView Results: http://localhost:3000${targetLink}`
+        text: `🏆 CHAMPION CROWNED: ${winnerName} won ${tournamentTitle} (${formatBadge})!\n\n🥇 1st Place: ${winnerName} (${winnerScoreOrPoints || 'Champion'})\n🥈 2nd Place: ${runnerUpName || 'Finalist'}\n🥉 3rd Place: ${thirdPlaceName || '3rd Place'}\n\nView Results: ${appBaseUrl}${targetLink}`
       }).catch(err => console.warn(`Email send error to ${u.email}:`, err.message));
     }
     console.log(`[Winner Broadcast] Dispatched podium email to ${allUsers.length} members.`);
@@ -577,7 +602,7 @@ const getEmailTransporter = () => {
 };
 
 const generateClubEmailHtml = ({ title, recipientName, message, actionLabel, actionUrl, senderName }) => {
-  const appBaseUrl = process.env.CLIENT_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const appBaseUrl = getAppBaseUrl();
   const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${appBaseUrl}${actionUrl}`) : appBaseUrl;
 
   return `
@@ -1972,11 +1997,12 @@ app.post('/api/challenges', express.json(), async (req, res) => {
       senderName: senderDisplayName
     });
 
+    const appBaseUrl = getAppBaseUrl();
     sendEmail({
       to: cleanTarget,
       subject: `[ZC Chess Club] ⚔️ Match Challenge from ${senderDisplayName}! (${matchTimeControl})`,
       html: emailHtml,
-      text: `${senderDisplayName} challenged you to a ${matchTimeControl} chess match at ${matchLocation}! Visit http://localhost:3000/profile to respond.`
+      text: `${senderDisplayName} challenged you to a ${matchTimeControl} chess match at ${matchLocation}! Visit ${appBaseUrl}/profile to respond.`
     }).catch(e => console.warn('Challenge invite email error:', e.message));
 
     res.json({
@@ -4207,6 +4233,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
 
     // 2. Email Notifications
     if (sendEmailNotification !== false) {
+      const appBaseUrl = getAppBaseUrl();
       for (const r of recipients) {
         const html = generateClubEmailHtml({
           title,
@@ -4221,7 +4248,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
           to: r.email,
           subject: `[ZC Chess Club] ${title}`,
           html,
-          text: `${title}\n\n${message}\n\nVisit: http://localhost:3000${link || '/'}`
+          text: `${title}\n\n${message}\n\nVisit: ${appBaseUrl}${link || '/'}`
         });
 
         if (mailResult.success) {

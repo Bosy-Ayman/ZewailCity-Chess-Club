@@ -1112,9 +1112,8 @@
 }
 
 .puzzle-board-wrapper {
-  width: 100%;
-  max-width: 480px;
-  aspect-ratio: 1 / 1;
+  width: fit-content;
+  max-width: 100%;
   box-shadow: 0 14px 35px rgba(0, 0, 0, 0.65), 0 0 20px rgba(243, 193, 68, 0.08);
   border: 3px solid rgba(243, 193, 68, 0.25);
   border-radius: 14px;
@@ -2455,7 +2454,6 @@
 
 .puzzle-board-wrapper {
   max-width: 100%;
-  aspect-ratio: 1;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
@@ -2524,7 +2522,7 @@
   /* Puzzle board stays within bounds */
   .puzzle-board-wrapper {
     max-width: 100%;
-    width: 100%;
+    width: fit-content;
     box-sizing: border-box;
   }
 }

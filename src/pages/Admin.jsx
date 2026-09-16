@@ -98,28 +98,42 @@ export default function AdminDashboard() {
   // Dynamic container board width calculation for optimal ratio
   const boardWrapperRef = useRef(null);
   const boardDragRef = useRef(0);
-  const [boardWidth, setBoardWidth] = useState(() => Math.min(window.innerWidth - 32, 480));
+  const [boardWidth, setBoardWidth] = useState(() => Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 480, 480));
 
   useEffect(() => {
     const updateBoardWidth = () => {
-      const maxAllowed = Math.min(window.innerWidth - 32, 480);
+      const maxAllowed = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 480, 480);
       let calculatedW = maxAllowed;
       if (boardWrapperRef.current && boardWrapperRef.current.parentElement) {
-        const parentW = boardWrapperRef.current.parentElement.clientWidth - 32;
-        if (parentW > 0) {
-          calculatedW = Math.min(parentW, maxAllowed);
+        const parentEl = boardWrapperRef.current.parentElement;
+        const computedStyle = window.getComputedStyle(parentEl);
+        const padLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const padRight = parseFloat(computedStyle.paddingRight) || 0;
+        const available = parentEl.clientWidth - padLeft - padRight;
+        if (available > 0) {
+          calculatedW = Math.min(available, maxAllowed);
         }
       }
       calculatedW = Math.max(260, Math.floor(calculatedW));
-      setBoardWidth((prev) => (Math.abs(prev - calculatedW) > 2 ? calculatedW : prev));
+      setBoardWidth((prev) => (Math.abs(prev - calculatedW) >= 1 ? calculatedW : prev));
     };
 
     updateBoardWidth();
+
+    let resizeObserver;
+    if (typeof ResizeObserver !== "undefined" && boardWrapperRef.current?.parentElement) {
+      resizeObserver = new ResizeObserver(() => {
+        updateBoardWidth();
+      });
+      resizeObserver.observe(boardWrapperRef.current.parentElement);
+    }
+
     const t1 = setTimeout(updateBoardWidth, 50);
     const t2 = setTimeout(updateBoardWidth, 200);
     window.addEventListener("resize", updateBoardWidth);
 
     return () => {
+      if (resizeObserver) resizeObserver.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener("resize", updateBoardWidth);
