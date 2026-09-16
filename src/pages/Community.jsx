@@ -134,11 +134,15 @@ const Community = () => {
     if (activeFilter === "champions") {
       result = result.filter(u => {
         const top = Math.max(u.fideRating || 0, u.chessComRating || 0, u.lichessRating || 0);
+        const isHistorical = ["abdelrahman mohamed", "abdelwahab hamdi", "mohamed eslam", "omar tarek", "youssef ghanem", "ahmed hassan", "bosy ayman", "poussy ayman", "omar ezz"].some(champ => (u.name || "").toLowerCase().includes(champ));
         return (
           u.isChampion ||
           (u.chessTitle && u.chessTitle.trim().length > 0) ||
-          (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place"))) ||
-          top >= 1800
+          (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place") || u.bio.toLowerCase().includes("gold"))) ||
+          top >= 1500 ||
+          u.role === "president" ||
+          u.role === "vice_president" ||
+          isHistorical
         );
       });
     } else if (activeFilter === "officers") {
@@ -469,13 +473,17 @@ const Community = () => {
               className={`filter-tab-btn ${activeFilter === "champions" ? "active" : ""}`}
               onClick={() => setActiveFilter("champions")}
             >
-              🏆 Campus Champions
+              🏆 Campus Champions ({users.filter(u => {
+                const top = Math.max(u.fideRating || 0, u.chessComRating || 0, u.lichessRating || 0);
+                const isHist = ["abdelrahman mohamed", "abdelwahab hamdi", "mohamed eslam", "omar tarek", "youssef ghanem", "ahmed hassan", "bosy ayman", "poussy ayman", "omar ezz"].some(c => (u.name || "").toLowerCase().includes(c));
+                return u.isChampion || (u.chessTitle && u.chessTitle.trim().length > 0) || (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place") || u.bio.toLowerCase().includes("gold"))) || top >= 1500 || u.role === "president" || u.role === "vice_president" || isHist;
+              }).length})
             </button>
             <button 
               className={`filter-tab-btn ${activeFilter === "officers" ? "active" : ""}`}
               onClick={() => setActiveFilter("officers")}
             >
-              👑 Club Leadership
+              👑 Club Leadership ({users.filter(u => ["president", "vice_president", "admin", "oc", "hr", "pr", "media", "trainer"].includes(u.role) || (Array.isArray(u.clubRoles) && u.clubRoles.length > 0)).length})
             </button>
             {loggedInEmail && (
               <>
@@ -499,7 +507,7 @@ const Community = () => {
               className={`filter-tab-btn ${activeFilter === "active" ? "active" : ""}`}
               onClick={() => setActiveFilter("active")}
             >
-              ⚡ Rated Contenders
+              ⚡ Rated Contenders ({users.filter(u => (u.fideRating || 0) > 0 || (u.chessComRating || 0) > 0 || (u.lichessRating || 0) > 0).length})
             </button>
           </div>
         </section>

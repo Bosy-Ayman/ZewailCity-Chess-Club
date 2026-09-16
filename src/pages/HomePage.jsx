@@ -184,6 +184,8 @@ const HomePage = () => {
   const [liveStats, setLiveStats] = useState({ members: null, matches: null, tournaments: null });
   const [featuredLiveEvent, setFeaturedLiveEvent] = useState(null);
   const [liveTournament, setLiveTournament] = useState(null);
+  const [tournamentsList, setTournamentsList] = useState([]);
+  const [puzzleTournamentsList, setPuzzleTournamentsList] = useState([]);
   const [registeredUsers, setRegisteredUsers] = useState([
     {
       email: "s-bosy.mohamed@zewailcity.edu.eg",
@@ -257,6 +259,7 @@ const HomePage = () => {
 
           // Live stats: tournament count
           if (Array.isArray(tList)) {
+            setTournamentsList(tList);
             const completedTournaments = tList.filter((t) => t.status === "Completed");
             // Count total matches across all tournaments
             let totalMatches = 0;
@@ -277,6 +280,9 @@ const HomePage = () => {
               }));
             const puzzleRes = await fetch(`${API_BASE}/api/puzzle-tournaments`);
             const puzzleList = puzzleRes.ok ? await puzzleRes.json() : [];
+            if (Array.isArray(puzzleList)) {
+              setPuzzleTournamentsList(puzzleList);
+            }
             const puzzleEvents = (Array.isArray(puzzleList) ? puzzleList : [])
               .filter((p) => p.startDate)
               .map((p) => {
@@ -574,8 +580,27 @@ const HomePage = () => {
     const lichessRating = u.lichessRating || 0;
     const topRating = Math.max(fideRating, chessComRating, lichessRating);
 
-    const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer"].includes(u.role);
-    const category = isLeader ? "leaders" : (topRating >= 1800 ? "champions" : "competitors");
+    // 1. Leadership Check
+    const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer", "officer"].includes(u.role) || 
+      (Array.isArray(u.clubRoles) && u.clubRoles.length > 0) ||
+      emailKey.includes("admin@zcchessclub.com");
+
+    // 2. Champions Check
+    const wonTournament = (tournamentsList || []).some(t => 
+      (t.winner && (t.winner.toLowerCase() === (u.name || "").toLowerCase() || t.winner.toLowerCase() === emailKey)) ||
+      (Array.isArray(t.podium) && t.podium.some(p => p && p.name && (p.name.toLowerCase() === (u.name || "").toLowerCase() || p.name.toLowerCase() === emailKey)))
+    );
+    const wonPuzzle = (puzzleTournamentsList || []).some(pt => 
+      (Array.isArray(pt.leaderboard) && pt.leaderboard.slice(0, 3).some(l => l && (l.email?.toLowerCase() === emailKey || l.name?.toLowerCase() === (u.name || "").toLowerCase())))
+    );
+    const isHistoricalChamp = ["abdelrahman mohamed", "abdelwahab hamdi", "mohamed eslam", "omar tarek", "youssef ghanem", "ahmed hassan", "bosy ayman", "poussy ayman", "omar ezz"].some(champ => (u.name || "").toLowerCase().includes(champ));
+    const bioMentionsChamp = (u.bio || "").toLowerCase().includes("champion") || (u.bio || "").toLowerCase().includes("1st place") || (u.bio || "").toLowerCase().includes("gold");
+    const hasChessTitle = !!(u.chessTitle && u.chessTitle.trim());
+
+    const isChampion = hasChessTitle || wonTournament || wonPuzzle || isHistoricalChamp || bioMentionsChamp || topRating >= 1500 || u.role === "president" || u.role === "vice_president";
+
+    // 3. Active Player Check: all registered players who have ratings, activity, or club membership
+    const isActivePlayer = true;
 
     const title = u.major
       ? `🎓 ${u.major}${u.batch ? ` (Batch ${u.batch})` : ''}`
@@ -605,7 +630,7 @@ const HomePage = () => {
       ? "⚡ Officer"
       : u.chessTitle 
       ? `👑 ${u.chessTitle}` 
-      : (topRating > 0 ? `⚡ ${topRating} Elo` : "♟️ Club Member");
+      : (topRating > 0 ? `⚡ ${topRating} Elo` : isChampion ? "🏆 Champion" : "♟️ Club Member");
 
     return {
       name: u.name || emailKey.split("@")[0],
@@ -613,7 +638,9 @@ const HomePage = () => {
       role: u.role || "member",
       clubRoles: u.clubRoles || [],
       title,
-      category,
+      isLeader,
+      isChampion,
+      isActivePlayer,
       badge,
       fideRating,
       chessComRating,
@@ -633,9 +660,9 @@ const HomePage = () => {
   });
 
   const filteredTacticians = campusTacticians.filter((t) => {
-    if (tacticiansFilter === "champions") return t.category === "champions";
-    if (tacticiansFilter === "leaders") return t.category === "leaders";
-    if (tacticiansFilter === "competitors") return t.category === "competitors";
+    if (tacticiansFilter === "champions") return t.isChampion;
+    if (tacticiansFilter === "leaders") return t.isLeader;
+    if (tacticiansFilter === "competitors") return t.isActivePlayer;
     return true;
   });
 
@@ -1551,19 +1578,19 @@ const HomePage = () => {
             className={`tactician-filter-btn ${tacticiansFilter === "champions" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("champions")}
           >
-            🏆 Campus Champions
+            🏆 Campus Champions ({campusTacticians.filter(t => t.isChampion).length})
           </button>
           <button 
             className={`tactician-filter-btn ${tacticiansFilter === "leaders" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("leaders")}
           >
-            👑 Club Leadership
+            👑 Club Leadership ({campusTacticians.filter(t => t.isLeader).length})
           </button>
           <button 
             className={`tactician-filter-btn ${tacticiansFilter === "competitors" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("competitors")}
           >
-            ⚡ Active Players
+            ⚡ Active Players ({campusTacticians.filter(t => t.isActivePlayer).length})
           </button>
         </div>
 
