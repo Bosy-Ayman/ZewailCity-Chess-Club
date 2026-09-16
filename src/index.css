@@ -568,3 +568,114 @@ img, video, iframe, embed, object {
   to { opacity: 1; }
 }
 
+/* ============================================================
+   MOBILE USABILITY & MODERN TOUCH EXPERIENCE (≤ 768px)
+   Keeps desktop layout strictly untouched while elevating mobile UX
+   ============================================================ */
+@media (max-width: 768px) {
+  /* 1. Touch & Tap Optimizations */
+  *,
+  *::before,
+  *::after {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  .tactician-card,
+  .community-member-card,
+  .tournament-card,
+  .spotlight-entry-pill {
+    touch-action: manipulation;
+  }
+
+  /* Prevent iOS Safari 100% auto-zoom on input focus */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* 2. Modern Smooth Horizontal Scrolling for Filter & Pill Bars */
+  .tacticians-filter-bar,
+  .community-filter-tabs,
+  .community-sort-bar,
+  .tournament-pills-bar,
+  .modal-tab-mobile-menu-list,
+  .activity-feed-slider {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .tacticians-filter-bar::-webkit-scrollbar,
+  .community-filter-tabs::-webkit-scrollbar,
+  .community-sort-bar::-webkit-scrollbar,
+  .tournament-pills-bar::-webkit-scrollbar,
+  .activity-feed-slider::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 3. Mobile Touch Friendly Targets (Min 40px - 44px) */
+  .hamburger,
+  .user-menu-btn,
+  .notif-bell-btn,
+  .search-clear-btn,
+  .modal-close-btn,
+  .lightbox-close-btn,
+  .solutions-modal-close {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  /* 4. Active Touch Feedback */
+  .tactician-filter-btn:active,
+  .filter-tab-btn:active,
+  .btn-gold:active,
+  .explore-btn:active,
+  .hero-secondary-btn:active,
+  .sort-btn:active {
+    transform: scale(0.96);
+    transition: transform 0.1s ease;
+  }
+
+  /* 5. Safe Area Insets for Modern Mobile Notches */
+  .mobile-sidebar,
+  .user-drawer,
+  .modal-tab-mobile-menu-drawer {
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 6. Universal Modal Mobile Frame Protection */
+  .tactician-modal-content,
+  .solutions-modal,
+  .player-modal-content,
+  .custom-modal,
+  .day-details-modal {
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box !important;
+    border-radius: 18px !important;
+  }
+
+  /* 7. Tables on Mobile (Prevent Breakage & Horizontal Squeeze) */
+  .admin-table-wrapper,
+  .leaderboard-table-container,
+  .applications-table-wrapper,
+  .archive-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+}
+
+
