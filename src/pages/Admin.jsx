@@ -55,6 +55,7 @@ export default function AdminDashboard() {
   const [puzzleEndDate, setPuzzleEndDate] = useState("");
   const [puzzleEndTime, setPuzzleEndTime] = useState("");
   const [puzzleTimeLimit, setPuzzleTimeLimit] = useState(60);
+  const [puzzleTimingMode, setPuzzleTimingMode] = useState("fixed"); // 'fixed' | 'custom'
   const [puzzlesList, setPuzzlesList] = useState([]);
 
   // Active puzzle setup state
@@ -854,7 +855,7 @@ export default function AdminDashboard() {
       mateIn: activePuzzleMateIn,
       correctMoves: activePuzzleMoves,
       description: activePuzzleDesc || (activePuzzleMateIn === 0 ? "Find the Best Move" : `Mate in ${activePuzzleMateIn}`),
-      timeLimit: activePuzzleTimeLimit ? Number(activePuzzleTimeLimit) : null
+      timeLimit: puzzleTimingMode === "custom" && activePuzzleTimeLimit ? Number(activePuzzleTimeLimit) : null
     };
     
     // If editing an existing tournament, directly save it to the backend tournament!
@@ -940,6 +941,9 @@ export default function AdminDashboard() {
     setActivePuzzleMoves(p.correctMoves || []);
     setActivePuzzleDesc(p.description || "");
     setActivePuzzleTimeLimit(p.timeLimit ? String(p.timeLimit) : "");
+    if (p.timeLimit) {
+      setPuzzleTimingMode("custom");
+    }
     setInitialPuzzleFen(p.initialFen);
     setSetupMode(false);
     setPuzzlesList(puzzlesList.filter((_, i) => i !== index));
@@ -954,6 +958,16 @@ export default function AdminDashboard() {
       setErrorMessage("Please add at least one puzzle to the tournament!");
       return;
     }
+
+    const payload = {
+      title: puzzleTitle,
+      startDate: puzzleStartDate,
+      startTime: puzzleStartTime,
+      endDate: puzzleEndDate,
+      endTime: puzzleEndTime,
+      timeLimit: Number(puzzleTimeLimit) || 60,
+      puzzles: puzzlesList
+    };
     
     try {
       const url = editingPuzzleTournamentId 
@@ -961,21 +975,13 @@ export default function AdminDashboard() {
         : `${API_BASE}/api/puzzle-tournaments`;
       const method = editingPuzzleTournamentId ? "PUT" : "POST";
 
-      await safeFetchJson(url, {
+      const res = await safeFetchJson(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: puzzleTitle,
-          startDate: puzzleStartDate,
-          startTime: puzzleStartTime,
-          endDate: puzzleEndDate,
-          endTime: puzzleEndTime,
-          timeLimit: puzzleTimeLimit,
-          puzzles: puzzlesList
-        })
+        body: JSON.stringify(payload)
       });
       
-      setSuccessMessage(editingPuzzleTournamentId ? "Puzzle tournament updated successfully!" : "Puzzle tournament created successfully!");
+      setSuccessMessage(res.message || (editingPuzzleTournamentId ? "Puzzle tournament updated!" : "Puzzle tournament created!"));
       handleResetPuzzleForm();
       fetchData();
     } catch (err) {
@@ -992,6 +998,10 @@ export default function AdminDashboard() {
     setPuzzleEndTime(t.endTime || "");
     setPuzzleTimeLimit(t.timeLimit || 60);
     setPuzzlesList(t.puzzles || []);
+    const hasCustom = (t.puzzles || []).some(
+      (p) => p.timeLimit && Number(p.timeLimit) > 0 && Number(p.timeLimit) !== Number(t.timeLimit)
+    );
+    setPuzzleTimingMode(hasCustom ? "custom" : "fixed");
     setSuccessMessage(`Editing: ${t.title}`);
     
     // Scroll to form
@@ -1086,6 +1096,7 @@ export default function AdminDashboard() {
     setPuzzleEndDate("");
     setPuzzleEndTime("");
     setPuzzleTimeLimit(60);
+    setPuzzleTimingMode("fixed");
     setPuzzlesList([]);
     const defaultChess = new Chess();
     setChessInstance(defaultChess);
@@ -2756,17 +2767,90 @@ export default function AdminDashboard() {
                         onChange={(e) => setPuzzleEndTime(e.target.value)}
                       />
                     </div>
+                  </div>
 
-                    <div className="form-group">
-                      <label>Time Limit per Puzzle (Seconds) *</label>
-                      <input
-                        type="number"
-                        value={puzzleTimeLimit}
-                        onChange={(e) => setPuzzleTimeLimit(parseInt(e.target.value) || 60)}
-                        min="5"
-                        required
-                      />
+                  {/* Timing Mode Selection */}
+                  <div className="form-group" style={{ background: "rgba(255, 255, 255, 0.03)", padding: "16px", borderRadius: "10px", border: "1px solid rgba(243, 193, 68, 0.2)", marginTop: "8px" }}>
+                    <label style={{ fontWeight: 600, color: "#f3c144", display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                      ⏱️ Timing Strategy per Puzzle:
+                    </label>
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: puzzleTimingMode === "fixed" ? "14px" : "0" }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                          padding: "10px 16px",
+                          borderRadius: "8px",
+                          background: puzzleTimingMode === "fixed" ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                          border: `1px solid ${puzzleTimingMode === "fixed" ? "#f3c144" : "rgba(255, 255, 255, 0.15)"}`,
+                          color: puzzleTimingMode === "fixed" ? "#f3c144" : "#caba91",
+                          fontWeight: puzzleTimingMode === "fixed" ? 600 : 400,
+                          transition: "all 0.2s ease",
+                          flex: "1 1 220px"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="puzzleTimingMode"
+                          value="fixed"
+                          checked={puzzleTimingMode === "fixed"}
+                          onChange={() => setPuzzleTimingMode("fixed")}
+                          style={{ accentColor: "#f3c144", cursor: "pointer" }}
+                        />
+                        <span>⏱️ Fixed Duration for All Puzzles</span>
+                      </label>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                          padding: "10px 16px",
+                          borderRadius: "8px",
+                          background: puzzleTimingMode === "custom" ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                          border: `1px solid ${puzzleTimingMode === "custom" ? "#f3c144" : "rgba(255, 255, 255, 0.15)"}`,
+                          color: puzzleTimingMode === "custom" ? "#f3c144" : "#caba91",
+                          fontWeight: puzzleTimingMode === "custom" ? 600 : 400,
+                          transition: "all 0.2s ease",
+                          flex: "1 1 220px"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="puzzleTimingMode"
+                          value="custom"
+                          checked={puzzleTimingMode === "custom"}
+                          onChange={() => setPuzzleTimingMode("custom")}
+                          style={{ accentColor: "#f3c144", cursor: "pointer" }}
+                        />
+                        <span>🎛️ Custom Duration per Puzzle</span>
+                      </label>
                     </div>
+
+                    {puzzleTimingMode === "fixed" ? (
+                      <div className="form-group" style={{ margin: "10px 0 0" }}>
+                        <label style={{ fontSize: "0.9rem" }}>Fixed Time Limit per Puzzle (Seconds) *</label>
+                        <input
+                          type="number"
+                          value={puzzleTimeLimit}
+                          onChange={(e) => setPuzzleTimeLimit(parseInt(e.target.value, 10) || 60)}
+                          min="5"
+                          max="600"
+                          required
+                          style={{ maxWidth: "240px" }}
+                        />
+                        <small style={{ color: "#caba91", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
+                          Every puzzle in this challenge will give tacticians exactly {puzzleTimeLimit || 60} seconds.
+                        </small>
+                      </div>
+                    ) : (
+                      <div style={{ background: "rgba(52, 152, 219, 0.1)", border: "1px solid rgba(52, 152, 219, 0.3)", borderRadius: "8px", padding: "10px 14px", color: "#6cb2eb", fontSize: "0.85rem", marginTop: "10px" }}>
+                        ℹ️ <strong>Custom Mode Active:</strong> You will set the specific countdown seconds for each puzzle individually below in the Puzzle Editor.
+                      </div>
+                    )}
                   </div>
 
                   <hr style={{ border: "none", borderTop: "1px solid #393428", margin: "25px 0" }} />
@@ -2795,7 +2879,7 @@ export default function AdminDashboard() {
                                 Puzzle #{index + 1} - {p.mateIn === 0 ? "Find the Best Move" : `Mate in ${p.mateIn}`}
                               </span>
                               <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: p.timeLimit ? "rgba(243, 193, 68, 0.2)" : "rgba(255, 255, 255, 0.08)", color: p.timeLimit ? "#f3c144" : "#caba91", border: `1px solid ${p.timeLimit ? 'rgba(243, 193, 68, 0.4)' : 'rgba(255, 255, 255, 0.15)'}` }}>
-                                ⏱️ {p.timeLimit ? `${p.timeLimit}s (custom)` : `${puzzleTimeLimit || 60}s (default)`}
+                                ⏱️ {p.timeLimit ? `${p.timeLimit}s (custom)` : `${puzzleTimeLimit || 60}s (${puzzleTimingMode === "custom" ? "default" : "fixed"})`}
                               </span>
                             </div>
                             <span className="puzzle-item-desc" style={{ color: "#caba91", fontSize: "0.85rem" }}>
@@ -3018,21 +3102,30 @@ export default function AdminDashboard() {
                           />
                         </div>
 
-                        <div className="form-group">
-                          <label>Time Limit for this Puzzle (Seconds, Optional)</label>
-                          <input
-                            type="number"
-                            min="5"
-                            max="600"
-                            value={activePuzzleTimeLimit}
-                            onChange={(e) => setActivePuzzleTimeLimit(e.target.value)}
-                            placeholder={`Default: ${puzzleTimeLimit || 60}s (leave blank to inherit)`}
-                            disabled={!setupMode}
-                          />
-                          <small style={{ color: "#caba91", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
-                            Custom countdown for this specific puzzle. Leave blank to use challenge default ({puzzleTimeLimit || 60}s).
-                          </small>
-                        </div>
+                        {puzzleTimingMode === "custom" ? (
+                          <div className="form-group" style={{ background: "rgba(243, 193, 68, 0.08)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(243, 193, 68, 0.25)" }}>
+                            <label style={{ color: "#f3c144", fontWeight: 600 }}>⏱️ Time Limit for this Puzzle (Seconds) *</label>
+                            <input
+                              type="number"
+                              min="5"
+                              max="600"
+                              value={activePuzzleTimeLimit}
+                              onChange={(e) => setActivePuzzleTimeLimit(e.target.value)}
+                              placeholder={`e.g. 45, 90, 120 (fallback: ${puzzleTimeLimit || 60}s)`}
+                              disabled={!setupMode}
+                              style={{ borderColor: "#f3c144" }}
+                            />
+                            <small style={{ color: "#caba91", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
+                              Enter individual timer in seconds for this specific puzzle.
+                            </small>
+                          </div>
+                        ) : (
+                          <div className="form-group" style={{ background: "rgba(255, 255, 255, 0.03)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                            <span style={{ color: "#caba91", fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                              ⏱️ <strong>Timing:</strong> Fixed at <strong>{puzzleTimeLimit || 60} seconds</strong> for all puzzles in this challenge.
+                            </span>
+                          </div>
+                        )}
 
                         <div className="form-group" style={{ marginTop: "10px" }}>
                           {setupMode ? (
