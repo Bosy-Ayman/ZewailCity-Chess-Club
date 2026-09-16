@@ -40,14 +40,15 @@ export default function WinnerCelebrationModal({
 
   if (!isOpen) return null;
 
-  const handleDownloadCert = (player, rank) => {
+  const handleDownloadCert = (player, rank, format = "pdf") => {
     if (!player || !player.name) return;
     generateWinnerCertificate({
       playerName: player.name,
       rank: rank,
       tournamentTitle: tournamentTitle,
       tournamentType: tournamentType,
-      pointsOrScore: getScoreDisplay(player, rank)
+      pointsOrScore: getScoreDisplay(player, rank),
+      format: format
     });
   };
 
@@ -322,10 +323,20 @@ export default function WinnerCelebrationModal({
             <button
               type="button"
               className="action-btn"
-              style={{ background: "linear-gradient(135deg, rgba(243,193,68,0.25) 0%, rgba(212,163,42,0.15) 100%)", border: "1.5px solid #f3c144", color: "#fff", fontWeight: "800" }}
-              onClick={() => handleDownloadCert(winner, "Champion (1st Place)")}
+              style={{ background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)", color: "#12100d", fontWeight: "900", border: "none" }}
+              onClick={() => handleDownloadCert(winner, "Champion (1st Place)", "pdf")}
             >
-              📜 Download Certificate (PNG)
+              📜 Download Certificate (PDF)
+            </button>
+          )}
+          {winner && winner.name && (
+            <button
+              type="button"
+              className="action-btn"
+              style={{ background: "rgba(243,193,68,0.12)", border: "1px solid rgba(243,193,68,0.4)", color: "#f3c144", fontWeight: "700" }}
+              onClick={() => handleDownloadCert(winner, "Champion (1st Place)", "png")}
+            >
+              🖼️ PNG Image
             </button>
           )}
 

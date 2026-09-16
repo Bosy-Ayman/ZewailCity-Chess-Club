@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { safeFetchJson, getPlayerAvatarUrl } from "../utils/api";
 import { chessAudio } from "../utils/chessAudio";
+import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import "./PuzzleChallenge.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
@@ -2137,6 +2138,7 @@ export default function PuzzleChallenge() {
                         <th className="col-solved">Puzzles Cleared</th>
                         <th className="col-rate">Solve Rate</th>
                         <th className="col-score">Total Score</th>
+                        <th style={{ textAlign: "center" }}>Honors Certificate</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2147,6 +2149,7 @@ export default function PuzzleChallenge() {
                             const avatarUrl = getRosterAvatar(entry);
                             const puzzleCount = liveTournament.puzzles?.length || 1;
                             const solvePct = Math.round(((entry.solvedCount || 0) / puzzleCount) * 100);
+                            const pName = getPlayerDisplayName(entry);
                             return (
                               <tr key={idx} className={entry.email === userEmail ? "highlight-user-row" : ""}>
                                 <td className="col-rank">
@@ -2162,7 +2165,7 @@ export default function PuzzleChallenge() {
                                       className="table-player-avatar"
                                       onError={(e) => { e.currentTarget.src = "/Icons/unknown.png"; }}
                                     />
-                                    <span className="player-name">{getPlayerDisplayName(entry)}</span>
+                                    <span className="player-name">{pName}</span>
                                     {entry.email === userEmail && <span className="you-pill">YOU</span>}
                                     {entry.unattempted && (
                                       <span
@@ -2194,13 +2197,41 @@ export default function PuzzleChallenge() {
                                 <td className="col-score">
                                   <strong className="score-val">{entry.score || 0} pts</strong>
                                 </td>
+                                <td style={{ textAlign: "center" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      generateWinnerCertificate({
+                                        playerName: pName,
+                                        rank: idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : idx === 2 ? "3rd Place" : `#${idx + 1} Rank`,
+                                        tournamentTitle: liveTournament.title || "Puzzle Tactics Arena",
+                                        tournamentType: "Puzzle Tactics Arena",
+                                        pointsOrScore: `${entry.score || 0} pts (${entry.solvedCount || 0} solved)`,
+                                        format: "pdf"
+                                      });
+                                    }}
+                                    style={{
+                                      background: "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                      border: "1px solid rgba(243,193,68,0.45)",
+                                      color: "#f3c144",
+                                      padding: "5px 12px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: "800",
+                                      cursor: "pointer"
+                                    }}
+                                    title="Download Official Certificate of Tactical Excellence (PDF)"
+                                  >
+                                    📜 PDF Cert
+                                  </button>
+                                </td>
                               </tr>
                             );
                           });
                         }
                         return (
                           <tr>
-                            <td colSpan="5" style={{ textAlign: "center", color: "#888", padding: "24px" }}>
+                            <td colSpan="6" style={{ textAlign: "center", color: "#888", padding: "24px" }}>
                               {isTournamentClosed(liveTournament)
                                 ? "No registered participants or scores for this challenge."
                                 : "No scores recorded yet for this active challenge."}
