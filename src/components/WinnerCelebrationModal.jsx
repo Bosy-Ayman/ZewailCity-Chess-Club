@@ -4,6 +4,7 @@ import Confetti from "react-confetti";
 import { X } from "lucide-react";
 import { chessAudio } from "../utils/chessAudio";
 import { getPlayerAvatarUrl } from "../utils/api";
+import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import "./WinnerCelebrationModal.css";
 
 /**
@@ -25,7 +26,8 @@ export default function WinnerCelebrationModal({
   onMarkCompleted = null,
   onViewBracketOrStandings = null,
   isStaff = false,
-  isCompletedStatus = false
+  isCompletedStatus = false,
+  tournamentId = null
 }) {
   const navigate = useNavigate();
 
@@ -37,6 +39,17 @@ export default function WinnerCelebrationModal({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleDownloadCert = (player, rank) => {
+    if (!player || !player.name) return;
+    generateWinnerCertificate({
+      playerName: player.name,
+      rank: rank,
+      tournamentTitle: tournamentTitle,
+      tournamentType: tournamentType,
+      pointsOrScore: getScoreDisplay(player, rank)
+    });
+  };
 
   const windowW = typeof window !== "undefined" ? window.innerWidth : 1200;
   const windowH = typeof window !== "undefined" ? window.innerHeight : 900;
@@ -162,6 +175,14 @@ export default function WinnerCelebrationModal({
                 >
                   View Profile ↗
                 </button>
+                <button
+                  type="button"
+                  className="podium-profile-link cert-btn"
+                  style={{ marginTop: "6px", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.4)", color: "#f3c144", fontWeight: "700" }}
+                  onClick={() => handleDownloadCert(runnerUp, "Runner-Up (2nd Place)")}
+                >
+                  📜 Certificate
+                </button>
               </div>
             </div>
           )}
@@ -243,6 +264,14 @@ export default function WinnerCelebrationModal({
                 >
                   Congratulate Profile ↗
                 </button>
+                <button
+                  type="button"
+                  className="podium-profile-link"
+                  style={{ marginTop: "6px", background: "linear-gradient(135deg, #f3c144 0%, #d4a32a 100%)", color: "#15120c", fontWeight: "800", border: "none" }}
+                  onClick={() => handleDownloadCert(winner, "Champion (1st Place)")}
+                >
+                  📜 Champion Certificate
+                </button>
               </div>
             </div>
           )}
@@ -274,6 +303,14 @@ export default function WinnerCelebrationModal({
                 >
                   View Profile ↗
                 </button>
+                <button
+                  type="button"
+                  className="podium-profile-link cert-btn"
+                  style={{ marginTop: "6px", background: "rgba(243, 193, 68, 0.12)", border: "1px solid rgba(243, 193, 68, 0.4)", color: "#f3c144", fontWeight: "700" }}
+                  onClick={() => handleDownloadCert(thirdPlace, "3rd Place")}
+                >
+                  📜 Certificate
+                </button>
               </div>
             </div>
           )}
@@ -281,6 +318,17 @@ export default function WinnerCelebrationModal({
 
         {/* Action Controls */}
         <div className="winner-celebration-actions">
+          {winner && winner.name && (
+            <button
+              type="button"
+              className="action-btn"
+              style={{ background: "linear-gradient(135deg, rgba(243,193,68,0.25) 0%, rgba(212,163,42,0.15) 100%)", border: "1.5px solid #f3c144", color: "#fff", fontWeight: "800" }}
+              onClick={() => handleDownloadCert(winner, "Champion (1st Place)")}
+            >
+              📜 Download Certificate (PNG)
+            </button>
+          )}
+
           {onViewBracketOrStandings && (
             <button
               type="button"

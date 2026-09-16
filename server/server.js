@@ -4057,6 +4057,119 @@ app.post('/api/tournaments/:id/broadcast-winner', async (req, res) => {
   }
 });
 
+// POST: Dispatch official winner certificates directly to winner emails with official club stamp
+app.post('/api/tournaments/:id/send-certificates', async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    const winners = [];
+    if (tournament.podium && Array.isArray(tournament.podium) && tournament.podium.length > 0) {
+      tournament.podium.forEach((p, idx) => {
+        if (p && p.name && p.name !== 'BYE' && p.name !== 'TBD') {
+          winners.push({
+            name: p.name,
+            rank: idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : "3rd Place",
+            points: p.points != null ? `${p.points} pts` : ""
+          });
+        }
+      });
+    } else if (tournament.winner && tournament.winner !== 'BYE' && tournament.winner !== 'TBD') {
+      winners.push({
+        name: tournament.winner,
+        rank: "Champion (1st Place)",
+        points: ""
+      });
+    }
+
+    if (winners.length === 0) {
+      return res.status(400).json({ error: "No recorded winners found for this tournament yet." });
+    }
+
+    let sentCount = 0;
+    const appBaseUrl = getAppBaseUrl();
+
+    for (const w of winners) {
+      const contact = await findPlayerContact(w.name, tournament);
+      if (contact && contact.email) {
+        const certCode = `ZC-CERT-${Math.abs(w.name.split("").reduce((acc, c) => acc * 31 + c.charCodeAt(0), 7)).toString(16).toUpperCase()}-${new Date().getFullYear()}`;
+        
+        const certHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { margin: 0; padding: 0; background-color: #0b0907; font-family: 'Inter', Arial, sans-serif; color: #eee; }
+              .wrapper { max-width: 620px; margin: 20px auto; background: #13100c; border: 2px solid #f3c144; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 35px rgba(0,0,0,0.7); }
+              .header { background: linear-gradient(180deg, #241d13 0%, #13100c 100%); padding: 28px 20px 18px; text-align: center; border-bottom: 1px solid rgba(243,193,68,0.25); }
+              .cert-box { margin: 24px 20px; padding: 28px 20px; background: linear-gradient(135deg, rgba(38, 30, 18, 0.9) 0%, rgba(18, 15, 10, 0.95) 100%); border: 2px solid rgba(243, 193, 68, 0.6); border-radius: 12px; text-align: center; }
+              .cert-title { font-size: 22px; font-weight: 800; color: #f3c144; margin: 0 0 10px; letter-spacing: 1px; text-transform: uppercase; }
+              .recipient-name { font-size: 26px; font-weight: 900; color: #ffffff; margin: 16px 0 8px; text-shadow: 0 0 12px rgba(243, 193, 68, 0.4); }
+              .stamp-badge { display: inline-block; border: 2px solid #f3c144; border-radius: 50%; width: 105px; height: 105px; padding: 14px 6px; box-sizing: border-box; text-align: center; color: #f3c144; font-size: 9px; font-weight: 800; background: rgba(243, 193, 68, 0.08); margin: 20px auto; }
+              .cta-btn { display: inline-block; background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%); color: #12100d !important; font-weight: 900; font-size: 15px; text-decoration: none; padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 18px rgba(243, 193, 68, 0.45); }
+              .footer { padding: 18px; text-align: center; background: #0b0907; border-top: 1px solid rgba(255,255,255,0.06); color: #888072; font-size: 11px; }
+            </style>
+          </head>
+          <body>
+            <div class="wrapper">
+              <div class="header">
+                <img src="https://zc-chess-club.vercel.app/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" width="52" height="52" style="display: block; margin: 0 auto 8px; border-radius: 8px;" />
+                <h2 style="color: #f3c144; margin: 0; font-size: 18px; letter-spacing: 2px;">ZEWAIL CITY CHESS CLUB</h2>
+                <p style="color: #a8a296; margin: 4px 0 0; font-size: 12px;">Official Certificate of Merit & Championship</p>
+              </div>
+              <div style="padding: 20px;">
+                <div class="cert-box">
+                  <div class="cert-title">📜 CERTIFICATE OF EXCELLENCE</div>
+                  <p style="color: #c4bcae; font-size: 13px; margin: 0;">This certificate is officially conferred upon</p>
+                  <div class="recipient-name">${w.name}</div>
+                  <div style="display: inline-block; background: rgba(243, 193, 68, 0.15); border: 1px solid #f3c144; color: #f3c144; font-weight: 800; font-size: 14px; padding: 6px 18px; border-radius: 999px; margin: 10px 0 16px;">
+                    ${w.rank}${w.points ? ` • ${w.points}` : ''}
+                  </div>
+                  <p style="color: #d1c7b7; font-size: 14px; line-height: 1.5; margin: 0 0 16px;">
+                    For exceptional strategic prowess and competitive excellence in the <strong>${tournament.title}</strong> at Zewail City of Science and Technology.
+                  </p>
+                  <div class="stamp-badge">
+                    ★ ZC CHESS ★<br/>
+                    <span style="font-size: 16px;">♟️</span><br/>
+                    OFFICIAL SEAL<br/>
+                    VERIFIED
+                  </div>
+                  <p style="color: #888; font-size: 11px; font-family: monospace; margin: 8px 0 0;">Verification ID: ${certCode}</p>
+                </div>
+                <div style="text-align: center; margin: 24px 0 10px;">
+                  <a href="${appBaseUrl}/tournamentdetails?id=${tournament._id}" class="cta-btn">View & Download Full HD Certificate →</a>
+                </div>
+              </div>
+              <div class="footer">
+                <p>© ${new Date().getFullYear()} Zewail City Chess Club • Giza, Egypt</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendEmail({
+          to: contact.email,
+          subject: `📜 [ZC Chess Club] Official Certificate of Achievement: ${tournament.title}`,
+          html: certHtml,
+          text: `Congratulations ${w.name}! Here is your official Certificate of Achievement for finishing as ${w.rank} in "${tournament.title}". Verification ID: ${certCode}`
+        });
+
+        sentCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Official certificates successfully dispatched to ${sentCount} winner(s)!`,
+      sentCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to dispatch certificates", details: err.message });
+  }
+});
+
 // GET: user's tournaments
 app.get('/api/users/:email/tournaments', async (req, res) => {
   try {

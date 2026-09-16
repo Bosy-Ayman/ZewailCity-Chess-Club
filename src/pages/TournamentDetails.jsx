@@ -7,6 +7,7 @@ import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPic
 import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { getPlayerAvatarUrl, compressImage } from "../utils/api";
 import { findCommonFreeSlots, findNearOverlapSlots, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
+import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -549,6 +550,20 @@ const isBlackWinner = (result) => {
       fetchTournamentDetails();
     } catch (err) {
       alert("Error updating status: " + err.message);
+    }
+  };
+
+  const handleDispatchCertificates = async () => {
+    if (!tournamentId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/send-certificates`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to dispatch certificates");
+      alert(data.message || "Official certificates successfully emailed to winners!");
+    } catch (err) {
+      alert("Error sending certificates: " + err.message);
     }
   };
 
@@ -1193,6 +1208,32 @@ const isBlackWinner = (result) => {
                       <span>Championship Podium</span>
                     </button>
                   )}
+                  {(tournament.status === "Completed" || podiumP1) && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const winnerName = podiumP1?.name || tournament.winner || "Champion";
+                        generateWinnerCertificate({
+                          playerName: winnerName,
+                          rank: "Champion (1st Place)",
+                          tournamentTitle: tournament.title || "ZC Chess Tournament",
+                          tournamentType: tournament.type || "Swiss",
+                          pointsOrScore: podiumP1?.points != null ? `${podiumP1.points}` : ""
+                        });
+                      }}
+                      className="export-tournament-btn cert-btn"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(243, 193, 68, 0.22) 0%, rgba(212, 163, 42, 0.12) 100%)",
+                        border: "1.5px solid #f3c144",
+                        color: "#f3c144",
+                        fontWeight: "800"
+                      }}
+                      title="Download Official Winner Certificate with Club Stamp"
+                    >
+                      <span>📜</span>
+                      <span>Champion Certificate</span>
+                    </button>
+                  )}
                   {!isStaff && tournament.status === "Upcoming" && !tournament?.registrations?.some(r => r.email?.toLowerCase() === loggedInUserEmail?.toLowerCase()) && !tournament?.playersList?.some(p => p.name?.toLowerCase() === loggedInUserName?.toLowerCase()) && (
                     <button 
                       type="button"
@@ -1277,9 +1318,24 @@ const isBlackWinner = (result) => {
                       </select>
                     </div>
 
-                    <button className="add-btn" onClick={() => setPlayerModalOpen(true)}>
-                      + Add Participant
-                    </button>
+                    {/* Add Participant hidden when tournament is completed or all rounds played */}
+                    {tournament.status !== "Completed" && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
+                      <button className="add-btn" onClick={() => setPlayerModalOpen(true)}>
+                        + Add Participant
+                      </button>
+                    )}
+
+                    {/* Email Winner Certificates button for staff */}
+                    {(tournament.status === "Completed" || (tournament.rounds > 0 && sortedRounds.length >= tournament.rounds)) && (
+                      <button 
+                        className="add-btn" 
+                        onClick={handleDispatchCertificates}
+                        style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)", color: "#fff", fontWeight: "800" }}
+                        title="Email official certificates with club stamp directly to tournament winners"
+                      >
+                        ✉️ Email Winner Certificates
+                      </button>
+                    )}
                     
                     {/* Add Match Pairing only makes sense for Knockout if no bracket is generated yet */}
                     {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
