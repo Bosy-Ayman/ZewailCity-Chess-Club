@@ -8,7 +8,7 @@ const TopHeader = ({ sidebarOpen, toggleSidebar }) => {
       <header className="top-header">
         <div className="logo-title">
           <div className="logo-icon">
-            <img src="/Icons/rook.png" alt="Chess Rook Logo" />
+            <img src="/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" />
           </div>
           <h2 className="logo-text">ZC Chess Club</h2>
         </div>

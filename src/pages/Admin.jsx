@@ -3483,8 +3483,8 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="mockup-email-content">
-                        <div className="mockup-email-header">
-                          <div className="mockup-logo-icon">♟️</div>
+                        <div className="mockup-email-header" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <img src="/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" style={{ width: "32px", height: "32px", objectFit: "contain", borderRadius: "6px" }} />
                           <div className="mockup-logo-title">ZEWAIL CITY CHESS CLUB</div>
                         </div>
 

@@ -8,7 +8,10 @@ export default function Footer() {
       <div className="footer-inner">
         {/* Brand Column */}
         <div className="footer-brand">
-          <span className="footer-logo-text">♟ ZC Chess Club</span>
+          <div className="footer-logo-wrap">
+            <img src="/Icons/chess-clublogo.png" alt="ZC Chess Club Logo" className="footer-logo-img" />
+            <span className="footer-logo-text">Zewail City Chess Club</span>
+          </div>
           <p className="footer-tagline">
             Fostering strategic mastery, competitive excellence, and a vibrant community of campus tacticians at Zewail City.
           </p>

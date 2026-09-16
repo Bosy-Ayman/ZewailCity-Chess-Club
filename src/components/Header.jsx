@@ -589,7 +589,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
             {/* Sidebar Header */}
             <div className="mobile-sidebar-head">
               <div className="mobile-sidebar-brand">
-                <img src="\Icons\chess-clublogo.png" alt="logo" className="mobile-sidebar-logo" />
+                <img src="/Icons/chess-clublogo.png" alt="logo" className="mobile-sidebar-logo" />
                 <span>ZC Chess Club</span>
               </div>
               <button className="mobile-sidebar-close" onClick={toggleSidebar} aria-label="Close menu">
