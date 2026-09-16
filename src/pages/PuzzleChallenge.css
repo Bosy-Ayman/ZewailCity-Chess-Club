@@ -26,9 +26,10 @@
 }
 
 .puzzle-challenge-root.playing {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
   background-image: radial-gradient(circle at center, rgba(24, 22, 18, 1) 0%, rgba(10, 9, 8, 1) 100%);
+  display: flex;
+  flex-direction: column;
 }
 
 .puzzle-layout-container {
@@ -43,11 +44,11 @@
 }
 
 .puzzle-layout-container.playing {
-  padding: 15px 20px;
-  max-width: 1100px;
-  height: 100vh;
+  padding: 10px 16px;
+  max-width: 1050px;
+  min-height: 100vh;
   justify-content: center;
-  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .puzzle-layout-container.loading-centered {
@@ -1744,9 +1745,9 @@
 .puzzle-gameplay-container {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 10px;
   width: 100%;
-  height: 100%;
+  height: auto;
   justify-content: center;
 }
 
@@ -1756,13 +1757,13 @@
   align-items: center;
   background: linear-gradient(135deg, rgba(30, 27, 22, 0.98), rgba(22, 20, 16, 0.98));
   border: 1px solid var(--glass-border);
-  padding: 12px 24px;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px var(--glass-shadow);
+  padding: 8px 18px;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px var(--glass-shadow);
 }
 
 .game-status-bar .puzzle-header-title {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   margin: 0;
   background: linear-gradient(135deg, #fff, var(--accent-gold));
   background-clip: text;
@@ -1777,11 +1778,11 @@
   border: 1px solid rgba(231, 76, 60, 0.3);
   color: #e74c3c;
   font-family: var(--font-display);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
-  padding: 8px 16px;
-  border-radius: 10px;
+  padding: 6px 14px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.25s ease;
   letter-spacing: 0.5px;
@@ -1796,17 +1797,17 @@
 .game-status-right-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sound-toggle-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 1.15rem;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  font-size: 1.05rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1825,14 +1826,14 @@
   color: white;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1rem;
-  padding: 9px 18px;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(192, 57, 43, 0.4);
+  font-size: 0.92rem;
+  padding: 6px 14px;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(192, 57, 43, 0.4);
   display: flex;
   align-items: center;
   gap: 5px;
-  min-width: 80px;
+  min-width: 72px;
   justify-content: center;
 }
 
@@ -1860,7 +1861,7 @@
 .gameplay-grid {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
   min-height: 0;
 }
@@ -1869,13 +1870,13 @@
 .gameplay-board-panel {
   background: linear-gradient(160deg, rgba(30, 27, 22, 0.98), rgba(22, 20, 16, 0.95));
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  box-shadow: 0 12px 35px var(--glass-shadow);
+  gap: 8px;
+  box-shadow: 0 10px 28px var(--glass-shadow);
   justify-content: center;
 }
 
@@ -2109,9 +2110,9 @@
 .stats-card {
   background: linear-gradient(160deg, rgba(30, 27, 22, 0.98), rgba(22, 20, 16, 0.95));
   border: 1px solid var(--glass-border);
-  border-radius: 18px;
-  padding: 18px 20px;
-  box-shadow: 0 10px 28px var(--glass-shadow);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 24px var(--glass-shadow);
 }
 
 .stats-card.mini-leaderboard-card {
@@ -2119,17 +2120,19 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .stats-card h4 {
   font-family: var(--font-display);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   color: var(--accent-gold);
-  margin: 0 0 14px;
+  margin: 0 0 8px;
   letter-spacing: 1px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding-bottom: 10px;
+  padding-bottom: 6px;
   font-weight: 700;
 }
 
@@ -2137,9 +2140,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 9px 0;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
 }
 
 .stat-row:last-child {

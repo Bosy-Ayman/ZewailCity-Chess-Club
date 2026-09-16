@@ -151,25 +151,47 @@ export default function PuzzleChallenge() {
   const scoreRef = useRef(0);
   const solvedCountRef = useRef(0);
 
-  // Dynamic Board Width calculation with hard limits to prevent zoom / overflow
+  // Dynamic Board Width calculation with vertical & horizontal viewport limits
   const boardContainerRef = useRef(null);
-  const [boardWidth, setBoardWidth] = useState(() => Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 440, 440));
+  const [boardWidth, setBoardWidth] = useState(() => {
+    if (typeof window === "undefined") return 400;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxByH = vw >= 768 ? Math.max(220, vh - 260) : 440;
+    return Math.max(220, Math.min(vw - 32, maxByH, 440));
+  });
 
   useEffect(() => {
     const updateBoardWidth = () => {
-      const maxAllowed = Math.min(typeof window !== "undefined" ? window.innerWidth - 32 : 440, 440);
-      let calculatedW = maxAllowed;
+      if (typeof window === "undefined") return;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let availableWidth = 440;
       if (boardContainerRef.current && boardContainerRef.current.parentElement) {
         const parentEl = boardContainerRef.current.parentElement;
         const computedStyle = window.getComputedStyle(parentEl);
         const padLeft = parseFloat(computedStyle.paddingLeft) || 0;
         const padRight = parseFloat(computedStyle.paddingRight) || 0;
-        const available = parentEl.clientWidth - padLeft - padRight;
-        if (available > 0) {
-          calculatedW = Math.min(available, maxAllowed);
+        const w = parentEl.clientWidth - padLeft - padRight;
+        if (w > 0) {
+          availableWidth = w;
         }
+      } else {
+        availableWidth = Math.min(vw - 32, 440);
       }
-      calculatedW = Math.max(260, Math.floor(calculatedW));
+
+      // On desktop / laptop (vw >= 768), scale board dynamically to fit inside screen height without scrolling or zooming out
+      let maxAllowedByHeight = 440;
+      if (vw >= 768) {
+        // Overhead for status bar, feedback banner, progress, toolbar, padding/borders is ~250px
+        maxAllowedByHeight = Math.max(220, vh - 250);
+      } else {
+        maxAllowedByHeight = Math.min(vw - 32, 440);
+      }
+
+      let calculatedW = Math.min(availableWidth, maxAllowedByHeight, 440);
+      calculatedW = Math.max(220, Math.floor(calculatedW));
       setBoardWidth((prev) => (Math.abs(prev - calculatedW) >= 1 ? calculatedW : prev));
     };
 
