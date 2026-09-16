@@ -5,7 +5,7 @@ import Footer from "../components/Footer";
 import { 
   Users, Search, Swords, UserPlus, UserCheck, ExternalLink, 
   Crown, Heart, Send, X, CheckCircle2, Copy, Check, 
-  Mail, Sparkles, User, MapPin
+  Mail, Sparkles, User
 } from "lucide-react";
 import { safeFetchJson } from "../utils/api";
 import "./Community.css";
@@ -633,7 +633,6 @@ const Community = () => {
                 const fideRating = member.fideRating || 0;
                 const chessComRating = member.chessComRating || 0;
                 const lichessRating = member.lichessRating || 0;
-                const topRating = Math.max(fideRating, chessComRating, lichessRating);
                 const avatar = member.profileImage || getPlayerAvatarUrl(member.name, customAvatars);
 
                 // Check mutual and follows-me relationships
@@ -660,11 +659,6 @@ const Community = () => {
                           className="member-avatar-img"
                           onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                         />
-                        {topRating > 0 && (
-                          <span className="member-rating-pill">
-                            {topRating}
-                          </span>
-                        )}
                       </div>
 
                       <div className="member-header-meta">
@@ -773,10 +767,12 @@ const Community = () => {
                       </div>
 
                       <p className="member-subtitle">
-                        {member.role === 'president' ? "👑 Club President" : member.role === 'vice_president' ? "⭐ Vice President" : member.role === 'admin' ? "👑 Club Administrator & High Board" : member.role === 'oc' ? "🏆 OC Head" : member.role === 'hr' ? "🤝 HR Head" : member.role === 'pr' ? "📢 PR Head" : member.role === 'media' ? "🎨 Media Head" : member.role === 'trainer' ? "♟️ Head Trainer" : (member.major ? `${member.major} • Class of ${member.batch || '2026'}` : "Zewailian Chess Tactician")}
+                        {member.major 
+                          ? `${member.major}${member.batch ? ` • Class of ${member.batch}` : ''}` 
+                          : (member.bio ? member.bio : "Zewailian Chess Tactician")}
                       </p>
 
-                      {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && (
+                      {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && member.role === 'member' && (
                         <div className="member-club-roles-row">
                           {member.clubRoles.map((cr, cIdx) => (
                             <span key={cIdx} className="member-club-role-chip" title={`${cr.position} of ${cr.department}`}>
@@ -999,7 +995,7 @@ const Community = () => {
                   onClick={handleCloseProfileModal}
                   aria-label="Close Profile"
                 >
-                  ✕
+                  <X size={18} />
                 </button>
 
                 <div className="tactician-modal-header">
@@ -1014,11 +1010,11 @@ const Community = () => {
                   </div>
                   <div className="tactician-modal-hero-info">
                     <div className="tactician-modal-badge">
-                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 High Board Executive' : m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '♟️ Head Trainer' : '♟️ Club Member')}
+                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 High Board Executive' : m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '🎓 Head of Training' : (Array.isArray(m.clubRoles) && m.clubRoles.length > 0 ? `✨ ${m.clubRoles[0].position}` : '♟️ Club Member'))}
                     </div>
                     <h2 className="tactician-modal-name">{m.name || m.email?.split('@')[0]}</h2>
                     <p className="tactician-modal-title">
-                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 Club Administrator & High Board' : m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '♟️ Head Trainer' : (m.major ? `${m.major} Student` : 'ZC Chess Club Tactician')}
+                      {m.bio ? m.bio : 'Zewail City Chess Club Tactician'}
                     </p>
 
                     {/* Email Display with Copy */}
@@ -1039,8 +1035,7 @@ const Community = () => {
                     )}
 
                     <div className="tactician-modal-chips-row">
-                      <span className="modal-chip"><MapPin size={11} /> ZC Campus</span>
-                      {m.major && <span className="modal-chip">{m.major}</span>}
+                      {m.major && <span className="modal-chip">🎓 {m.major}</span>}
                       {m.batch && <span className="modal-chip">Class of {m.batch}</span>}
                       {isMutual && <span className="modal-chip" style={{background: 'rgba(16,185,129,0.15)', color: '#34d399'}}>🤝 Mutual</span>}
                       {!isMutual && memberFollowsMe && <span className="modal-chip" style={{background: 'rgba(56,189,248,0.15)', color: '#38bdf8'}}>Follows You</span>}
@@ -1090,8 +1085,7 @@ const Community = () => {
 
                 {/* Bio & Tactical Details */}
                 <div className="tactician-modal-section">
-                  <h4>Tactical Profile &amp; Bio</h4>
-                  <p className="tactician-modal-bio">{m.bio || "Active registered tactician of Zewail City Chess Club."}</p>
+                  <h4>Tactical Attributes &amp; Preferences</h4>
                   
                   <div className="tactician-attributes-row">
                     <div className="attribute-item">
@@ -1112,8 +1106,7 @@ const Community = () => {
                          m.role === 'trainee' ? '♟️ Club Trainee' :
                          (Array.isArray(m.clubRoles) && m.clubRoles.length > 0) ? `✨ ${m.clubRoles[0].position || 'Staff'} (${m.clubRoles[0].department || ''})` :
                          m.chessTitle ? `🎖️ ${m.chessTitle} Titleholder` :
-                         m.major ? `🎓 ${m.major} Student` :
-                         '♟️ Verified Member'}
+                         '♟️ Club Member'}
                       </span>
                     </div>
                   </div>
@@ -1130,17 +1123,25 @@ const Community = () => {
                         <Heart size={16} className={modalCheered ? "fill-heart" : ""} />
                         <span>Cheer for {(m.name || '').split(' ')[0]} ({cheerCount})</span>
                       </button>
-                      <span className="cheer-hint">Cheer on your campus friends!</span>
-                    </div>
-
-                    <div className="tactician-modal-social-row" style={{display: 'flex', gap: '8px', marginBottom: '16px'}}>
-                      <button
-                        className={`ppm-btn-follow ${isFollowing ? 'following' : ''}`}
-                        style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', borderRadius: '10px', border: 'none', fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', background: isFollowing ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.12)', color: isFollowing ? '#34d399' : '#60a5fa', transition: 'all 0.2s ease'}}
-                        onClick={(e) => handleFollowToggle(m.email, m.name, e)}
-                      >
-                        {isFollowing ? <><UserCheck size={14} /><span>Following</span></> : <><UserPlus size={14} /><span>{memberFollowsMe ? 'Follow Back' : 'Follow'}</span></>}
-                      </button>
+                      {loggedInEmail && m.email && m.email.trim().toLowerCase() !== loggedInEmail.trim().toLowerCase() && (
+                        <button
+                          className={`tactician-follow-btn ${isFollowing ? "active" : ""}`}
+                          style={{ padding: "8px 16px", borderRadius: "10px", fontSize: "0.85rem", fontWeight: 700 }}
+                          onClick={(e) => handleFollowToggle(m.email, m.name, e)}
+                        >
+                          {isFollowing ? (
+                            <>
+                              <UserCheck size={14} />
+                              <span>Following</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={14} />
+                              <span>{memberFollowsMe ? "Follow Back" : "Follow"}</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
 
                     {/* Challenge Form */}

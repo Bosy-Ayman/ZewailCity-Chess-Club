@@ -265,6 +265,10 @@
    Mobile
 ======================== */
 @media (max-width: 768px) {
+  .about-content {
+    padding: 24px 16px 48px;
+  }
+
   .about-wrapper {
     padding: 0;
   }
@@ -274,19 +278,57 @@
   }
 
   .about-section-card {
-    padding: 18px 20px;
+    padding: 18px 18px;
+    border-radius: 0 12px 12px 0;
   }
 
   .section-title {
-    font-size: 1rem;
+    font-size: 1.05rem;
+  }
+
+  .team-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
   }
 }
 
 @media (max-width: 480px) {
-  .team-grid {
-    grid-template-columns: 1fr;
+  .about-header {
+    padding: 10px 0 24px;
+    margin-bottom: 24px;
   }
+
   .title {
     font-size: 1.5rem;
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+  }
+
+  .about-section-card {
+    padding: 16px 14px;
+  }
+
+  .section-text {
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .team-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .team-member {
+    padding: 18px 14px;
+  }
+
+  .view-history-board-btn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 12px 18px;
+    min-height: 44px;
   }
 }

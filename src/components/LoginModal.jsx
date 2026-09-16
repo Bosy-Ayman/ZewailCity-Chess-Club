@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import "./LoginModal.css";
 import { safeFetchJson } from "../utils/api";
 
@@ -94,8 +95,8 @@ export default function LoginModal({ onClose }) {
   return (
     <div className="login-modal-overlay" onClick={onClose}>
       <div className="login-modal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="close-modal-x" onClick={onClose}>
-          &times;
+        <button className="modal-close-btn" onClick={onClose} aria-label="Close sign in modal">
+          <X size={18} />
         </button>
 
         <header className="login-modal-header">

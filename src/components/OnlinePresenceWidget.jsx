@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, Link } from "react-router-dom";
+import { X } from "lucide-react";
 import "./OnlinePresenceWidget.css";
 import { safeFetchJson } from "../utils/api";
 
@@ -218,7 +219,7 @@ export default function OnlinePresenceWidget() {
                 onClick={() => setIsOpen(false)}
                 aria-label="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 

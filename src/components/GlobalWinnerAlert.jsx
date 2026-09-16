@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { getPlayerAvatarUrl } from "../utils/api";
 import WinnerCelebrationModal from "./WinnerCelebrationModal";
 import "./GlobalWinnerAlert.css";
@@ -244,7 +245,7 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
             onClick={handleDismiss}
             aria-label="Dismiss winner alert"
           >
-            &times;
+            <X size={14} />
           </button>
         </div>
       </div>

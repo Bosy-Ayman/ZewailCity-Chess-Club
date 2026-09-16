@@ -1393,7 +1393,7 @@ const handleHeartbeat = async (req, res) => {
           lastSeen: now
         }
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
 
     res.json({ success: true, timestamp: now });
@@ -1883,7 +1883,7 @@ app.post('/api/users/cheer', express.json(), async (req, res) => {
     let updatedUser = await User.findOneAndUpdate(
       query,
       { $inc: { cheers: 1 } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     // If query by email failed but targetName was also provided, try targetName
@@ -1892,7 +1892,7 @@ app.post('/api/users/cheer', express.json(), async (req, res) => {
       updatedUser = await User.findOneAndUpdate(
         { name: new RegExp(`^${cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') },
         { $inc: { cheers: 1 } },
-        { new: true }
+        { returnDocument: 'after' }
       );
     }
 
@@ -3758,7 +3758,7 @@ app.put('/api/applications/:id/status', async (req, res) => {
     const updatedApp = await Application.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (!updatedApp) {
@@ -3879,7 +3879,7 @@ app.put('/api/tournaments/:id', async (req, res) => {
     const updatedTournament = await Tournament.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!updatedTournament) {
       return res.status(404).json({ error: 'Tournament not found' });

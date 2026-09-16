@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import LoginModal from "../components/LoginModal";
-import { CheckCircle2, ArrowRight, Clock, Briefcase } from "lucide-react";
+import { CheckCircle2, ArrowRight, Clock, Briefcase, X } from "lucide-react";
 
 
 export default function ClubRoles() {
@@ -298,7 +298,9 @@ export default function ClubRoles() {
       {alreadyAppliedNotice && (
         <div className="auth-prompt-overlay" onClick={() => setAlreadyAppliedNotice(null)}>
           <div className="auth-prompt-card glass-panel" onClick={(e) => e.stopPropagation()}>
-            <button className="auth-modal-close" onClick={() => setAlreadyAppliedNotice(null)}>✕</button>
+            <button className="modal-close-btn" onClick={() => setAlreadyAppliedNotice(null)} aria-label="Close modal">
+              <X size={18} />
+            </button>
             <div className="auth-prompt-header">
               <span className="auth-prompt-icon">
                 {alreadyAppliedNotice.app.status === "Accepted" ? "🎉" : alreadyAppliedNotice.app.status === "Rejected" ? "📋" : "✅"}
@@ -351,7 +353,9 @@ export default function ClubRoles() {
       {authPromptRole && (
         <div className="auth-prompt-overlay" onClick={() => setAuthPromptRole(null)}>
           <div className="auth-prompt-card glass-panel" onClick={(e) => e.stopPropagation()}>
-            <button className="auth-modal-close" onClick={() => setAuthPromptRole(null)}>✕</button>
+            <button className="modal-close-btn" onClick={() => setAuthPromptRole(null)} aria-label="Close modal">
+              <X size={18} />
+            </button>
             <div className="auth-prompt-header">
               <span className="auth-prompt-icon">🔐</span>
               <h3>Sign In or Sign Up to Apply</h3>

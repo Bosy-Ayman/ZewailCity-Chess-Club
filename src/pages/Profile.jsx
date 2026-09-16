@@ -45,6 +45,29 @@ import "./Profile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
+export const FIDE_TITLE_NAMES = {
+  GM: "Grandmaster (GM)",
+  IM: "International Master (IM)",
+  FM: "FIDE Master (FM)",
+  CM: "Candidate Master (CM)",
+  WGM: "Woman Grandmaster (WGM)",
+  WIM: "Woman International Master (WIM)",
+  WFM: "Woman FIDE Master (WFM)",
+  WCM: "Woman Candidate Master (WCM)",
+  NM: "National Master (NM)"
+};
+
+export const getValidFideTitle = (title) => {
+  if (!title) return null;
+  const clean = title.trim().toUpperCase();
+  if (FIDE_TITLE_NAMES[clean]) return FIDE_TITLE_NAMES[clean];
+  const foundKey = Object.keys(FIDE_TITLE_NAMES).find(
+    k => FIDE_TITLE_NAMES[k].toLowerCase() === title.toLowerCase().trim()
+  );
+  if (foundKey) return FIDE_TITLE_NAMES[foundKey];
+  return null;
+};
+
 export const deriveAuthorityRoleFromClubRoles = (clubRoles, fallbackRole = 'member') => {
   if (Array.isArray(clubRoles) && clubRoles.length > 0) {
     if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'President')) return 'president';
@@ -87,6 +110,7 @@ export default function Profile() {
   const isOwnProfile = (!queryEmail && !queryName) || (queryEmail && loggedInEmail && queryEmail.toLowerCase() === loggedInEmail.toLowerCase());
 
   const [activeTab, setActiveTab] = useState("overview"); // 'overview' | 'tournaments' | 'challenges' | 'settings' | 'admin'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [profile, setProfile] = useState(() => {
     if (isOwnProfile && loggedInEmail) {
@@ -191,6 +215,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
     lichessRating: 0,
     favOpening: "",
     chessTitle: "",
+    playstyle: "",
     bio: "",
     role: "member",
     clubRoles: []
@@ -209,6 +234,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
     batch: "",
     chessTitle: "",
     favOpening: "",
+    playstyle: "",
     bio: "",
     fideRating: 0,
     fideId: "",
@@ -327,6 +353,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
         lichessRating: profData.lichessRating || 0,
         favOpening: profData.favOpening || "",
         chessTitle: profData.chessTitle || "",
+        playstyle: profData.playstyle || "",
         bio: profData.bio || "",
         role: effectiveLoadedRole,
         clubRoles: Array.isArray(profData.clubRoles) ? profData.clubRoles : []
@@ -343,6 +370,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
           batch: profData.batch || "",
           chessTitle: profData.chessTitle || "",
           favOpening: profData.favOpening || "",
+          playstyle: profData.playstyle || "",
           bio: profData.bio || "",
           fideRating: profData.fideRating || 0,
           fideId: profData.fideId || "",
@@ -497,6 +525,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
         batch: settingsForm.batch,
         chessTitle: settingsForm.chessTitle,
         favOpening: settingsForm.favOpening,
+        playstyle: settingsForm.playstyle || "",
         bio: settingsForm.bio,
         fideRating: Number(settingsForm.fideRating) || 0,
         fideId: settingsForm.fideId,
@@ -848,23 +877,27 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
     // 3. Tournament Champion
     if (tournamentAchievements?.isChampion) {
-      const topWon = tournamentAchievements.wonTournaments?.[0] || "Tournament Victor";
+      const wonList = tournamentAchievements.wonTournaments || [];
+      const winCount = wonList.length;
+      const topWon = wonList[0] || "Tournament Victor";
       return {
-        value: "Champion 🏆",
-        hint: `🥇 ${topWon}`,
+        value: winCount > 1 ? `${winCount}x Champion 🏆` : "Champion 🏆",
+        hint: winCount > 1 ? `🥇 ${winCount} Titles: ${wonList.join(', ')}` : `🥇 ${topWon}`,
         badgeClass: "gold",
-        detailTitle: `🏆 Tournament Champion (${topWon})`
+        detailTitle: winCount > 1 ? `🏆 ${winCount}x Tournament Champion (${wonList.join(' • ')})` : `🏆 Tournament Champion (${topWon})`
       };
     }
 
     // 4. Tournament Podium
     if (tournamentAchievements?.isPodium) {
-      const topPodium = tournamentAchievements.podiumTournaments?.[0] || "Top 3";
+      const podList = tournamentAchievements.podiumTournaments || [];
+      const podCount = podList.length;
+      const topPodium = podList[0] || "Top 3";
       return {
-        value: "Podium 🥈",
-        hint: `🥈 ${topPodium}`,
+        value: podCount > 1 ? `${podCount}x Podium 🥈` : "Podium 🥈",
+        hint: podCount > 1 ? `🥈 ${podCount} Podiums: ${podList.join(', ')}` : `🥈 ${topPodium}`,
         badgeClass: "cyan",
-        detailTitle: `🥈 Podium Finisher (${topPodium})`
+        detailTitle: podCount > 1 ? `🥈 ${podCount}x Podium Finisher (${podList.join(' • ')})` : `🥈 Podium Finisher (${topPodium})`
       };
     }
 
@@ -1075,18 +1108,36 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                 </div>
 
                 <div className="hero-badges-wrap">
-                  {profile.chessTitle && (
-                    <span className="badge-chess-title" title={`Official FIDE Title: ${profile.chessTitle}`}>
-                      🏆 {profile.chessTitle}
+                  {getValidFideTitle(profile.chessTitle) && (
+                    <span className="badge-chess-title" title={`Official FIDE Chess Title: ${getValidFideTitle(profile.chessTitle)}`}>
+                      🏆 {profile.chessTitle.toUpperCase()}
                     </span>
                   )}
 
-                  {profile.clubRoles && profile.clubRoles.length > 0 && (
+                  {profile.clubRoles && profile.clubRoles.length > 0 ? (
                     profile.clubRoles.map((cr, idx) => (
                       <span key={idx} className="badge-club-department-role" title={`${cr.position} of ${cr.department}`}>
                         {cr.position === 'President' ? '👑' : cr.position === 'Vice President' ? '⭐' : cr.position === 'Head' ? '👑' : '✨'} {cr.position} of {cr.department}
                       </span>
                     ))
+                  ) : (
+                    profile.role && profile.role !== 'member' ? (
+                      <span className={`hero-role-badge ${profile.role}`}>
+                        {profile.role === 'president' && <>👑 Club President</>}
+                        {profile.role === 'vice_president' && <>⭐ Vice President</>}
+                        {profile.role === 'oc' && <>⚡ Head of OC</>}
+                        {profile.role === 'hr' && <>👥 Head of HR</>}
+                        {profile.role === 'pr' && <>📢 Head of PR</>}
+                        {profile.role === 'media' && <>🎨 Head of Multimedia</>}
+                        {profile.role === 'trainer' && <>🎓 Head of Training</>}
+                        {profile.role === 'trainee' && <>♟️ Dedicated Trainee</>}
+                        {profile.role === 'admin' && <>👑 High Board Executive</>}
+                      </span>
+                    ) : (
+                      <span className="hero-role-badge member">
+                        ♟️ Club Member
+                      </span>
+                    )
                   )}
 
                   {!isOwnProfile && profile.followsViewer && (
@@ -1094,31 +1145,6 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                       {isFollowing ? "✨ Mutual Tacticians" : "Follows You"}
                     </span>
                   )}
-
-                  <span className={`hero-role-badge ${profile.role || 'member'}`}>
-                    {profile.role === 'president' && <>👑 Club President</>}
-                    {profile.role === 'vice_president' && <>⭐ Vice President</>}
-                    {profile.role === 'oc' && <>⚡ Head of OC</>}
-                    {profile.role === 'hr' && <>👥 Head of HR</>}
-                    {profile.role === 'pr' && <>📢 Head of PR</>}
-                    {profile.role === 'media' && <>🎨 Head of Multimedia</>}
-                    {profile.role === 'trainer' && <>🎓 Head of Training</>}
-                    {profile.role === 'trainee' && <>♟️ Dedicated Trainee</>}
-                    {profile.role === 'admin' && <>👑 High Board Executive</>}
-                    {(!profile.role || profile.role === 'member') && (
-                      profile.chessTitle 
-                        ? <>🎖️ {profile.chessTitle}</>
-                        : tournamentAchievements.isChampion
-                        ? <>🏆 Arena Champion</>
-                        : tournamentAchievements.isPodium
-                        ? <>🥈 Podium Finisher</>
-                        : tournaments.length > 0
-                        ? <>⚔️ Tournament Contender</>
-                        : profile.major
-                        ? <>🎓 {profile.major.split(' ')[0]} Tactician</>
-                        : <>♟️ Club Contender</>
-                    )}
-                  </span>
 
                   {tournamentAchievements.isChampion && (
                     <span 
@@ -1169,7 +1195,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                 </div>
 
                 <p className="hero-bio">
-                  {profile.bio || "Passionate chess player at Zewail City of Science and Technology. Solving tactics, competing in Swiss arenas, and mastering opening theory."}
+                  {profile.bio ? `"${profile.bio}"` : (isOwnProfile ? "Click 'Edit Profile & Ratings' to add your chess motto and personal bio." : "Zewail City Chess Club tactician.")}
                 </p>
 
                 {/* Metadata Pills Strip */}
@@ -1213,13 +1239,6 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     <div className="hero-meta-item" title="Club Join Date">
                       <Clock size={14} className="meta-icon" />
                       <span>Joined {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
-                    </div>
-                  )}
-
-                  {profile.verified && (
-                    <div className="hero-meta-item verified-tag" title="Verified Zewail City Student Tactician">
-                      <CheckCircle2 size={14} className="meta-icon verified-icon" />
-                      <span>Verified Tactician</span>
                     </div>
                   )}
                 </div>
@@ -1448,70 +1467,218 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
         </section>
 
         {/* =========================================================================
-            3. DASHBOARD TABS NAVIGATION
+            3. DASHBOARD TABS NAVIGATION (2-Level Mobile Header + Desktop Tabs)
            ========================================================================= */}
-        <div className="dashboard-tabs">
-          <button 
-            type="button"
-            className={`dashboard-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            <User size={16} />
-            <span>Overview & Dossier</span>
-          </button>
-          
-          <button 
-            type="button"
-            className={`dashboard-tab-btn ${activeTab === 'tournaments' ? 'active' : ''}`}
-            onClick={() => setActiveTab('tournaments')}
-          >
-            <Trophy size={16} />
-            <span>Championships</span>
-            <span className="tab-badge-count">{tournaments.length}</span>
-          </button>
+        {(() => {
+          const profileNavItems = [
+            {
+              id: "overview",
+              label: "Overview & Dossier",
+              icon: <User size={18} />,
+              desc: "Performance metrics, rating progression, tactical achievements",
+              badge: null
+            },
+            {
+              id: "tournaments",
+              label: "Championships",
+              icon: <Trophy size={18} />,
+              desc: "Registered tournaments, standings, and match records",
+              badge: tournaments.length > 0 ? tournaments.length : null
+            },
+            {
+              id: "challenges",
+              label: "Challenges Inbox",
+              icon: <Swords size={18} />,
+              desc: "Head-to-head match challenges and duels",
+              badge: challenges.length > 0 ? challenges.length : null
+            },
+            {
+              id: "availability",
+              label: "Free Hours & Schedule",
+              icon: <Clock size={18} />,
+              desc: "Weekly campus availability, presence, and match preferences",
+              badge: availability.length > 0 ? availability.length : null
+            },
+            ...(isOwnProfile ? [{
+              id: "settings",
+              label: "Account Settings",
+              icon: <Settings size={18} />,
+              desc: "Profile preferences, avatar customization, and credentials",
+              badge: null
+            }] : []),
+            ...(isAdmin ? [{
+              id: "admin",
+              label: "Admin Controls",
+              icon: <Crown size={18} />,
+              desc: "Switch directly to administrator dashboard and tools",
+              badge: null
+            }] : [])
+          ];
 
-          <button 
-            type="button"
-            className={`dashboard-tab-btn ${activeTab === 'challenges' ? 'active' : ''}`}
-            onClick={() => setActiveTab('challenges')}
-          >
-            <Swords size={16} />
-            <span>Challenges Inbox</span>
-            {challenges.length > 0 && <span className="tab-badge-count gold">{challenges.length}</span>}
-          </button>
+          const currentProfileNav = profileNavItems.find(item => item.id === activeTab) || profileNavItems[0] || { id: activeTab, icon: <User size={18} />, label: "Profile Section" };
 
-          <button 
-            type="button"
-            className={`dashboard-tab-btn ${activeTab === 'availability' ? 'active' : ''}`}
-            onClick={() => setActiveTab('availability')}
-          >
-            <Clock size={16} />
-            <span>Free Hours &amp; Match Schedule</span>
-            {availability.length > 0 && <span className="tab-badge-count gold">{availability.length}</span>}
-          </button>
+          return (
+            <>
+              {/* Level 1: Mobile Compact Current-Section Trigger */}
+              <div className="profile-mobile-nav-wrapper">
+                <button
+                  type="button"
+                  className="profile-mobile-nav-trigger"
+                  onClick={() => setMobileMenuOpen(true)}
+                  aria-label="Open Profile Sections Menu"
+                  aria-expanded={mobileMenuOpen}
+                >
+                  <div className="profile-mobile-nav-left">
+                    <span className="profile-mobile-nav-menu-icon">☰</span>
+                    <span className="profile-mobile-nav-active-icon">{currentProfileNav.icon}</span>
+                    <div className="profile-mobile-nav-text">
+                      <span className="profile-mobile-nav-section-label">Active Section</span>
+                      <span className="profile-mobile-nav-active-title">
+                        {currentProfileNav.label}
+                        {currentProfileNav.badge !== null && currentProfileNav.badge !== undefined && (
+                          <span className="profile-mobile-nav-badge">{currentProfileNav.badge}</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="profile-mobile-nav-right">
+                    <span className="profile-mobile-nav-switch-hint">Switch</span>
+                    <span className="profile-mobile-nav-arrow">›</span>
+                  </div>
+                </button>
+              </div>
 
-          {isOwnProfile && (
-            <button 
-              type="button"
-              className={`dashboard-tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveTab('settings')}
-            >
-              <Settings size={16} />
-              <span>Account Settings</span>
-            </button>
-          )}
+              {/* Level 2: Mobile Expandable Bottom-Sheet Menu Drawer */}
+              {mobileMenuOpen && (
+                <div className="profile-mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+                  <div 
+                    className="profile-mobile-menu-drawer"
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                  >
+                    <div className="profile-mobile-menu-header">
+                      <div className="profile-mobile-menu-title-row">
+                        <span className="profile-menu-icon">♟️</span>
+                        <h3>Profile Navigation Menu</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="profile-mobile-menu-close"
+                        onClick={() => setMobileMenuOpen(false)}
+                        aria-label="Close menu"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    
+                    <p className="profile-mobile-menu-subtitle">
+                      Tap a section to navigate instantly:
+                    </p>
 
-          {isAdmin && (
-            <button 
-              type="button"
-              className={`dashboard-tab-btn admin ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => setActiveTab('admin')}
-            >
-              <Crown size={16} />
-              <span>👑 Admin Controls</span>
-            </button>
-          )}
-        </div>
+                    <div className="profile-mobile-menu-list">
+                      {profileNavItems.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`profile-mobile-menu-item ${isActive ? "active-item" : ""}`}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setMobileMenuOpen(false);
+                            }}
+                          >
+                            <div className="profile-item-status-icon">
+                              {isActive ? "✓" : ""}
+                            </div>
+                            <span className="profile-item-icon">{item.icon}</span>
+                            <div className="profile-item-content">
+                              <div className="profile-item-title-row">
+                                <span className="profile-item-title">{item.label}</span>
+                                {item.badge !== null && item.badge !== undefined && (
+                                  <span className={`profile-item-badge ${isActive ? "active-badge" : ""}`}>
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="profile-item-desc">{item.desc}</span>
+                            </div>
+                            <span className="profile-item-arrow">›</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Dashboard Tabs Navigation (>= 768px) */}
+              <div className="dashboard-tabs profile-desktop-tabs">
+                <button 
+                  type="button"
+                  className={`dashboard-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('overview')}
+                >
+                  <User size={16} />
+                  <span>Overview & Dossier</span>
+                </button>
+                
+                <button 
+                  type="button"
+                  className={`dashboard-tab-btn ${activeTab === 'tournaments' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('tournaments')}
+                >
+                  <Trophy size={16} />
+                  <span>Championships</span>
+                  <span className="tab-badge-count">{tournaments.length}</span>
+                </button>
+
+                <button 
+                  type="button"
+                  className={`dashboard-tab-btn ${activeTab === 'challenges' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('challenges')}
+                >
+                  <Swords size={16} />
+                  <span>Challenges Inbox</span>
+                  {challenges.length > 0 && <span className="tab-badge-count gold">{challenges.length}</span>}
+                </button>
+
+                <button 
+                  type="button"
+                  className={`dashboard-tab-btn ${activeTab === 'availability' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('availability')}
+                >
+                  <Clock size={16} />
+                  <span>Free Hours &amp; Match Schedule</span>
+                  {availability.length > 0 && <span className="tab-badge-count gold">{availability.length}</span>}
+                </button>
+
+                {isOwnProfile && (
+                  <button 
+                    type="button"
+                    className={`dashboard-tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('settings')}
+                  >
+                    <Settings size={16} />
+                    <span>Account Settings</span>
+                  </button>
+                )}
+
+                {isAdmin && (
+                  <button 
+                    type="button"
+                    className={`dashboard-tab-btn admin ${activeTab === 'admin' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('admin')}
+                  >
+                    <Crown size={16} />
+                    <span>👑 Admin Controls</span>
+                  </button>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* =========================================================================
             4. TAB CONTENT: OVERVIEW
@@ -1605,21 +1772,25 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
                 <div className="details-list">
                   <div className="detail-item">
-                    <span className="detail-label"><Crown size={14} /> FIDE Official Title</span>
-                    <span className="detail-val highlight-gold">{profile?.chessTitle ? `${profile.chessTitle} Titleholder` : "Club Contender (Un-titled)"}</span>
+                    <span className="detail-label"><Crown size={14} /> Official FIDE Chess Title</span>
+                    <span className="detail-val highlight-gold">
+                      {getValidFideTitle(profile?.chessTitle) ? `🏆 ${getValidFideTitle(profile.chessTitle)}` : "None / Un-titled"}
+                    </span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-label"><Compass size={14} /> Favorite Opening Repertoire</span>
                     <span className="detail-val opening-badge">
-                      ♟️ {profile?.favOpening || "Universal / Sicilian Defense"}
+                      ♟️ {profile?.favOpening || "Not specified"}
                     </span>
                   </div>
-                  <div className="detail-item">
-                    <span className="detail-label"><Flame size={14} /> Preferred Playing Style</span>
-                    <span className="detail-val playstyle-badge">
-                      ⚡ {profile?.playstyle || "Dynamic & Tactical / Universal"}
-                    </span>
-                  </div>
+                  {profile?.playstyle && (
+                    <div className="detail-item">
+                      <span className="detail-label"><Flame size={14} /> Preferred Playing Style</span>
+                      <span className="detail-val playstyle-badge">
+                        ⚡ {profile.playstyle}
+                      </span>
+                    </div>
+                  )}
                   <div className="detail-item">
                     <span className="detail-label"><Heart size={14} /> Campus Cheers Received</span>
                     <span className="detail-val cheer-count-badge">
@@ -1637,7 +1808,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   <div className="detail-item full-width">
                     <span className="detail-label"><Star size={14} /> Personal Chess Motto & Bio</span>
                     <blockquote className="bio-quote-box">
-                      "{profile?.bio || "Every chess master was once a beginner. Striving for tactical precision and strategic mastery at Zewail City."}"
+                      {profile?.bio ? `"${profile.bio}"` : (isOwnProfile ? "No personal bio set yet. You can add your chess philosophy and tournament motto in Account Settings." : "No personal bio provided.")}
                     </blockquote>
                   </div>
                 </div>
@@ -2135,18 +2306,31 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     </div>
 
                     <div className="form-group">
-                      <label><Crown size={13} /> Official Chess Title</label>
+                      <label><Crown size={13} /> Official FIDE Chess Title</label>
                       <select name="chessTitle" value={settingsForm.chessTitle} onChange={handleSettingsChange}>
-                        <option value="">None / Club Contender</option>
-                        <option value="CM">Candidate Master (CM)</option>
-                        <option value="FM">FIDE Master (FM)</option>
-                        <option value="IM">International Master (IM)</option>
+                        <option value="">None / Un-titled Contender</option>
                         <option value="GM">Grandmaster (GM)</option>
-                        <option value="WCM">Woman CM (WCM)</option>
-                        <option value="WFM">Woman FM (WFM)</option>
-                        <option value="WIM">Woman IM (WIM)</option>
-                        <option value="WGM">Woman GM (WGM)</option>
+                        <option value="IM">International Master (IM)</option>
+                        <option value="FM">FIDE Master (FM)</option>
+                        <option value="CM">Candidate Master (CM)</option>
+                        <option value="WGM">Woman Grandmaster (WGM)</option>
+                        <option value="WIM">Woman International Master (WIM)</option>
+                        <option value="WFM">Woman FIDE Master (WFM)</option>
+                        <option value="WCM">Woman Candidate Master (WCM)</option>
                         <option value="NM">National Master (NM)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label><Flame size={13} /> Preferred Playing Style</label>
+                      <select name="playstyle" value={settingsForm.playstyle || ""} onChange={handleSettingsChange}>
+                        <option value="">-- Select Your Playing Style --</option>
+                        <option value="Dynamic & Tactical">⚡ Dynamic & Tactical (Attacking & Combinations)</option>
+                        <option value="Positional & Strategic">♟️ Positional & Strategic (Long-term squeeze)</option>
+                        <option value="Universal & Balanced">✨ Universal & Balanced (Adaptable play)</option>
+                        <option value="Solid & Defensive">🛡️ Solid & Defensive (Counter-attacking)</option>
+                        <option value="Aggressive & Gambiteer">🔥 Aggressive & Gambiteer (High risk, initiative)</option>
+                        <option value="Endgame Specialist">👑 Endgame Specialist (Technical precision)</option>
                       </select>
                     </div>
 
@@ -2944,13 +3128,22 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                 <div className="admin-form-grid">
                   <div className="form-group">
                     <label>Official Chess Title</label>
-                    <input 
-                      type="text" 
-                      value={adminRoleForm.chessTitle}
+                    <select
+                      value={adminRoleForm.chessTitle || ""}
                       onChange={(e) => setAdminRoleForm(prev => ({ ...prev, chessTitle: e.target.value }))}
-                      placeholder="e.g. CM, FM, IM, GM, Campus Contender"
-                      className="admin-input"
-                    />
+                      className="admin-select"
+                    >
+                      <option value="">None / Un-titled Contender</option>
+                      <option value="GM">Grandmaster (GM)</option>
+                      <option value="IM">International Master (IM)</option>
+                      <option value="FM">FIDE Master (FM)</option>
+                      <option value="CM">Candidate Master (CM)</option>
+                      <option value="WGM">Woman Grandmaster (WGM)</option>
+                      <option value="WIM">Woman International Master (WIM)</option>
+                      <option value="WFM">Woman FIDE Master (WFM)</option>
+                      <option value="WCM">Woman Candidate Master (WCM)</option>
+                      <option value="NM">National Master (NM)</option>
+                    </select>
                   </div>
 
                   <div className="form-group">

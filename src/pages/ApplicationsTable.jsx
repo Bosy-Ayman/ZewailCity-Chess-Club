@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import './ApplicationsTable.css';
@@ -139,7 +140,8 @@ const ApplicationsTable = () => {
               </div>
             </header>
 
-            <div className="table-container">
+            {/* Desktop Table View */}
+            <div className="table-container applications-desktop-table">
               <table className="applications-table">
                 <thead>
                   <tr>
@@ -178,13 +180,56 @@ const ApplicationsTable = () => {
               </table>
             </div>
 
+            {/* Mobile Applications Cards View */}
+            <div className="applications-mobile-cards">
+              {applications.map((app) => (
+                <div key={app._id} className="app-mobile-card">
+                  <div className="app-mobile-card-header">
+                    <div className="app-mobile-applicant-info">
+                      <h3 className="app-mobile-name">{app.name}</h3>
+                      <span className="app-mobile-role-pill">{app.roleTitle}</span>
+                    </div>
+                    <span className="app-mobile-dept-badge">{app.department}</span>
+                  </div>
+
+                  <div className="app-mobile-card-grid">
+                    <div className="app-mobile-field">
+                      <span className="field-lbl">Academic Path</span>
+                      <span className="field-val">{app.major} (Batch {app.batch})</span>
+                    </div>
+                    <div className="app-mobile-field">
+                      <span className="field-lbl">Student ID</span>
+                      <span className="field-val">{app.idNumber || "—"}</span>
+                    </div>
+                    <div className="app-mobile-field">
+                      <span className="field-lbl">Email</span>
+                      <span className="field-val email-val">{app.email}</span>
+                    </div>
+                    <div className="app-mobile-field">
+                      <span className="field-lbl">Phone</span>
+                      <span className="field-val">{app.phone || "—"}</span>
+                    </div>
+                    <div className="app-mobile-field full-width">
+                      <span className="field-lbl">Submitted On</span>
+                      <span className="field-val date-val">{new Date(app.submissionDate).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <button className="app-mobile-view-btn" onClick={() => openModal(app.roleSpecificData)}>
+                    <span>View Role Details & Answers</span>
+                    <span style={{ fontSize: "1.1rem" }}>➔</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
             {modalOpen && (
               <div className="modal-overlay" onClick={closeModal}>
                 <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                   <div className="modal-header">
                     <h2>Role Specific Data</h2>
-                    <button className="modal-close" onClick={closeModal}>
-                      ✕
+                    <button className="modal-close-btn" onClick={closeModal} aria-label="Close modal">
+                      <X size={18} />
                     </button>
                   </div>
                   <div className="modal-body">

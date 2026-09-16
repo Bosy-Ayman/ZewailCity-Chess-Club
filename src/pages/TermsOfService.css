@@ -93,11 +93,44 @@
 }
 
 @media (max-width: 600px) {
+  .terms-container {
+    padding: 30px 16px 60px;
+  }
+
   .terms-header h1 {
-    font-size: 2rem;
+    font-size: 1.85rem;
   }
   
   .terms-content {
-    padding: 24px;
+    padding: 20px 16px;
+    border-radius: 12px;
+  }
+
+  .terms-content h2 {
+    font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .terms-container {
+    padding: 20px 12px 40px;
+  }
+
+  .terms-header {
+    margin-bottom: 24px;
+  }
+
+  .terms-header h1 {
+    font-size: 1.55rem;
+  }
+
+  .terms-content {
+    padding: 16px 12px;
+  }
+
+  .terms-content p,
+  .terms-content ul {
+    font-size: 0.88rem;
+    line-height: 1.6;
   }
 }

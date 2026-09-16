@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { X } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { findRegisteredUserForHistoricalPlayer } from "../utils/tournamentWinners";
@@ -52,6 +53,7 @@ export default function EventHistory() {
   const [pastEvents, setPastEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("events"); // "events", "halloffame", or "highboard"
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all"); // "all", "tournament", "exhibition", "training", "online"
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEventModal, setSelectedEventModal] = useState(null);
@@ -781,7 +783,7 @@ export default function EventHistory() {
       silver: {
         name: "Haneen Yasser",
         stats: "🏅 4th (Nile) & 6th (AAST) • High Board",
-        badge: "Inter-Uni Double Finalist & Multimedia Head",
+        badge: "Inter-Uni Double Finalist",
         avatar: "/Winners/HaneenYasser.png"
       },
       bronze: {
@@ -795,7 +797,7 @@ export default function EventHistory() {
     const winnersList = [
       { name: "Abdelrahman Mohamed", role: "Grand Champion & Former VP", desc: "🥇 KQ IV 2026 • 🥇 Esports 2026 • 🥇 Ramadan 2025 | 🥈 Fall KO 2025 • 🥈 Teams (Gambling)", image: "/Winners/AbdelrahmanMohamed.png", trophies: "3x 🥇 • 2x 🥈 • 0x 🥉", category: "boys" },
       { name: "Bosy Ayman", role: "President (24-26) & Inter-Uni Champion", desc: "🥇 1st Place AAST University Championship (Girls) • 🥇 1st Place Nile University Championship (Girls)", image: "/Winners/BosyAyman.png", trophies: "2x 🥇 • 0x 🥈 • 0x 🥉", category: "girls" },
-      { name: "Haneen Yasser", role: "Head of Multimedia (26-27) & Inter-Uni Finalist", desc: "🏅 4th Place Nile University Championship (Girls) • 🏅 6th Place AAST University Championship (Girls)", image: "/Winners/HaneenYasser.png", trophies: "🏅 4th Place (Nile) • 🏅 6th Place (AAST)", category: "girls" },
+      { name: "Haneen Yasser", role: "Inter-Uni Double Finalist", desc: "🏅 4th Place Nile University Championship (Girls) • 🏅 6th Place AAST University Championship (Girls)", image: "/Winners/HaneenYasser.png", trophies: "🏅 4th Place (Nile) • 🏅 6th Place (AAST)", category: "girls" },
       { name: "Salma Ashraf", role: "Inter-Uni Finalist (Girls)", desc: "🏅 4th Place AAST University Championship (Girls)", image: "/Winners/SalmaAshraf.jpg", trophies: "🏅 4th Place Inter-Uni Finalist (AAST)", category: "girls" },
       { name: "Ahmed Elkodariy", role: "President (26-27) & Campus Champion", desc: "🥇 Fall 2025 Knockout Champion • 🥇 Teams Championship (Knights)", image: "/Winners/AhmedElkodariy.PNG", trophies: "2x 🥇 • 0x 🥈 • 0x 🥉", category: "boys" },
       { name: "Mohamed Ezz", role: "King's Quest Multi-Champion", desc: "🥇 King's Quest I Champion • 🥇 King's Quest II Champion", image: "/Winners/MohamedEzz.jpg", trophies: "2x 🥇 • 0x 🥈 • 0x 🥉", category: "boys" },
@@ -1071,30 +1073,157 @@ export default function EventHistory() {
           </div>
         </section>
 
-        {/* Tab Navigation */}
-        <nav className="history-nav-tabs" aria-label="History Categories">
-          <button
-            className={`history-tab-btn ${activeTab === "events" ? "active" : ""}`}
-            onClick={() => setActiveTab("events")}
-          >
-            <span className="tab-icon">🏆</span>
-            <span className="tab-text">Tournament Timeline</span>
-          </button>
-          <button
-            className={`history-tab-btn ${activeTab === "halloffame" ? "active" : ""}`}
-            onClick={() => setActiveTab("halloffame")}
-          >
-            <span className="tab-icon">🥇</span>
-            <span className="tab-text">Hall of Fame & Winners</span>
-          </button>
-          <button
-            className={`history-tab-btn ${activeTab === "highboard" ? "active" : ""}`}
-            onClick={() => setActiveTab("highboard")}
-          >
-            <span className="tab-icon">👑</span>
-            <span className="tab-text">High Board History</span>
-          </button>
-        </nav>
+        {/* 📱 2-Level Mobile History Navigation + Desktop Tabs */}
+        {(() => {
+          const historyNavItems = [
+            {
+              id: "events",
+              label: "Tournament Timeline",
+              icon: "🏆",
+              desc: "Chronological milestone events, archives, and past tournaments",
+              badge: pastEvents.length > 0 ? pastEvents.length : null
+            },
+            {
+              id: "halloffame",
+              label: "Hall of Fame & Winners",
+              icon: "🥇",
+              desc: "All-time campus champions, tournament podiums, and winners gallery",
+              badge: null
+            },
+            {
+              id: "highboard",
+              label: "High Board History",
+              icon: "👑",
+              desc: "Club executive leadership, presidents, and committee heads",
+              badge: null
+            }
+          ];
+
+          const currentNav = historyNavItems.find(item => item.id === activeTab) || historyNavItems[0];
+
+          return (
+            <>
+              {/* Level 1: Compact Header Trigger */}
+              <div className="history-mobile-nav-wrapper">
+                <button
+                  type="button"
+                  className="history-mobile-nav-trigger"
+                  onClick={() => setMobileMenuOpen(true)}
+                  aria-label="Open History Sections Menu"
+                  aria-expanded={mobileMenuOpen}
+                >
+                  <div className="history-mobile-nav-left">
+                    <span className="history-mobile-nav-menu-icon">☰</span>
+                    <span className="history-mobile-nav-active-icon">{currentNav.icon}</span>
+                    <div className="history-mobile-nav-text">
+                      <span className="history-mobile-nav-section-label">Active Chronicle</span>
+                      <span className="history-mobile-nav-active-title">
+                        {currentNav.label}
+                        {currentNav.badge !== null && currentNav.badge !== undefined && (
+                          <span className="history-mobile-nav-badge">{currentNav.badge}</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="history-mobile-nav-right">
+                    <span className="history-mobile-nav-switch-hint">Switch</span>
+                    <span className="history-mobile-nav-arrow">›</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Level 2: Mobile Bottom-Sheet Drawer */}
+              {mobileMenuOpen && (
+                <div className="history-mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+                  <div 
+                    className="history-mobile-menu-drawer"
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                  >
+                    <div className="history-mobile-menu-header">
+                      <div className="history-mobile-menu-title-row">
+                        <span className="history-menu-icon">📜</span>
+                        <h3>History & Legacy Archives</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="history-mobile-menu-close"
+                        onClick={() => setMobileMenuOpen(false)}
+                        aria-label="Close menu"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    
+                    <p className="history-mobile-menu-subtitle">
+                      Select a legacy archive to explore:
+                    </p>
+
+                    <div className="history-mobile-menu-list">
+                      {historyNavItems.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`history-mobile-menu-item ${isActive ? "active-item" : ""}`}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setMobileMenuOpen(false);
+                            }}
+                          >
+                            <div className="history-item-status-icon">
+                              {isActive ? "✓" : ""}
+                            </div>
+                            <span className="history-item-icon">{item.icon}</span>
+                            <div className="history-item-content">
+                              <div className="history-item-title-row">
+                                <span className="history-item-title">{item.label}</span>
+                                {item.badge !== null && item.badge !== undefined && (
+                                  <span className={`history-item-badge ${isActive ? "active-badge" : ""}`}>
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="history-item-desc">{item.desc}</span>
+                            </div>
+                            <span className="history-item-arrow">›</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Tabs (>= 768px) */}
+              <nav className="history-nav-tabs history-desktop-nav-tabs" aria-label="History Categories">
+                <button
+                  className={`history-tab-btn ${activeTab === "events" ? "active" : ""}`}
+                  onClick={() => setActiveTab("events")}
+                >
+                  <span className="tab-icon">🏆</span>
+                  <span className="tab-text">Tournament Timeline</span>
+                </button>
+                <button
+                  className={`history-tab-btn ${activeTab === "halloffame" ? "active" : ""}`}
+                  onClick={() => setActiveTab("halloffame")}
+                >
+                  <span className="tab-icon">🥇</span>
+                  <span className="tab-text">Hall of Fame & Winners</span>
+                </button>
+                <button
+                  className={`history-tab-btn ${activeTab === "highboard" ? "active" : ""}`}
+                  onClick={() => setActiveTab("highboard")}
+                >
+                  <span className="tab-icon">👑</span>
+                  <span className="tab-text">High Board History</span>
+                </button>
+              </nav>
+            </>
+          );
+        })()}
 
         {/* ==============================
             TAB 1: TOURNAMENTS & TIMELINE
@@ -1381,12 +1510,14 @@ export default function EventHistory() {
                     <div className="podium-place silver" onClick={() => openPlayerModal(girlsPodium.silver.name, { avatar: girlsPodium.silver.avatar, role: girlsPodium.silver.badge })} style={{ cursor: "pointer" }}>
                       <div className="podium-rank-ribbon">2nd Place</div>
                       <div className="podium-avatar-wrapper silver-border">
-                        <img
-                          src={girlsPodium.silver.avatar}
-                          alt={girlsPodium.silver.name}
-                          className="podium-avatar"
-                          onError={handleImageError}
-                        />
+                        <div className="podium-avatar-inner">
+                          <img
+                            src={girlsPodium.silver.avatar}
+                            alt={girlsPodium.silver.name}
+                            className="podium-avatar"
+                            onError={handleImageError}
+                          />
+                        </div>
                         <span className="podium-medal">🥈</span>
                       </div>
                       <h3 className="podium-winner-name">{girlsPodium.silver.name}</h3>
@@ -1401,12 +1532,14 @@ export default function EventHistory() {
                       </div>
                       <div className="podium-rank-ribbon gold-ribbon">Grand Champion</div>
                       <div className="podium-avatar-wrapper gold-border">
-                        <img
-                          src={girlsPodium.gold.avatar}
-                          alt={girlsPodium.gold.name}
-                          className="podium-avatar"
-                          onError={handleImageError}
-                        />
+                        <div className="podium-avatar-inner">
+                          <img
+                            src={girlsPodium.gold.avatar}
+                            alt={girlsPodium.gold.name}
+                            className="podium-avatar"
+                            onError={handleImageError}
+                          />
+                        </div>
                         <span className="podium-medal gold-medal">🥇</span>
                       </div>
                       <h3 className="podium-winner-name gold-name">{girlsPodium.gold.name}</h3>
@@ -1418,12 +1551,14 @@ export default function EventHistory() {
                     <div className="podium-place bronze" onClick={() => openPlayerModal(girlsPodium.bronze.name, { avatar: girlsPodium.bronze.avatar, role: girlsPodium.bronze.badge })} style={{ cursor: "pointer" }}>
                       <div className="podium-rank-ribbon">3rd Place</div>
                       <div className="podium-avatar-wrapper bronze-border">
-                        <img
-                          src={girlsPodium.bronze.avatar}
-                          alt={girlsPodium.bronze.name}
-                          className="podium-avatar"
-                          onError={handleImageError}
-                        />
+                        <div className="podium-avatar-inner">
+                          <img
+                            src={girlsPodium.bronze.avatar}
+                            alt={girlsPodium.bronze.name}
+                            className="podium-avatar"
+                            onError={handleImageError}
+                          />
+                        </div>
                         <span className="podium-medal">🥉</span>
                       </div>
                       <h3 className="podium-winner-name">{girlsPodium.bronze.name}</h3>
@@ -1497,12 +1632,14 @@ export default function EventHistory() {
                       </div>
                       <div className="podium-rank-ribbon gold-ribbon">Grand Champion</div>
                       <div className="podium-avatar-wrapper gold-border">
-                        <img
-                          src={boysPodium.gold.avatar}
-                          alt={boysPodium.gold.name}
-                          className="podium-avatar"
-                          onError={handleImageError}
-                        />
+                        <div className="podium-avatar-inner">
+                          <img
+                            src={boysPodium.gold.avatar}
+                            alt={boysPodium.gold.name}
+                            className="podium-avatar"
+                            onError={handleImageError}
+                          />
+                        </div>
                         <span className="podium-medal gold-medal">🥇</span>
                       </div>
                       <h3 className="podium-winner-name gold-name">{boysPodium.gold.name}</h3>
@@ -1514,12 +1651,14 @@ export default function EventHistory() {
                     <div className="podium-place bronze" onClick={() => openPlayerModal(boysPodium.bronze.name, { avatar: boysPodium.bronze.avatar, role: boysPodium.bronze.badge })} style={{ cursor: "pointer" }}>
                       <div className="podium-rank-ribbon">3rd Place</div>
                       <div className="podium-avatar-wrapper bronze-border">
-                        <img
-                          src={boysPodium.bronze.avatar}
-                          alt={boysPodium.bronze.name}
-                          className="podium-avatar"
-                          onError={handleImageError}
-                        />
+                        <div className="podium-avatar-inner">
+                          <img
+                            src={boysPodium.bronze.avatar}
+                            alt={boysPodium.bronze.name}
+                            className="podium-avatar"
+                            onError={handleImageError}
+                          />
+                        </div>
                         <span className="podium-medal">🥉</span>
                       </div>
                       <h3 className="podium-winner-name">{boysPodium.bronze.name}</h3>
@@ -1687,7 +1826,7 @@ export default function EventHistory() {
                 onClick={() => setSelectedEventModal(null)}
                 aria-label="Close modal"
               >
-                ✕
+                <X size={18} />
               </button>
 
               {selectedEventModal.image && (
@@ -1962,7 +2101,7 @@ export default function EventHistory() {
                 onClick={() => setSelectedPlayerModal(null)}
                 aria-label="Close modal"
               >
-                ✕
+                <X size={18} />
               </button>
 
               <div className="trading-card-inner">

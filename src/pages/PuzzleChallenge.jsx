@@ -25,6 +25,7 @@ export default function PuzzleChallenge() {
   const [solutionPuzzleIdx, setSolutionPuzzleIdx] = useState(0);
   const [solutionMoveStep, setSolutionMoveStep] = useState(0);
   const [solutionsModalTab, setSolutionsModalTab] = useState("solutions"); // 'solutions' | 'standings' | 'roster'
+  const [modalMenuOpen, setModalMenuOpen] = useState(false);
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
   const [celebrationTournament, setCelebrationTournament] = useState(null);
 
@@ -1689,32 +1690,159 @@ export default function PuzzleChallenge() {
               );
             })()}
 
-            {/* Modal Tabs Switcher */}
-            <div className="solutions-tabs-nav">
-              <button
-                type="button"
-                className={`tab-btn ${solutionsModalTab === "solutions" ? "active" : ""}`}
-                onClick={() => setSolutionsModalTab("solutions")}
-              >
-                {isTournamentClosed(liveTournament)
-                  ? `🧩 Puzzle Solutions (${liveTournament.puzzles?.length || 0})`
-                  : "🔒 Solutions (Locked)"}
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${solutionsModalTab === "standings" ? "active" : ""}`}
-                onClick={() => setSolutionsModalTab("standings")}
-              >
-                📊 Overall Standings ({getTournamentStandings(liveTournament).length})
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${solutionsModalTab === "roster" ? "active" : ""}`}
-                onClick={() => setSolutionsModalTab("roster")}
-              >
-                👥 Registered Roster ({liveTournament.participants?.length || 0})
-              </button>
-            </div>
+            {/* 📱 2-Level Mobile Modal Navigation + Desktop Tabs Switcher */}
+            {(() => {
+              const modalNavItems = [
+                {
+                  id: "solutions",
+                  label: isTournamentClosed(liveTournament) ? "Puzzle Solutions" : "Solutions (Locked)",
+                  icon: isTournamentClosed(liveTournament) ? "🧩" : "🔒",
+                  desc: "Step-by-step interactive move sequences and tactical checkmates",
+                  badge: liveTournament.puzzles?.length || 0
+                },
+                {
+                  id: "standings",
+                  label: "Overall Standings",
+                  icon: "📊",
+                  desc: "Tactician leaderboard, cleared puzzle counts, and total scores",
+                  badge: getTournamentStandings(liveTournament).length
+                },
+                {
+                  id: "roster",
+                  label: "Registered Roster",
+                  icon: "👥",
+                  desc: "Active participants and registered campus tacticians",
+                  badge: liveTournament.participants?.length || 0
+                }
+              ];
+
+              const currentModalNav = modalNavItems.find(item => item.id === solutionsModalTab) || modalNavItems[0];
+
+              return (
+                <>
+                  {/* Level 1: Mobile Compact Header Trigger inside modal */}
+                  <div className="modal-tab-mobile-nav-wrapper">
+                    <button
+                      type="button"
+                      className="modal-tab-mobile-nav-trigger"
+                      onClick={() => setModalMenuOpen(true)}
+                      aria-label="Open Arena Tabs Menu"
+                      aria-expanded={modalMenuOpen}
+                    >
+                      <div className="modal-tab-mobile-nav-left">
+                        <span className="modal-tab-mobile-nav-menu-icon">☰</span>
+                        <span className="modal-tab-mobile-nav-active-icon">{currentModalNav.icon}</span>
+                        <div className="modal-tab-mobile-nav-text">
+                          <span className="modal-tab-mobile-nav-section-label">Active Tab</span>
+                          <span className="modal-tab-mobile-nav-active-title">
+                            {currentModalNav.label}
+                            {currentModalNav.badge !== null && currentModalNav.badge !== undefined && (
+                              <span className="modal-tab-mobile-nav-badge">{currentModalNav.badge}</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="modal-tab-mobile-nav-right">
+                        <span className="modal-tab-mobile-nav-switch-hint">Switch</span>
+                        <span className="modal-tab-mobile-nav-arrow">›</span>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Level 2: Mobile Expandable Bottom-Sheet Drawer for Modal */}
+                  {modalMenuOpen && (
+                    <div className="modal-tab-mobile-menu-overlay" onClick={() => setModalMenuOpen(false)}>
+                      <div 
+                        className="modal-tab-mobile-menu-drawer"
+                        onClick={(e) => e.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                      >
+                        <div className="modal-tab-mobile-menu-header">
+                          <div className="modal-tab-mobile-menu-title-row">
+                            <span className="modal-tab-menu-icon">♟️</span>
+                            <h3>Tactics Arena Views</h3>
+                          </div>
+                          <button
+                            type="button"
+                            className="modal-tab-mobile-menu-close"
+                            onClick={() => setModalMenuOpen(false)}
+                            aria-label="Close menu"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        
+                        <p className="modal-tab-mobile-menu-subtitle">
+                          Select an arena view to display:
+                        </p>
+
+                        <div className="modal-tab-mobile-menu-list">
+                          {modalNavItems.map((item) => {
+                            const isActive = solutionsModalTab === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className={`modal-tab-mobile-menu-item ${isActive ? "active-item" : ""}`}
+                                onClick={() => {
+                                  setSolutionsModalTab(item.id);
+                                  setModalMenuOpen(false);
+                                }}
+                              >
+                                <div className="modal-tab-item-status-icon">
+                                  {isActive ? "✓" : ""}
+                                </div>
+                                <span className="modal-tab-item-icon">{item.icon}</span>
+                                <div className="modal-tab-item-content">
+                                  <div className="modal-tab-item-title-row">
+                                    <span className="modal-tab-item-title">{item.label}</span>
+                                    {item.badge !== null && item.badge !== undefined && (
+                                      <span className={`modal-tab-item-badge ${isActive ? "active-badge" : ""}`}>
+                                        {item.badge}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="modal-tab-item-desc">{item.desc}</span>
+                                </div>
+                                <span className="modal-tab-item-arrow">›</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desktop Modal Tabs Switcher (>= 768px) */}
+                  <div className="solutions-tabs-nav solutions-desktop-tabs-nav">
+                    <button
+                      type="button"
+                      className={`tab-btn ${solutionsModalTab === "solutions" ? "active" : ""}`}
+                      onClick={() => setSolutionsModalTab("solutions")}
+                    >
+                      {isTournamentClosed(liveTournament)
+                        ? `🧩 Puzzle Solutions (${liveTournament.puzzles?.length || 0})`
+                        : "🔒 Solutions (Locked)"}
+                    </button>
+                    <button
+                      type="button"
+                      className={`tab-btn ${solutionsModalTab === "standings" ? "active" : ""}`}
+                      onClick={() => setSolutionsModalTab("standings")}
+                    >
+                      📊 Overall Standings ({getTournamentStandings(liveTournament).length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`tab-btn ${solutionsModalTab === "roster" ? "active" : ""}`}
+                      onClick={() => setSolutionsModalTab("roster")}
+                    >
+                      👥 Registered Roster ({liveTournament.participants?.length || 0})
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
 
             {/* TAB 1: INTERACTIVE PUZZLE SOLUTIONS */}
             {solutionsModalTab === "solutions" && (

@@ -1090,3 +1090,91 @@
     padding: 0 2px;
   }
 }
+
+/* ──────────────────────────────────────────────── */
+/* ── RESPONSIVE — SMALL MOBILE (≤ 480px)       ── */
+/* ──────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .challonge-wrapper {
+    padding: 14px 10px;
+    margin: 12px 0;
+    border-radius: 12px;
+  }
+
+  .challonge-tournament-name {
+    font-size: 1.2rem;
+  }
+
+  /* Hide zoom percentage on very small screens */
+  .zoom-percentage {
+    display: none;
+  }
+
+  /* Compact zoom controls */
+  .zoom-controls {
+    gap: 4px;
+    padding: 3px 6px;
+  }
+
+  .zoom-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 0.9rem;
+  }
+
+  .zoom-btn.reset {
+    padding: 0 8px;
+    font-size: 0.7rem;
+  }
+
+  /* Bracket tab group: full width */
+  .bracket-tab-group {
+    width: 100%;
+  }
+
+  .bracket-tab-btn {
+    flex: 1;
+    text-align: center;
+    padding: 7px 8px;
+    font-size: 0.76rem;
+  }
+
+  /* Canvas area: shorter minimum height on phones */
+  .bracket-canvas-container {
+    min-height: 280px;
+    padding: 6px 4px 16px;
+  }
+
+  /* Match modal: full-width on tiny screens */
+  .match-modal-card {
+    padding: 14px 10px;
+    border-radius: 12px;
+  }
+
+  .match-modal-vs-box {
+    gap: 4px;
+  }
+
+  .modal-player-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .modal-player-name {
+    font-size: 0.78rem;
+  }
+
+  .modal-score-big {
+    font-size: 1.1rem;
+  }
+
+  /* Controls: wrap tightly */
+  .challonge-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .round-jump-bar {
+    padding: 6px 10px;
+  }
+}

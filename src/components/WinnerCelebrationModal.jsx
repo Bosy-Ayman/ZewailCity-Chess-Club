@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Confetti from "react-confetti";
+import { X } from "lucide-react";
 import { chessAudio } from "../utils/chessAudio";
 import { getPlayerAvatarUrl } from "../utils/api";
 import "./WinnerCelebrationModal.css";
@@ -103,11 +104,11 @@ export default function WinnerCelebrationModal({
         aria-modal="true"
       >
         <button
-          className="winner-celebration-close"
+          className="modal-close-btn"
           onClick={onClose}
           aria-label="Close celebration modal"
         >
-          &times;
+          <X size={18} />
         </button>
 
         {/* Format Badge */}

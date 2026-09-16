@@ -930,3 +930,41 @@ tbody tr:hover {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ==========================================================================
+   SUPPLEMENTAL MOBILE RESPONSIVE — TOURNAMENTS PAGE
+   ========================================================================== */
+
+/* Ensure tournament table always scrolls horizontally on mobile */
+.responsive-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+}
+
+@media (max-width: 480px) {
+  /* Filter/search row: stack vertically */
+  .tournaments-filters-row {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  /* Card footer: stack buttons */
+  .t-card-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .t-btn-details,
+  .t-btn-join,
+  .t-btn-joined {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .t-card-meta-row {
+    grid-template-columns: 1fr;
+  }
+}

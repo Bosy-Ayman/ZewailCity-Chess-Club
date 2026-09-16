@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPickerToSchedule } from "../components/ChallongeBracket";
@@ -719,7 +720,7 @@ const isBlackWinner = (result) => {
       major: profileFromDb.major || extra.major || standing?.major || "Zewail City Tactician",
       batch: profileFromDb.batch || "ZC '25",
       rating: profileFromDb.fideRating || extra.rating || standing?.rating || 1500,
-      chessTitle: profileFromDb.chessTitle || (standing && standing.wins >= 2 ? "Candidate Master" : "Active Competitor"),
+      chessTitle: profileFromDb.chessTitle || "",
       favOpening: profileFromDb.favOpening || "Sicilian Defense / Queen's Gambit",
       bio: profileFromDb.bio || "Active tournament tactician competing for Zewail City honors.",
       standing: standing || null
@@ -1986,8 +1987,12 @@ const isBlackWinner = (result) => {
       {playerModalOpen && (
         <div className="modal-overlay" onClick={() => setPlayerModalOpen(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setPlayerModalOpen(false)}>
-              &times;
+            <button 
+              className="modal-close-btn" 
+              onClick={() => setPlayerModalOpen(false)}
+              aria-label="Close add participant modal"
+            >
+              <X size={18} />
             </button>
             <h3 className="modal-title">Add Participant</h3>
             <form onSubmit={handleAddPlayerSubmit} className="modal-form">
@@ -2068,8 +2073,12 @@ const isBlackWinner = (result) => {
       {matchModalOpen && (
         <div className="modal-overlay" onClick={() => setMatchModalOpen(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="close-btn" onClick={() => setMatchModalOpen(false)}>
-              &times;
+            <button 
+              className="modal-close-btn" 
+              onClick={() => setMatchModalOpen(false)}
+              aria-label="Close match result modal"
+            >
+              <X size={18} />
             </button>
             <h3 className="modal-title">Record Match Result</h3>
             <form onSubmit={handleAddMatchSubmit} className="modal-form">
@@ -2150,8 +2159,12 @@ const isBlackWinner = (result) => {
       {editModalOpen && (
         <div className="modal-overlay" onClick={() => setEditModalOpen(false)}>
           <div className="modal-card edit-tournament-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
-            <button className="close-btn" onClick={() => setEditModalOpen(false)}>
-              &times;
+            <button 
+              className="modal-close-btn" 
+              onClick={() => setEditModalOpen(false)}
+              aria-label="Close edit tournament modal"
+            >
+              <X size={18} />
             </button>
             <h3 className="modal-title" style={{ color: "#f3c144" }}>⚙️ Manage Tournament Information</h3>
             <p style={{ color: "#b5afa1", fontSize: "0.84rem", marginTop: "-8px", marginBottom: "18px" }}>
@@ -2368,10 +2381,11 @@ const isBlackWinner = (result) => {
               </div>
               <button
                 type="button"
+                className="modal-close-btn"
                 onClick={() => setScheduleModalOpen(false)}
-                style={{ background: "transparent", border: "none", color: "#888", fontSize: "1.4rem", cursor: "pointer", lineHeight: 1 }}
+                aria-label="Close schedule modal"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -2799,7 +2813,9 @@ const isBlackWinner = (result) => {
       {selectedPlayerModal && (
         <div className="player-modal-overlay" onClick={() => setSelectedPlayerModal(null)}>
           <div className="player-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
-            <button className="player-modal-close" onClick={() => setSelectedPlayerModal(null)}>✕</button>
+            <button className="modal-close-btn" onClick={() => setSelectedPlayerModal(null)} aria-label="Close player profile modal">
+              <X size={18} />
+            </button>
             
             <div className="player-modal-header">
               <div className="player-modal-avatar-box">

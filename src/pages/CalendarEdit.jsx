@@ -2,6 +2,7 @@ import "./CalendarEdit.css";
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 
@@ -189,12 +190,13 @@ export default function CalendarEdit() {
         <div className="day-details-overlay" onClick={() => setSelectedDate(null)}>
             <div className="day-details" onClick={e => e.stopPropagation()}>
             
-            {/* Top-right X button */}
+            {/* Unified Top-right X button */}
             <button 
-                className="top-right-close" 
+                className="modal-close-btn" 
                 onClick={() => setSelectedDate(null)}
+                aria-label="Close modal"
             >
-                ×
+                <X size={18} />
             </button>
 
             <h3>

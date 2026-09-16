@@ -1,6 +1,7 @@
 import "./Calendar.css";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { X, Calendar as CalendarIcon, Clock, MapPin, Trophy, Swords, ArrowRight } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { FALL_2025_TOURNAMENT } from "../utils/knockoutHistoricalData";
@@ -47,51 +48,81 @@ function getMatchRoundLabel(round, bracket, isDoubleElim = true) {
  * Helper to parse scores and winners from match results
  */
 function parseScoreDetails(result, white, black) {
-  if (!result || result === "Pending" || result === "—" || result === "-") {
+  if (!result || result === "Pending" || result === "—" || result === "-" || result === "TBD") {
     return {
       whiteScore: "—",
       blackScore: "—",
       isCompleted: false,
       winner: null,
-      resultText: "Pending / Upcoming"
+      resultText: "Upcoming Match"
     };
   }
 
-  const clean = String(result).replace(/\s+/g, "");
-  if (clean === "1-0") {
-    return {
-      whiteScore: "1",
-      blackScore: "0",
-      isCompleted: true,
-      winner: white,
-      resultText: "1 - 0"
-    };
+  const str = String(result).trim();
+  const lower = str.toLowerCase();
+
+  // Check Armageddon or playoff results: e.g. "1-1 (Armageddon: White Wins)" or "Armageddon White"
+  const isArmageddonWhite = lower.includes("white win") || (lower.includes("armageddon") && lower.includes("white"));
+  const isArmageddonBlack = lower.includes("black win") || (lower.includes("armageddon") && lower.includes("black"));
+
+  // Check for score patterns like "1-0", "0-1", "1/2-1/2", "1.5-0.5", "2-1", "1-1"
+  const scoreMatch = str.match(/(\d+(?:\.5|½|\/2)?)\s*[-:]\s*(\d+(?:\.5|½|\/2)?)/);
+
+  let wScore = "—";
+  let bScore = "—";
+  let winner = null;
+
+  if (scoreMatch) {
+    const s1Raw = scoreMatch[1].replace("/2", "½");
+    const s2Raw = scoreMatch[2].replace("/2", "½");
+    wScore = s1Raw === "0.5" ? "½" : s1Raw;
+    bScore = s2Raw === "0.5" ? "½" : s2Raw;
+
+    const num1 = parseFloat(scoreMatch[1].replace("½", ".5").replace("/2", ".5"));
+    const num2 = parseFloat(scoreMatch[2].replace("½", ".5").replace("/2", ".5"));
+
+    if (num1 > num2) {
+      winner = white;
+    } else if (num2 > num1) {
+      winner = black;
+    } else {
+      // Tie score like 1-1, check Armageddon / tiebreak text
+      if (isArmageddonWhite) {
+        winner = white;
+      } else if (isArmageddonBlack) {
+        winner = black;
+      } else {
+        winner = null;
+      }
+    }
+  } else if (lower.includes("white win") || lower === "1-0") {
+    wScore = "1";
+    bScore = "0";
+    winner = white;
+  } else if (lower.includes("black win") || lower === "0-1") {
+    wScore = "0";
+    bScore = "1";
+    winner = black;
+  } else if (lower.includes("draw") || lower.includes("½")) {
+    wScore = "½";
+    bScore = "½";
+    winner = null;
+  } else {
+    wScore = str.length <= 4 ? str : "✓";
+    bScore = str.length <= 4 ? "" : "—";
+    winner = null;
   }
-  if (clean === "0-1") {
-    return {
-      whiteScore: "0",
-      blackScore: "1",
-      isCompleted: true,
-      winner: black,
-      resultText: "0 - 1"
-    };
-  }
-  if (clean === "1/2-1/2" || clean === "½-½" || clean.toLowerCase() === "draw") {
-    return {
-      whiteScore: "½",
-      blackScore: "½",
-      isCompleted: true,
-      winner: null,
-      resultText: "½ - ½ (Draw)"
-    };
-  }
+
+  // Ensure digits are never abnormally long strings
+  if (String(wScore).length > 4) wScore = String(wScore).slice(0, 3);
+  if (String(bScore).length > 4) bScore = String(bScore).slice(0, 3);
 
   return {
-    whiteScore: result,
-    blackScore: "",
+    whiteScore: wScore,
+    blackScore: bScore,
     isCompleted: true,
-    winner: null,
-    resultText: result
+    winner,
+    resultText: str
   };
 }
 
@@ -425,17 +456,33 @@ export default function Calendar() {
               className="day-details"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Unified Modal Close Button */}
+              <button 
+                className="modal-close-btn" 
+                onClick={() => setSelectedDate(null)}
+                aria-label="Close daily events modal"
+              >
+                <X size={18} />
+              </button>
+
               <div className="day-details-header">
-                <h3>
-                  📅 Events on{" "}
-                  {new Date(selectedDate).toLocaleDateString("en-US", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </h3>
-                <span className="day-details-count">{selectedEvents.length} {selectedEvents.length === 1 ? "Event" : "Events"}</span>
+                <div className="day-details-header-title-wrap">
+                  <div className="day-details-badge">
+                    <CalendarIcon size={13} />
+                    <span>DAILY SCHEDULE</span>
+                  </div>
+                  <h3>
+                    {new Date(selectedDate).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </h3>
+                </div>
+                <span className="day-details-count">
+                  {selectedEvents.length} {selectedEvents.length === 1 ? "Event" : "Events"}
+                </span>
               </div>
 
               {selectedEvents.length > 0 ? (
@@ -447,10 +494,12 @@ export default function Calendar() {
                           {/* Round Header & Timing Pill */}
                           <div className="cal-match-top-bar">
                             <span className="cal-round-pill">
-                              🎯 {ev.roundLabel || `Round ${ev.round}`}
+                              <Swords size={12} style={{ marginRight: "4px", verticalAlign: "middle" }} />
+                              {ev.roundLabel || `Round ${ev.round}`}
                             </span>
                             <span className="cal-time-pill">
-                              🕒 {ev.time}
+                              <Clock size={12} style={{ marginRight: "4px", verticalAlign: "middle" }} />
+                              {ev.time}
                             </span>
                           </div>
 
@@ -495,9 +544,9 @@ export default function Calendar() {
                           {ev.scoreDetails?.isCompleted ? (
                             <div className="cal-match-outcome-banner">
                               {ev.scoreDetails.winner ? (
-                                <span>🏆 <strong>{ev.scoreDetails.winner}</strong> won with score <strong>{ev.scoreDetails.resultText}</strong></span>
+                                <span>🏆 <strong>{ev.scoreDetails.winner}</strong> won ({ev.scoreDetails.resultText})</span>
                               ) : (
-                                <span>🤝 Drawn match ({ev.scoreDetails.resultText})</span>
+                                <span>🤝 Match Drawn ({ev.scoreDetails.resultText})</span>
                               )}
                             </div>
                           ) : (
@@ -508,8 +557,14 @@ export default function Calendar() {
 
                           {/* Match Footer Info & Action */}
                           <div className="cal-match-footer-info">
-                            <span className="cal-footer-location">📍 {ev.location}</span>
-                            <span className="cal-footer-tourney">🏆 {ev.tournamentTitle}</span>
+                            <span className="cal-footer-location">
+                              <MapPin size={12} style={{ marginRight: "3px", verticalAlign: "middle" }} />
+                              {ev.location}
+                            </span>
+                            <span className="cal-footer-tourney">
+                              <Trophy size={12} style={{ marginRight: "3px", verticalAlign: "middle" }} />
+                              {ev.tournamentTitle}
+                            </span>
                           </div>
 
                           <div style={{ marginTop: "12px" }}>
@@ -518,36 +573,47 @@ export default function Calendar() {
                               className="view-bracket-link"
                               onClick={() => setSelectedDate(null)}
                             >
-                              ⚡ View Match in Tournament Bracket →
+                              <span>⚡ View Match in Tournament Bracket</span>
+                              <ArrowRight size={14} />
                             </Link>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <span className="event-category-badge tournament">
-                              🏆 TOURNAMENT EVENT
+                              <Trophy size={11} style={{ marginRight: "4px", verticalAlign: "middle" }} />
+                              TOURNAMENT EVENT
                             </span>
-                            <span style={{ color: "#f3c144", fontWeight: "700", fontSize: "0.85rem" }}>🕒 {ev.time}</span>
+                            <span style={{ color: "#f3c144", fontWeight: "700", fontSize: "0.85rem", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <Clock size={13} />
+                              {ev.time}
+                            </span>
                           </div>
-                          <h4 style={{ color: "#fff", fontSize: "1.1rem", margin: "6px 0 4px" }}>{ev.title}</h4>
-                          {ev.location && <p style={{ color: "#b5afa1", margin: "3px 0", fontSize: "0.85rem" }}>📍 {ev.location}</p>}
-                          {ev.description && <p style={{ marginTop: '5px', fontStyle: 'italic', color: '#8c867a', fontSize: '0.82rem' }}>{ev.description}</p>}
+                          <h4 style={{ color: "#fff", fontSize: "1.1rem", margin: "6px 0 6px", fontWeight: "800" }}>{ev.title}</h4>
+                          {ev.location && (
+                            <p style={{ color: "#b5afa1", margin: "4px 0", fontSize: "0.85rem", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <MapPin size={13} color="#f3c144" />
+                              {ev.location}
+                            </p>
+                          )}
+                          {ev.description && (
+                            <p style={{ marginTop: '6px', color: '#8c867a', fontSize: '0.84rem', lineHeight: "1.5" }}>
+                              {ev.description}
+                            </p>
+                          )}
                         </>
                       )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="no-event-text">No events scheduled on this day</p>
+                <div className="cal-no-events-box">
+                  <span className="cal-no-events-icon">📅</span>
+                  <h4>No events scheduled</h4>
+                  <p>No club matches or tournaments scheduled on this date.</p>
+                </div>
               )}
-
-              <button
-                className="close-btn"
-                onClick={() => setSelectedDate(null)}
-              >
-                Close
-              </button>
             </div>
           </div>
         )}

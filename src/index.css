@@ -22,7 +22,6 @@
 
 html {
   scroll-behavior: smooth;
-  touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -35,7 +34,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
   position: relative;
   overflow-x: hidden;
-  touch-action: manipulation;
+  width: 100%;
+  max-width: 100vw;
+}
+
+#root,
+.App {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* Atmospheric Background Orbs */
@@ -410,9 +418,8 @@ input:-webkit-autofill:active {
 }
 
 @media (max-width: 768px) {
-  html, body, #root {
+  body {
     overflow-x: hidden;
-    max-width: 100vw;
     -webkit-overflow-scrolling: touch;
   }
   
@@ -422,5 +429,142 @@ input:-webkit-autofill:active {
   textarea {
     font-size: 16px !important;
   }
+
+  /* Micro-haptic tactile tap feedback */
+  button:active, 
+  .btn:active,
+  .btn-hero-action:active,
+  .tactician-cheer-btn:active,
+  .tactician-follow-btn:active,
+  .tactician-challenge-direct-btn:active,
+  .btn-member-cheer:active,
+  .btn-member-follow:active,
+  .btn-member-duel:active,
+  .filter-tab-btn:active,
+  .tactician-tab-btn:active {
+    transform: scale(0.96);
+    transition: transform 0.08s ease;
+  }
+}
+
+/* ==========================================================================
+   GLOBAL BOX-SIZING & OVERFLOW CONTAINMENT
+   ========================================================================== */
+
+/* Ensure all elements respect their container width */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent images and videos from overflowing their containers */
+img, video, iframe, embed, object {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Iframes (maps, etc.) preserve their responsive wrapper */
+.location-map-wrapper iframe,
+.bracket-canvas-container iframe {
+  height: auto;
+  min-height: 0;
+}
+
+/* ==========================================================================
+   UNIFIED MODAL CLOSE BUTTON DESIGN SYSTEM
+   ========================================================================== */
+
+.modal-close-btn,
+.close-modal-x,
+.lightbox-close-btn,
+.tactician-modal-close,
+.tactician-modal-close-btn,
+.top-right-close,
+.solutions-modal-close,
+.drawer-close-btn,
+.notif-modal-close-btn,
+.player-modal-close,
+.auth-modal-close,
+.winner-celebration-close,
+.modal-close {
+  position: absolute !important;
+  top: 16px !important;
+  right: 16px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #cbd5e1 !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-size: 1.1rem !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  z-index: 50 !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+}
+
+.modal-close-btn:hover,
+.close-modal-x:hover,
+.lightbox-close-btn:hover,
+.tactician-modal-close:hover,
+.tactician-modal-close-btn:hover,
+.top-right-close:hover,
+.solutions-modal-close:hover,
+.drawer-close-btn:hover,
+.notif-modal-close-btn:hover,
+.player-modal-close:hover,
+.auth-modal-close:hover,
+.winner-celebration-close:hover,
+.modal-close:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #ffffff !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  transform: rotate(90deg) scale(1.08) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.4) !important;
+}
+
+.modal-close-btn:active,
+.close-modal-x:active,
+.lightbox-close-btn:active,
+.tactician-modal-close:active,
+.tactician-modal-close-btn:active,
+.top-right-close:active,
+.solutions-modal-close:active,
+.drawer-close-btn:active,
+.notif-modal-close-btn:active,
+.player-modal-close:active,
+.auth-modal-close:active,
+.winner-celebration-close:active,
+.modal-close:active {
+  transform: rotate(90deg) scale(0.95) !important;
+}
+
+/* Modal overlays smooth transition and blur */
+.day-details-overlay,
+.tactician-modal-overlay,
+.modal-overlay,
+.player-modal-overlay,
+.auth-prompt-overlay,
+.event-modal-overlay,
+.solutions-modal-backdrop,
+.winner-celebration-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: unifiedModalFadeIn 0.22s ease-out;
+}
+
+@keyframes unifiedModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 

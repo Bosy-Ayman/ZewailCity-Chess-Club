@@ -5,7 +5,7 @@ import {
   Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, 
   Calendar, MapPin, Users, Swords, Heart, 
   CheckCircle2, Send,
-  Mail, Copy, Check, Crown, UserPlus, UserCheck, User
+  Mail, Copy, Check, Crown, UserPlus, UserCheck, User, X
 } from "lucide-react";
 import Confetti from "react-confetti";
 import { useWindowSize } from "react-use";
@@ -146,6 +146,7 @@ const HomePage = () => {
   const otherAnnouncements = announcements.filter((a) => !a.pinned);
 
   const [activeTournamentIndex, setActiveTournamentIndex] = useState(0);
+  const [winnersMenuOpen, setWinnersMenuOpen] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
 
   const galleryImages = [
@@ -234,6 +235,7 @@ const HomePage = () => {
   const [challengeLocation, setChallengeLocation] = useState("Academic Building Lounge");
   const [challengeSent, setChallengeSent] = useState(false);
   const [modalCheered, setModalCheered] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Social & Admin State
   const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
@@ -555,6 +557,15 @@ const HomePage = () => {
     }
   };
 
+  const handleCopyInviteText = (targetTactician) => {
+    const sender = localStorage.getItem("userName") || (loggedInEmail ? loggedInEmail.split("@")[0] : "A member");
+    const target = targetTactician ? targetTactician.name : "tactician";
+    const inviteText = `⚔️ Hey ${target}! I challenge you to a ${challengeTimeControl} chess match at ${challengeLocation}. Ready to play? — ${sender} (ZC Chess Club)`;
+    navigator.clipboard.writeText(inviteText);
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2500);
+  };
+
 
   const campusTacticians = registeredUsers.map((u) => {
     const emailKey = (u.email || "").toLowerCase().trim();
@@ -566,35 +577,11 @@ const HomePage = () => {
     const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer"].includes(u.role);
     const category = isLeader ? "leaders" : (topRating >= 1800 ? "champions" : "competitors");
 
-    const title = u.role === "president"
-      ? "👑 Club President"
-      : u.role === "vice_president"
-      ? "⭐ Vice President"
-      : u.role === "admin"
-      ? "👑 High Board Executive"
-      : u.role === "hr"
-      ? "🤝 HR & Talent Lead"
-      : u.role === "pr"
-      ? "📢 PR & Outreach Lead"
-      : u.role === "oc"
-      ? "🏆 Organizing Committee Lead"
-      : u.role === "media"
-      ? "🎨 Multimedia & Design Lead"
-      : u.role === "trainer"
-      ? "♟️ Head Trainer"
-      : u.role === "trainee"
-      ? "🎯 Dedicated Trainee"
-      : u.role === "officer"
-      ? "⚡ Club Officer"
-      : (Array.isArray(u.clubRoles) && u.clubRoles.length > 0)
-      ? `✨ ${u.clubRoles[0].position || "Staff"} (${u.clubRoles[0].department || ""})`
-      : u.chessTitle
-      ? `🎖️ ${u.chessTitle} Titleholder`
-      : u.major
-      ? `🎓 ${u.major.split(' ')[0]} ${u.batch ? `(Batch ${u.batch})` : 'Student'}`
+    const title = u.major
+      ? `🎓 ${u.major}${u.batch ? ` (Batch ${u.batch})` : ''}`
       : topRating > 0
       ? `⚡ Rated Contender (${topRating} Elo)`
-      : "♟️ Club Member";
+      : "♟️ Zewailian Tactician";
 
     const badge = u.role === "president"
       ? "👑 President"
@@ -1236,8 +1223,93 @@ const HomePage = () => {
           </p>
         </div>
 
-        {/* Segmented Selector for Tournaments */}
-        <div className="tournament-pills-scroll-wrapper">
+        {/* 📱 2-Level Mobile Tournament Navigation Pattern (Level 1: Compact Header Trigger) */}
+        <div className="winners-mobile-nav-wrapper">
+          <button 
+            type="button"
+            className="winners-mobile-nav-trigger"
+            onClick={() => setWinnersMenuOpen(true)}
+            aria-label="Switch Tournament"
+          >
+            <div className="winners-mobile-nav-left">
+              <span className="winners-mobile-nav-menu-icon">☰</span>
+              <span className="winners-mobile-nav-icon">{activeTournament.icon}</span>
+              <div className="winners-mobile-nav-text">
+                <span className="winners-mobile-nav-section-label">Selected Tournament</span>
+                <span className="winners-mobile-nav-active-title">
+                  {activeTournament.name}
+                  <span className="winners-mobile-nav-badge">{activeTournament.badge}</span>
+                </span>
+              </div>
+            </div>
+            <div className="winners-mobile-nav-right">
+              <span className="winners-mobile-nav-switch-hint">Switch</span>
+              <span className="winners-mobile-nav-arrow">›</span>
+            </div>
+          </button>
+        </div>
+
+        {/* 📱 Mobile Expandable Menu Overlay & Drawer (Level 2) */}
+        {winnersMenuOpen && (
+          <div className="winners-mobile-menu-overlay" onClick={() => setWinnersMenuOpen(false)}>
+            <div 
+              className="winners-mobile-menu-drawer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="winners-mobile-menu-header">
+                <div className="winners-mobile-menu-title-row">
+                  <span className="winners-menu-icon">🏆</span>
+                  <h3>Select Championship</h3>
+                </div>
+                <button 
+                  type="button" 
+                  className="winners-mobile-menu-close" 
+                  onClick={() => setWinnersMenuOpen(false)}
+                  aria-label="Close menu"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="winners-mobile-menu-subtitle">
+                Choose a recent flagship tournament to inspect the winners and podium results:
+              </div>
+
+              <div className="winners-mobile-menu-list">
+                {recentTournaments.map((t, idx) => {
+                  const isActive = idx === activeTournamentIndex;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`winners-mobile-menu-item ${isActive ? 'active-item' : ''}`}
+                      onClick={() => {
+                        setActiveTournamentIndex(idx);
+                        setWinnersMenuOpen(false);
+                      }}
+                    >
+                      <span className="winners-item-status-icon">{isActive ? '✓' : '•'}</span>
+                      <span className="winners-item-icon">{t.icon}</span>
+                      <div className="winners-item-content">
+                        <div className="winners-item-title-row">
+                          <span className="winners-item-title">{t.name}</span>
+                          <span className={`winners-item-badge ${isActive ? 'active-badge' : ''}`}>{t.badge}</span>
+                        </div>
+                        <span className="winners-item-desc">
+                          📅 {t.date} • 📍 {t.location}
+                        </span>
+                      </div>
+                      <span className="winners-item-arrow">›</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Desktop Segmented Selector for Tournaments */}
+        <div className="tournament-pills-scroll-wrapper winners-desktop-pills">
           <div className="tournament-pills-bar">
             {recentTournaments.map((t, idx) => (
               <button
@@ -1252,8 +1324,8 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* Active Tournament Info Header */}
-        <div className="active-tournament-banner">
+        {/* Active Tournament Info Header (Desktop) */}
+        <div className="active-tournament-banner winners-desktop-banner">
           <div className="active-tournament-meta">
             <span className="active-tournament-badge">{activeTournament.badge}</span>
             <h3 className="active-tournament-title">{activeTournament.name}</h3>
@@ -1514,9 +1586,6 @@ const HomePage = () => {
                         className="tactician-avatar-img"
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                       />
-                      {player.topRating > 0 && (
-                        <span className="tactician-rating-badge">{player.topRating}</span>
-                      )}
                     </div>
 
                     <div className="tactician-header-meta">
@@ -1556,9 +1625,8 @@ const HomePage = () => {
                       )}
                     </div>
                     <p className="tactician-title">{player.title}</p>
-                    <span className="tactician-major-tag">{player.major}</span>
 
-                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && (
+                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && player.role === 'member' && (
                       <div className="tactician-club-roles-row">
                         {player.clubRoles.map((cr, cIdx) => (
                           <span key={cIdx} className="tactician-club-role-chip" title={`${cr.position} of ${cr.department}`}>
@@ -1673,7 +1741,7 @@ const HomePage = () => {
               onClick={() => setTacticianModalOpen(false)}
               aria-label="Close Profile"
             >
-              ✕
+              <X size={18} />
             </button>
 
             {modalCheered && (
@@ -1693,7 +1761,7 @@ const HomePage = () => {
               <div className="tactician-modal-hero-info">
                 <div className="tactician-modal-badge">{selectedTactician.badge}</div>
                 <h2 className="tactician-modal-name">{selectedTactician.name}</h2>
-                <p className="tactician-modal-title">{selectedTactician.title}</p>
+                <p className="tactician-modal-title">{selectedTactician.bio ? selectedTactician.bio : "Zewail City Chess Club Tactician"}</p>
                 
                 {/* Email Display with Copy */}
                 {selectedTactician.email && (
@@ -1713,9 +1781,8 @@ const HomePage = () => {
                 )}
 
                 <div className="tactician-modal-chips-row">
-                  <span className="modal-chip"><MapPin size={11} /> ZC Campus</span>
-                  <span className="modal-chip">{selectedTactician.major}</span>
-                  <span className="modal-chip">Class of {selectedTactician.batch}</span>
+                  {selectedTactician.major && <span className="modal-chip">🎓 {selectedTactician.major}</span>}
+                  {selectedTactician.batch && <span className="modal-chip">Class of {selectedTactician.batch}</span>}
                 </div>
               </div>
             </div>
@@ -1762,8 +1829,7 @@ const HomePage = () => {
 
             {/* Bio & Tactical Details */}
             <div className="tactician-modal-section">
-              <h4>Tactical Profile &amp; Bio</h4>
-              <p className="tactician-modal-bio">{selectedTactician.bio || "Active registered tactician of Zewail City Chess Club."}</p>
+              <h4>Tactical Attributes &amp; Preferences</h4>
               
               <div className="tactician-attributes-row">
                 <div className="attribute-item">
@@ -1772,7 +1838,7 @@ const HomePage = () => {
                 </div>
                 <div className="attribute-item">
                   <span className="attr-label">Campus Role:</span>
-                  <span className="attr-val">{selectedTactician.title || "Club Tactician"}</span>
+                  <span className="attr-val">{selectedTactician.badge || "♟️ Club Member"}</span>
                 </div>
               </div>
             </div>
@@ -1855,10 +1921,21 @@ const HomePage = () => {
                       </div>
                     </div>
 
-                    <button type="submit" className="challenge-submit-btn">
-                      <Send size={15} />
-                      <span>Issue Campus Challenge</span>
-                    </button>
+                    <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                      <button 
+                        type="button" 
+                        className="ppm-btn-message"
+                        onClick={() => handleCopyInviteText(selectedTactician)}
+                        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "10px", borderRadius: "10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#eee", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700 }}
+                      >
+                        {copiedInvite ? <Check size={14} style={{ color: "#2ecc71" }} /> : <Copy size={14} />}
+                        <span>{copiedInvite ? "Copied! 📋" : "Copy Invite Text"}</span>
+                      </button>
+                      <button type="submit" className="challenge-submit-btn" style={{ flex: 1 }}>
+                        <Send size={15} />
+                        <span>Issue Campus Challenge</span>
+                      </button>
+                    </div>
                   </form>
                 )}
               </div>
@@ -1913,7 +1990,7 @@ const HomePage = () => {
               onClick={() => setActiveLightboxIndex(null)}
               aria-label="Close Lightbox"
             >
-              ✕
+              <X size={18} />
             </button>
 
             {/* Navigation buttons */}

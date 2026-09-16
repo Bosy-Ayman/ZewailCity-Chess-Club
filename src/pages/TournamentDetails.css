@@ -1653,3 +1653,49 @@
     font-size: 0.65rem;
   }
 }
+
+/* ==========================================================================
+   SUPPLEMENTAL MOBILE RESPONSIVE — TOURNAMENT DETAILS PAGE
+   ========================================================================== */
+
+/* Application table: always scrolls horizontally */
+.application-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+}
+
+.application-table {
+  min-width: 520px; /* Ensures columns don't collapse */
+}
+
+@media (max-width: 480px) {
+  /* Hero meta grid: single column on tiny screens */
+  .tournament-hero-meta-grid {
+    grid-template-columns: 1fr !important;
+    gap: 6px;
+  }
+
+  /* Export action buttons: stack vertically */
+  .tournament-export-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .export-tournament-btn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  /* Role card: stack content when narrow */
+  .role-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Section title smaller */
+  .section-title {
+    font-size: 1.05rem;
+  }
+}

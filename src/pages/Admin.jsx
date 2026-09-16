@@ -4,7 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { Search, Users, Filter, Eye, Send, Mail, Bell, CheckCircle2, Sparkles, Camera } from "lucide-react";
+import { Search, Users, Filter, Eye, Send, Mail, Bell, CheckCircle2, Sparkles, Camera, X } from "lucide-react";
 import "./Admin.css";
 import { safeFetchJson, compressImage } from "../utils/api";
 
@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const [activeTab, setActiveTab] = useState("add-tournament");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Puzzle Challenge Tournament states
   const [puzzleTournaments, setPuzzleTournaments] = useState([]);
@@ -1233,94 +1234,182 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Mobile Tab Selector (Visible on < 768px) */}
-        <div className="admin-mobile-tab-select-wrapper">
-          <label htmlFor="admin-mobile-tab-select" className="admin-mobile-tab-label">Switch Admin Section:</label>
-          <select
-            id="admin-mobile-tab-select"
-            className="admin-mobile-tab-select"
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value)}
-          >
-            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-              <option value="add-tournament">➕ Add Tournament</option>
-            )}
-            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-              <option value="tournaments-list">🏆 Manage Tournaments ({tournaments.length})</option>
-            )}
-            {(['admin', 'president', 'vice_president', 'hr'].includes(userRole)) && (
-              <option value="applications">📋 Club Applications ({applications.length})</option>
-            )}
-            {['admin', 'president', 'vice_president'].includes(userRole) && (
-              <option value="manage-users">👥 Manage Users ({users.length})</option>
-            )}
-            {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-              <option value="manage-puzzles">🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}</option>
-            )}
-            {['admin', 'president', 'vice_president'].includes(userRole) && (
-              <option value="broadcast">📢 Email & In-App Broadcast</option>
-            )}
-            <option value="inquiries">📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}</option>
-          </select>
-        </div>
+        {/* 📱 2-Level Mobile Admin Navigation: Compact Current-Section Header & Expandable Menu */}
+        {(() => {
+          const adminNavItems = [
+            {
+              id: "add-tournament",
+              label: "Add Tournament",
+              icon: "➕",
+              desc: "Create and publish a new Swiss or Knockout tournament",
+              roles: ['admin', 'president', 'vice_president', 'oc'],
+              badge: null
+            },
+            {
+              id: "tournaments-list",
+              label: "Manage Tournaments",
+              icon: "🏆",
+              desc: "Update rounds, pairings, standings, and statuses",
+              roles: ['admin', 'president', 'vice_president', 'oc'],
+              badge: tournaments.length
+            },
+            {
+              id: "applications",
+              label: "Club Applications",
+              icon: "📋",
+              desc: "Review and evaluate candidate member applications",
+              roles: ['admin', 'president', 'vice_president', 'hr'],
+              badge: applications.length
+            },
+            {
+              id: "manage-users",
+              label: "Manage Users",
+              icon: "👥",
+              desc: "Manage club members, edit roles, and oversee accounts",
+              roles: ['admin', 'president', 'vice_president'],
+              badge: users.length
+            },
+            {
+              id: "manage-puzzles",
+              label: "Chess Puzzles",
+              icon: "🧩",
+              desc: "Create tactical puzzles and arena competitions",
+              roles: ['admin', 'president', 'vice_president', 'oc'],
+              badge: puzzlesList.length > 0 ? puzzlesList.length : null
+            },
+            {
+              id: "broadcast",
+              label: "Broadcast & Email",
+              icon: "📢",
+              desc: "Send announcements, in-app alerts, and emails",
+              roles: ['admin', 'president', 'vice_president'],
+              badge: null
+            },
+            {
+              id: "inquiries",
+              label: "Inquiries / Dispatches",
+              icon: "📬",
+              desc: "Direct messages, member feedback, and support inquiries",
+              roles: ['admin', 'president', 'vice_president', 'hr', 'oc', 'pr', 'media', 'multimedia'],
+              badge: inquiries.filter(m => !m.read).length > 0 ? `${inquiries.filter(m => !m.read).length} new` : inquiries.length
+            }
+          ];
 
-        {/* Desktop Tab Controls (Visible on >= 768px) */}
-        <div className="admin-tabs admin-desktop-tabs">
-          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-            <button
-              className={`tab-btn ${activeTab === "add-tournament" ? "active" : ""}`}
-              onClick={() => setActiveTab("add-tournament")}
-            >
-              ➕ Add Tournament
-            </button>
-          )}
-          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-            <button
-              className={`tab-btn ${activeTab === "tournaments-list" ? "active" : ""}`}
-              onClick={() => setActiveTab("tournaments-list")}
-            >
-              🏆 Manage Tournaments ({tournaments.length})
-            </button>
-          )}
-          {(['admin', 'president', 'vice_president', 'hr'].includes(userRole)) && (
-            <button
-              className={`tab-btn ${activeTab === "applications" ? "active" : ""}`}
-              onClick={() => setActiveTab("applications")}
-            >
-              📋 Club Applications ({applications.length})
-            </button>
-          )}
-          {['admin', 'president', 'vice_president'].includes(userRole) && (
-            <button
-              className={`tab-btn ${activeTab === "manage-users" ? "active" : ""}`}
-              onClick={() => setActiveTab("manage-users")}
-            >
-              👥 Manage Users ({users.length})
-            </button>
-          )}
-          {(['admin', 'president', 'vice_president', 'oc'].includes(userRole)) && (
-            <button
-              className={`tab-btn ${activeTab === "manage-puzzles" ? "active" : ""}`}
-              onClick={() => setActiveTab("manage-puzzles")}
-            >
-              🧩 Chess Puzzles {puzzlesList.length > 0 ? `(${puzzlesList.length})` : ""}
-            </button>
-          )}
-          {['admin', 'president', 'vice_president'].includes(userRole) && (
-            <button
-              className={`tab-btn ${activeTab === "broadcast" ? "active" : ""}`}
-              onClick={() => setActiveTab("broadcast")}
-            >
-              📢 Broadcast & Email
-            </button>
-          )}
-          <button
-            className={`tab-btn ${activeTab === "inquiries" ? "active" : ""}`}
-            onClick={() => setActiveTab("inquiries")}
-          >
-            📬 Inquiries / Dispatches {inquiries.filter(m => !m.read).length > 0 ? `(${inquiries.filter(m => !m.read).length} new)` : `(${inquiries.length})`}
-          </button>
-        </div>
+          const accessibleNavItems = adminNavItems.filter(item => item.roles.includes(userRole));
+          const currentNavItem = accessibleNavItems.find(item => item.id === activeTab) || accessibleNavItems[0] || { id: activeTab, icon: "⚙️", label: "Admin Section" };
+
+          return (
+            <>
+              {/* Level 1: Compact Current-Section Header Trigger */}
+              <div className="admin-mobile-nav-wrapper">
+                <button
+                  type="button"
+                  className="admin-mobile-nav-trigger"
+                  onClick={() => setMobileMenuOpen(true)}
+                  aria-label="Open Admin Sections Menu"
+                  aria-expanded={mobileMenuOpen}
+                >
+                  <div className="admin-mobile-nav-left">
+                    <span className="admin-mobile-nav-menu-icon">☰</span>
+                    <span className="admin-mobile-nav-active-icon">{currentNavItem.icon}</span>
+                    <div className="admin-mobile-nav-text">
+                      <span className="admin-mobile-nav-section-label">Active Section</span>
+                      <span className="admin-mobile-nav-active-title">
+                        {currentNavItem.label}
+                        {currentNavItem.badge !== null && currentNavItem.badge !== undefined && (
+                          <span className="admin-mobile-nav-badge">{currentNavItem.badge}</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="admin-mobile-nav-right">
+                    <span className="admin-mobile-nav-switch-hint">Switch</span>
+                    <span className="admin-mobile-nav-arrow">›</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Level 2: Full-Screen / Bottom-Sheet Expandable Admin Menu Drawer */}
+              {mobileMenuOpen && (
+                <div className="admin-mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+                  <div 
+                    className="admin-mobile-menu-drawer" 
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                  >
+                    <div className="admin-mobile-menu-header">
+                      <div className="admin-mobile-menu-title-row">
+                        <span className="admin-menu-icon">⚙️</span>
+                        <h3>Admin Menu</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="admin-mobile-menu-close"
+                        onClick={() => setMobileMenuOpen(false)}
+                        aria-label="Close menu"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    
+                    <p className="admin-mobile-menu-subtitle">
+                      Tap a section to navigate instantly:
+                    </p>
+
+                    <div className="admin-mobile-menu-list">
+                      {accessibleNavItems.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={`admin-mobile-menu-item ${isActive ? "active-item" : ""}`}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setMobileMenuOpen(false);
+                            }}
+                          >
+                            <div className="admin-item-status-icon">
+                              {isActive ? "✓" : ""}
+                            </div>
+                            <span className="admin-item-icon">{item.icon}</span>
+                            <div className="admin-item-content">
+                              <div className="admin-item-title-row">
+                                <span className="admin-item-title">{item.label}</span>
+                                {item.badge !== null && item.badge !== undefined && (
+                                  <span className={`admin-item-badge ${isActive ? "active-badge" : ""}`}>
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="admin-item-desc">{item.desc}</span>
+                            </div>
+                            <span className="admin-item-arrow">›</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Desktop Tab Controls (Visible on >= 768px) */}
+              <div className="admin-tabs admin-desktop-tabs">
+                {accessibleNavItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`tab-btn ${activeTab === item.id ? "active" : ""}`}
+                    onClick={() => setActiveTab(item.id)}
+                  >
+                    {item.icon} {item.label} {item.badge !== null && item.badge !== undefined ? `(${item.badge})` : ""}
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Alert Messages */}
         {successMessage && <div className="alert-message success">{successMessage}</div>}
@@ -1707,7 +1796,9 @@ export default function AdminDashboard() {
                   {photoModal.isOpen && (
                     <div className="modal-overlay" onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))}>
                       <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: "460px" }}>
-                        <button className="close-btn" onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))}>✕</button>
+                        <button className="modal-close-btn" onClick={() => setPhotoModal(prev => ({ ...prev, isOpen: false }))} aria-label="Close photo modal">
+                          <X size={18} />
+                        </button>
                         <h3 style={{ color: "#fff", margin: "0 0 6px", fontSize: "1.2rem" }}>📷 Tournament Photo</h3>
                         <p style={{ color: "#bab19c", fontSize: "0.85rem", margin: "0 0 16px" }}>
                           Upload or update photo for <strong style={{ color: "#f3c144" }}>{photoModal.tournamentTitle}</strong>. This photo will be highlighted in Tournaments and the permanent History & Archives.
@@ -3630,8 +3721,8 @@ export default function AdminDashboard() {
         {modalOpen && selectedApp && (
           <div className="admin-modal-overlay" onClick={() => setModalOpen(false)}>
             <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
-              <button className="close-modal-btn" onClick={() => setModalOpen(false)}>
-                &times;
+              <button className="modal-close-btn" onClick={() => setModalOpen(false)} aria-label="Close modal">
+                <X size={18} />
               </button>
               <h3>Application Details: {selectedApp.name}</h3>
               <hr className="modal-divider" />
@@ -3690,10 +3781,11 @@ export default function AdminDashboard() {
                 </div>
                 <button
                   type="button"
-                  className="notif-modal-close-btn"
+                  className="modal-close-btn"
                   onClick={() => setSelectedLogPreview(null)}
+                  aria-label="Close notification log modal"
                 >
-                  ✕
+                  <X size={18} />
                 </button>
               </div>
 

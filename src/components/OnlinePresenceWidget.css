@@ -480,7 +480,7 @@
 /* Mobile Responsiveness */
 @media (max-width: 600px) {
   .online-presence-dock {
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     right: 16px;
     padding: 6px 12px 6px 10px;
     gap: 8px;
@@ -497,11 +497,25 @@
   }
 
   .online-presence-drawer {
-    bottom: 70px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     right: 12px;
     left: 12px;
     width: auto;
     max-width: none;
     max-height: 70vh;
+  }
+}
+
+@media (max-width: 360px) {
+  .online-presence-dock {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    right: 12px;
+    padding: 5px 10px 5px 8px;
+  }
+  .drawer-header {
+    padding: 14px 14px 10px;
+  }
+  .drawer-body {
+    padding: 8px 10px;
   }
 }

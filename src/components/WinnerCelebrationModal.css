@@ -540,3 +540,61 @@
     min-height: 95px;
   }
 }
+
+@media (max-width: 420px) {
+  .winner-celebration-card {
+    padding: 22px 10px 18px;
+  }
+
+  .winner-celebration-title {
+    font-size: 1.35rem;
+  }
+
+  .winner-podium-wrapper {
+    gap: 4px;
+    margin: 20px auto 20px;
+  }
+
+  .podium-avatar-box {
+    width: 50px;
+    height: 50px;
+  }
+
+  .podium-avatar-box.gold-box {
+    width: 64px;
+    height: 64px;
+  }
+
+  .podium-avatar {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    min-height: 50px;
+  }
+
+  .avatar-gold {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+  }
+
+  .podium-name {
+    font-size: 0.72rem;
+    max-width: 72px;
+  }
+
+  .gold-name {
+    font-size: 0.82rem;
+  }
+
+  .winner-celebration-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .action-btn {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { X } from "lucide-react";
 import { getPlayerAvatarUrl } from "../utils/api";
 import { findCommonFreeSlots, findNearOverlapSlots, getNextDateForDay, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
 import "./ChallongeBracket.css";
@@ -990,8 +991,8 @@ export default function ChallongeBracket({
       {selectedMatchModal && (
         <div className="match-modal-overlay" onClick={() => setSelectedMatchModal(null)}>
           <div className="match-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
-            <button className="match-modal-close" onClick={() => setSelectedMatchModal(null)}>
-              ✕
+            <button className="modal-close-btn" onClick={() => setSelectedMatchModal(null)} aria-label="Close match details">
+              <X size={18} />
             </button>
             <div className="match-modal-header">
               <span className="match-code-tag">{selectedMatchModal.matchCode}</span>

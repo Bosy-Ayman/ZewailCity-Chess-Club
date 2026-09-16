@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { X } from "lucide-react";
 import "./Header.css";
 import LoginModal from "./LoginModal";
 import GlobalWinnerAlert from "./GlobalWinnerAlert";
@@ -592,7 +593,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span>ZC Chess Club</span>
               </div>
               <button className="mobile-sidebar-close" onClick={toggleSidebar} aria-label="Close menu">
-                ✕
+                <X size={18} />
               </button>
             </div>
 
@@ -639,7 +640,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
           <aside className="user-drawer">
             {/* Close Button */}
             <button className="close-drawer-btn" onClick={closeUserDrawer} aria-label="Close menu">
-              ✕
+              <X size={18} />
             </button>
 
             {/* User Header */}
@@ -811,7 +812,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 onClick={() => setSelectedNotif(null)}
                 aria-label="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
