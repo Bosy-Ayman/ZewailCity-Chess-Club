@@ -1352,22 +1352,26 @@ export default function AdminDashboard() {
           let userClubRoles = [];
           try { if (rawUserClubRoles) userClubRoles = JSON.parse(rawUserClubRoles); } catch (e) {}
 
-          const isHR = ['hr', 'member_hr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources'));
-          const isOC = ['oc', 'member_oc'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'));
-          const isPR = ['pr', 'member_pr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
-          const isMedia = ['media', 'member_media'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Multimedia & Design'));
           const isExec = ['admin', 'president', 'vice_president'].includes(userRole);
+          const isHeadHR = userRole === 'hr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+          const isHeadOC = userRole === 'oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+          const isHeadPR = userRole === 'pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+          const isHeadMedia = userRole === 'media' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Multimedia & Design' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+          const isHeadTrainer = userRole === 'trainer' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Training & Masterclasses' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+
+          const isOCMember = userRole === 'member_oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'));
+          const isPRMember = userRole === 'member_pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
 
           const accessibleNavItems = adminNavItems.filter(item => {
             if (isExec) return true;
-            if (item.id === "manage-users" && isHR) return true;
-            if (item.id === "applications" && isHR) return true;
-            if (item.id === "broadcast" && (isHR || isPR || isMedia)) return true;
-            if (item.id === "inquiries" && (isHR || isOC || isPR || isMedia)) return true;
-            if (item.id === "add-tournament" && isOC) return true;
-            if (item.id === "tournaments-list" && isOC) return true;
-            if (item.id === "manage-puzzles" && isOC) return true;
-            return item.roles.includes(userRole);
+            if (item.id === "manage-users" && isHeadHR) return true;
+            if (item.id === "applications" && isHeadHR) return true;
+            if (item.id === "broadcast" && (isHeadHR || isHeadPR || isPRMember || isHeadMedia)) return true;
+            if (item.id === "inquiries" && (isHeadHR || isHeadOC || isOCMember || isHeadPR || isPRMember || isHeadMedia)) return true;
+            if (item.id === "add-tournament" && (isHeadOC || isOCMember)) return true;
+            if (item.id === "tournaments-list" && (isHeadOC || isOCMember)) return true;
+            if (item.id === "manage-puzzles" && (isHeadOC || isOCMember || isHeadTrainer)) return true;
+            return false;
           });
           const currentNavItem = accessibleNavItems.find(item => item.id === activeTab) || accessibleNavItems[0] || { id: activeTab, icon: "⚙️", label: "Admin Section" };
 

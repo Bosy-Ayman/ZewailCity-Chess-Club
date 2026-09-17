@@ -773,73 +773,115 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="drawer-link-icon">📬</span> Contact Us
               </Link>
 
-              {/* Management section for admins/presidents/vps/hr/oc */}
-              {(['admin', 'president', 'vice_president', 'hr', 'oc'].includes(userRole)
-                || (Array.isArray(userClubRoles) && userClubRoles.length > 0)) && (
-                <>
-                  <div className="drawer-section-label" style={{ marginTop: "12px" }}>Management</div>
-                  <Link to="/admin" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📊</span> Admin Dashboard
-                  </Link>
-                </>
-              )}
+              {/* Management section according to strict RBAC rules */}
+              {(() => {
+                const isExec = ['admin', 'president', 'vice_president'].includes(userRole);
+                const isHeadHR = userRole === 'hr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+                const isHeadOC = userRole === 'oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+                const isHeadPR = userRole === 'pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+                const isHeadMedia = userRole === 'media' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Multimedia & Design' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+                const isHeadTrainer = userRole === 'trainer' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Training & Masterclasses' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
 
-              {['admin', 'president', 'vice_president'].includes(userRole) && (
-                <>
-                  <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">➕</span> Add Tournament
-                  </Link>
-                  <Link to="/admin?tab=tournaments-list" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">⚙️</span> Manage Tournaments
-                  </Link>
-                  <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📋</span> Applications
-                  </Link>
-                  <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">👥</span> Manage Users
-                  </Link>
-                  <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">🧩</span> Manage Puzzles
-                  </Link>
-                  <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📢</span> Broadcast & Email
-                  </Link>
-                  <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📬</span> Inquiries & Messages
-                  </Link>
-                </>
-              )}
+                const isOCMember = userRole === 'member_oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'));
+                const isPRMember = userRole === 'member_pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
 
-              {(['hr', 'member_hr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources'))) && (
-                <>
-                  <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">👥</span> Manage Users
-                  </Link>
-                  <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📋</span> Applications
-                  </Link>
-                  <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📢</span> Broadcast & Email
-                  </Link>
-                  <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">📬</span> Inquiries & Messages
-                  </Link>
-                </>
-              )}
+                const hasManagementAccess = isExec || isHeadHR || isHeadOC || isHeadPR || isHeadMedia || isHeadTrainer || isOCMember || isPRMember;
+                if (!hasManagementAccess) return null;
 
-              {(userRole === 'oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'))) && (
-                <>
-                  <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">➕</span> Add Tournament
-                  </Link>
-                  <Link to="/admin?tab=tournaments-list" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">⚙️</span> Manage Tournaments
-                  </Link>
-                  <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                    <span className="drawer-link-icon">🧩</span> Manage Puzzles
-                  </Link>
-                </>
-              )}
+                return (
+                  <>
+                    <div className="drawer-section-label" style={{ marginTop: "12px" }}>Management</div>
+                    <Link to="/admin" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                      <span className="drawer-link-icon">📊</span> Admin Dashboard
+                    </Link>
+
+                    {isExec && (
+                      <>
+                        <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">➕</span> Add Tournament
+                        </Link>
+                        <Link to="/admin?tab=tournaments-list" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">⚙️</span> Manage Tournaments
+                        </Link>
+                        <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📋</span> Applications
+                        </Link>
+                        <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">👥</span> Manage Users
+                        </Link>
+                        <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">🧩</span> Manage Puzzles
+                        </Link>
+                        <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📢</span> Broadcast & Email
+                        </Link>
+                        <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                        </Link>
+                      </>
+                    )}
+
+                    {isHeadHR && !isExec && (
+                      <>
+                        <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">👥</span> Manage Users
+                        </Link>
+                        <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📋</span> Applications
+                        </Link>
+                        <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📢</span> Broadcast & Email
+                        </Link>
+                        <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                        </Link>
+                      </>
+                    )}
+
+                    {(isHeadOC || isOCMember) && !isExec && (
+                      <>
+                        <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">➕</span> Add Tournament
+                        </Link>
+                        <Link to="/admin?tab=tournaments-list" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">⚙️</span> Manage Tournaments
+                        </Link>
+                        <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">🧩</span> Manage Puzzles
+                        </Link>
+                      </>
+                    )}
+
+                    {(isHeadPR || isPRMember) && !isExec && (
+                      <>
+                        <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📢</span> Broadcast & Email
+                        </Link>
+                        <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                        </Link>
+                      </>
+                    )}
+
+                    {isHeadMedia && !isExec && !isHeadPR && !isPRMember && (
+                      <>
+                        <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📢</span> Broadcast & Email
+                        </Link>
+                        <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                          <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                        </Link>
+                      </>
+                    )}
+
+                    {isHeadTrainer && !isExec && !isHeadOC && !isOCMember && (
+                      <Link to="/admin?tab=manage-puzzles" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                        <span className="drawer-link-icon">🧩</span> Manage Puzzles
+                      </Link>
+                    )}
+                  </>
+                );
+              })()}
             </nav>
 
             {/* Footer: Logout */}
