@@ -826,6 +826,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
   );
 
   const tournamentAchievements = getUserTournamentAchievements(profile, tournaments);
+  const activeTournaments = tournaments.filter(t => !(t.status === "Completed" || t.status === "completed" || t.status === "closed" || t.status === "Finished"));
 
   const getDynamicCampusStanding = () => {
     if (!profile) return { value: "Registered", hint: "Tactician", badgeClass: "green", detailTitle: "Club Contender" };
@@ -913,12 +914,12 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
     }
 
     // 6. Active Competitor
-    if (tournaments.length > 0) {
+    if (activeTournaments.length > 0) {
       return {
         value: "Competitor",
-        hint: `⚔️ Enrolled in ${tournaments.length} Event${tournaments.length > 1 ? 's' : ''}`,
+        hint: `⚔️ Enrolled in ${activeTournaments.length} Event${activeTournaments.length > 1 ? 's' : ''}`,
         badgeClass: "cyan",
-        detailTitle: `⚔️ Active Competitor (${tournaments.length} Tournament${tournaments.length > 1 ? 's' : ''})`
+        detailTitle: `⚔️ Active Competitor (${activeTournaments.length} Tournament${activeTournaments.length > 1 ? 's' : ''})`
       };
     }
 
@@ -1187,7 +1188,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   </button>
                   <span className="social-stat-dot">•</span>
                   <span className="social-stat-item highlight">
-                    ⚔️ {tournaments.length} Championships
+                    ⚔️ {activeTournaments.length + (tournamentAchievements?.historicalList?.length || 0)} Championships
                   </span>
                   <span className="social-stat-dot">•</span>
                   <span className="social-stat-item highlight-cheers">
@@ -1331,7 +1332,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
             <div className="hero-stats-row">
               <div className="hero-stat-box">
                 <div className="stat-label">Tournaments</div>
-                <div className="stat-value">{tournaments.length}</div>
+                <div className="stat-value">{activeTournaments.length}</div>
                 <div className="stat-hint">Active Enrolled</div>
               </div>
               <div className="hero-stat-divider" />
@@ -1455,7 +1456,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               <span className="rating-platform-tag blue">Club Hub</span>
             </div>
             <div className="rating-score-container">
-              <span className="rating-score">{tournaments.length}</span>
+              <span className="rating-score">{activeTournaments.length}</span>
               <span className="rating-delta blue">Enrolled</span>
             </div>
             <div className="rating-subtext">
@@ -1484,7 +1485,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               label: "Championships",
               icon: <Trophy size={18} />,
               desc: "Registered tournaments, standings, and match records",
-              badge: tournaments.length > 0 ? tournaments.length : null
+              badge: (activeTournaments.length + (tournamentAchievements?.historicalList?.length || 0)) > 0 ? (activeTournaments.length + (tournamentAchievements?.historicalList?.length || 0)) : null
             },
             {
               id: "challenges",
@@ -1632,7 +1633,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                 >
                   <Trophy size={16} />
                   <span>Championships</span>
-                  <span className="tab-badge-count">{tournaments.length}</span>
+                  <span className="tab-badge-count">{activeTournaments.length + (tournamentAchievements?.historicalList?.length || 0)}</span>
                 </button>
 
                 <button 
@@ -1863,17 +1864,17 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     {tournamentAchievements.isPodium ? <CheckCircle2 size={16} className="accolade-status-icon" /> : <Lock size={16} className="accolade-status-icon" />}
                   </div>
 
-                  <div className={`accolade-badge-card ${tournaments.length > 0 ? 'unlocked' : 'locked'}`}>
+                  <div className={`accolade-badge-card ${(activeTournaments.length + (tournamentAchievements?.historicalList?.length || 0)) > 0 ? 'unlocked' : 'locked'}`}>
                     <div className="accolade-icon">⚔️</div>
                     <div className="accolade-info">
                       <div className="accolade-name">Tournament Competitor</div>
                       <div className="accolade-desc">
-                        {tournaments.length > 0 
+                        {activeTournaments.length > 0 
                           ? `Competed in ${tournaments.length} official championship(s)` 
                           : "Register and compete in an official tournament to unlock"}
                       </div>
                     </div>
-                    {tournaments.length > 0 ? <CheckCircle2 size={16} className="accolade-status-icon" /> : <Lock size={16} className="accolade-status-icon" />}
+                    {activeTournaments.length > 0 ? <CheckCircle2 size={16} className="accolade-status-icon" /> : <Lock size={16} className="accolade-status-icon" />}
                   </div>
                 </div>
               </div>
@@ -1898,7 +1899,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               </a>
             </div>
 
-            {tournaments.length === 0 && (!tournamentAchievements.historicalList || tournamentAchievements.historicalList.length === 0) ? (
+            {activeTournaments.length === 0 && (!tournamentAchievements.historicalList || tournamentAchievements.historicalList.length === 0) ? (
               <div className="empty-state-card glass-panel">
                 <div className="empty-icon-glow">
                   <Trophy size={48} />
@@ -1911,7 +1912,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
               </div>
             ) : (
               <div className="tournament-grid-dashboard">
-                {tournaments.map((t) => {
+                {activeTournaments.map((t) => {
                   const reg = t.registrations?.find((r) => r.email && profile?.email && r.email.toLowerCase() === profile.email.toLowerCase());
                   const isPlayer = (t.playersList || []).some((p) => typeof p === 'string' ? p.toLowerCase() === (profile?.name || '').toLowerCase() : p.name && (p.name.toLowerCase() === (profile?.name || '').toLowerCase() || (profile?.email && p.email && p.email.toLowerCase() === profile.email.toLowerCase())));
                   const isCompleted = t.status === "Completed" || t.status === "completed" || t.status === "closed" || t.status === "Finished";
@@ -2100,134 +2101,8 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   </a>
                 </div>
 
-                {/* Desktop Table View */}
-                <div className="historical-records-table-wrap" style={{ overflowX: "auto", marginBottom: "24px" }}>
-                  <table className="historical-records-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 6px" }}>
-                    <thead>
-                      <tr style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#8a8070" }}>
-                        <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700 }}>Event</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Category</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Rank</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Award</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Date</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Location</th>
-                        <th style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>Certificate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tournamentAchievements.historicalList.map((ht, idx) => {
-                        const rankLabel = ht.place === 1 ? "🥇 1st" : ht.place === 2 ? "🥈 2nd" : ht.place === 3 ? "🥉 3rd" : `#${ht.place}`;
-                        const certRankStr = ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`;
-                        const categoryLabel = (ht.category || "tournament") === "puzzle" ? "🧩 Puzzle" : "♟️ Tournament";
-                        const canDownloadCert = isOwnProfile || isAdmin;
-
-                        return (
-                          <tr
-                            key={`hist-row-${idx}`}
-                            style={{
-                              background: ht.isChampion
-                                ? "linear-gradient(135deg, rgba(243,193,68,0.08) 0%, rgba(30,27,22,0.95) 100%)"
-                                : "rgba(255,255,255,0.03)",
-                              borderLeft: ht.isChampion ? "3px solid #f3c144" : "3px solid transparent",
-                              transition: "all 0.2s ease"
-                            }}
-                          >
-                            <td style={{ padding: "12px 14px" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: ht.isChampion ? "#f3c144" : "#e2e8f0" }}>{ht.title}</span>
-                                <span style={{ fontSize: "0.75rem", color: "#7a7267" }}>{ht.type}</span>
-                              </div>
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                              <span style={{
-                                display: "inline-block",
-                                padding: "3px 10px",
-                                borderRadius: "12px",
-                                fontSize: "0.75rem",
-                                fontWeight: 700,
-                                background: (ht.category || "tournament") === "puzzle" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.15)",
-                                color: (ht.category || "tournament") === "puzzle" ? "#a78bfa" : "#60a5fa",
-                                border: (ht.category || "tournament") === "puzzle" ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(59,130,246,0.3)"
-                              }}>
-                                {categoryLabel}
-                              </span>
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center" }}>
-                              <span style={{
-                                display: "inline-block",
-                                padding: "4px 12px",
-                                borderRadius: "8px",
-                                fontSize: "0.85rem",
-                                fontWeight: 900,
-                                background: ht.place === 1 ? "linear-gradient(135deg, rgba(243,193,68,0.25), rgba(212,163,42,0.12))" : ht.place === 2 ? "rgba(192,192,192,0.15)" : ht.place === 3 ? "rgba(205,127,50,0.15)" : "rgba(255,255,255,0.08)",
-                                color: ht.place === 1 ? "#f3c144" : ht.place === 2 ? "#c0c0c0" : ht.place === 3 ? "#cd7f32" : "#94a3b8",
-                                border: ht.place === 1 ? "1px solid rgba(243,193,68,0.4)" : "1px solid rgba(255,255,255,0.1)"
-                              }}>
-                                {rankLabel}
-                              </span>
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.82rem", color: "#cbd5e1", fontWeight: 600 }}>
-                              {ht.award}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.82rem", color: "#94a3b8" }}>
-                              {new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontSize: "0.8rem", color: "#8a8070" }}>
-                              {ht.location}
-                            </td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
-                              {canDownloadCert ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    generateWinnerCertificate({
-                                      playerName: profile?.name || "Player",
-                                      rank: ht.award || certRankStr,
-                                      tournamentTitle: ht.title,
-                                      tournamentType: ht.type,
-                                      pointsOrScore: ht.score || "",
-                                      date: new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
-                                      location: ht.location || "Zewail City of Science and Technology",
-                                      format: "pdf"
-                                    });
-                                  }}
-                                  style={{
-                                    background: isOwnProfile
-                                      ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
-                                      : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
-                                    border: isOwnProfile ? "none" : "1px solid rgba(243,193,68,0.45)",
-                                    color: isOwnProfile ? "#12100d" : "#f3c144",
-                                    padding: "5px 12px",
-                                    borderRadius: "6px",
-                                    fontSize: "0.78rem",
-                                    fontWeight: 800,
-                                    cursor: "pointer",
-                                    boxShadow: isOwnProfile ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "5px",
-                                    transition: "all 0.2s ease"
-                                  }}
-                                  title={isOwnProfile ? "Download your official diploma certificate (PDF)" : `Download certificate for ${profile?.name}`}
-                                >
-                                  <span>📜</span>
-                                  <span>{isOwnProfile ? "My Certificate" : "Certificate"}</span>
-                                </button>
-                              ) : (
-                                <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }} title="Certificates are private to the player">
-                                  🔒 Private
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Card View (shown below md breakpoint via CSS) */}
-                <div className="historical-records-mobile">
+                {/* Unified Card View */}
+                <div className="tournament-grid-dashboard">
                   {tournamentAchievements.historicalList.map((ht, idx) => {
                     const rankLabel = ht.place === 1 ? "🥇 1st" : ht.place === 2 ? "🥈 2nd" : ht.place === 3 ? "🥉 3rd" : `#${ht.place}`;
                     const certRankStr = ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`;

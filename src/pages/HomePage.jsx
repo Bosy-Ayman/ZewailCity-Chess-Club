@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { 
-  Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink, 
-  Calendar, MapPin, Users, Swords, Heart, 
+import {
+  Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink,
+  Calendar, MapPin, Users, Swords, Heart,
   CheckCircle2, Send,
   Mail, Copy, Check, Crown, UserPlus, UserCheck, User, X
 } from "lucide-react";
@@ -374,7 +374,7 @@ const HomePage = () => {
                       });
                     }
                   })
-                  .catch(() => {});
+                  .catch(() => { });
 
                 setFollowingState(followMap);
               }
@@ -581,16 +581,16 @@ const HomePage = () => {
     const topRating = Math.max(fideRating, chessComRating, lichessRating);
 
     // 1. Leadership Check
-    const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer", "officer"].includes(u.role) || 
+    const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer", "officer"].includes(u.role) ||
       (Array.isArray(u.clubRoles) && u.clubRoles.length > 0) ||
       emailKey.includes("admin@zcchessclub.com");
 
     // 2. Champions Check
-    const wonTournament = (tournamentsList || []).some(t => 
+    const wonTournament = (tournamentsList || []).some(t =>
       (t.winner && (t.winner.toLowerCase() === (u.name || "").toLowerCase() || t.winner.toLowerCase() === emailKey)) ||
       (Array.isArray(t.podium) && t.podium.some(p => p && p.name && (p.name.toLowerCase() === (u.name || "").toLowerCase() || p.name.toLowerCase() === emailKey)))
     );
-    const wonPuzzle = (puzzleTournamentsList || []).some(pt => 
+    const wonPuzzle = (puzzleTournamentsList || []).some(pt =>
       (Array.isArray(pt.leaderboard) && pt.leaderboard.slice(0, 3).some(l => l && (l.email?.toLowerCase() === emailKey || l.name?.toLowerCase() === (u.name || "").toLowerCase())))
     );
     const isHistoricalChamp = ["abdelrahman mohamed", "abdelwahab hamdi", "mohamed eslam", "omar tarek", "youssef ghanem", "ahmed hassan", "bosy ayman", "poussy ayman", "omar ezz"].some(champ => (u.name || "").toLowerCase().includes(champ));
@@ -605,32 +605,32 @@ const HomePage = () => {
     const title = u.major
       ? `🎓 ${u.major}${u.batch ? ` (Batch ${u.batch})` : ''}`
       : topRating > 0
-      ? `⚡ Rated Contender (${topRating} Elo)`
-      : "♟️ Zewailian Tactician";
+        ? `⚡ Rated Contender (${topRating} Elo)`
+        : "♟️ Zewailian Tactician";
 
     const badge = u.role === "president"
       ? "👑 President"
       : u.role === "vice_president"
-      ? "⭐ Vice President"
-      : u.role === "admin" 
-      ? "👑 High Board" 
-      : u.role === "oc"
-      ? "🏆 OC Head"
-      : u.role === "hr" 
-      ? "🤝 HR Head" 
-      : u.role === "pr"
-      ? "📢 PR Head"
-      : u.role === "media"
-      ? "🎨 Media Head"
-      : u.role === "trainer"
-      ? "♟️ Head Trainer"
-      : u.role === "trainee"
-      ? "🎯 Trainee"
-      : u.role === "officer"
-      ? "⚡ Officer"
-      : u.chessTitle 
-      ? `👑 ${u.chessTitle}` 
-      : (topRating > 0 ? `⚡ ${topRating} Elo` : isChampion ? "🏆 Champion" : "♟️ Club Member");
+        ? "⭐ Vice President"
+        : u.role === "admin"
+          ? "👑 High Board"
+          : u.role === "oc"
+            ? "🏆 OC Head"
+            : u.role === "hr"
+              ? "🤝 HR Head"
+              : u.role === "pr"
+                ? "📢 PR Head"
+                : u.role === "media"
+                  ? "🎨 Media Head"
+                  : u.role === "trainer"
+                    ? "♟️ Head Trainer"
+                    : u.role === "trainee"
+                      ? "🎯 Trainee"
+                      : u.role === "officer"
+                        ? "⚡ Officer"
+                        : u.chessTitle
+                          ? `👑 ${u.chessTitle}`
+                          : (topRating > 0 ? `⚡ ${topRating} Elo` : isChampion ? "🏆 Champion" : "♟️ Club Member");
 
     return {
       name: u.name || emailKey.split("@")[0],
@@ -855,23 +855,23 @@ const HomePage = () => {
   const activeTournament = recentTournaments[activeTournamentIndex] || recentTournaments[0];
   const featuredAnnouncement = featuredLiveEvent
     ? {
-        ...pinnedAnnouncement,
-        category: featuredLiveEvent.eventKind === "puzzle" ? "puzzle" : "tournament",
-        categoryLabel: featuredLiveEvent.eventKind === "puzzle" ? "Puzzle Challenge" : "Tournament",
-        title: featuredLiveEvent.title || featuredLiveEvent.name,
-        description: featuredLiveEvent.eventKind === "puzzle"
-          ? `${featuredLiveEvent.title} is live in the ZC tactics arena. Register, solve the puzzles, and climb the leaderboard.`
-          : `${featuredLiveEvent.title || featuredLiveEvent.name} is on the club calendar. Check the schedule, register your place, and compete for the podium.`,
-        date: featuredLiveEvent.startDate,
-        image: featuredLiveEvent.image || (featuredLiveEvent.eventKind === "puzzle" ? "/Images/Tournaments/2025-2026/PuzzleChallenge.jpg" : pinnedAnnouncement.image),
-        link: featuredLiveEvent.eventKind === "puzzle" ? "/puzzlechallenge" : "/tournaments",
-        linkLabel: featuredLiveEvent.eventKind === "puzzle" ? "Enter Puzzle Arena" : "View Tournament"
-      }
+      ...pinnedAnnouncement,
+      category: featuredLiveEvent.eventKind === "puzzle" ? "puzzle" : "tournament",
+      categoryLabel: featuredLiveEvent.eventKind === "puzzle" ? "Puzzle Challenge" : "Tournament",
+      title: featuredLiveEvent.title || featuredLiveEvent.name,
+      description: featuredLiveEvent.eventKind === "puzzle"
+        ? `${featuredLiveEvent.title} is live in the ZC tactics arena. Register, solve the puzzles, and climb the leaderboard.`
+        : `${featuredLiveEvent.title || featuredLiveEvent.name} is on the club calendar. Check the schedule, register your place, and compete for the podium.`,
+      date: featuredLiveEvent.startDate,
+      image: featuredLiveEvent.image || (featuredLiveEvent.eventKind === "puzzle" ? "/Images/Tournaments/2025-2026/PuzzleChallenge.jpg" : pinnedAnnouncement.image),
+      link: featuredLiveEvent.eventKind === "puzzle" ? "/puzzlechallenge" : "/tournaments",
+      linkLabel: featuredLiveEvent.eventKind === "puzzle" ? "Enter Puzzle Arena" : "View Tournament"
+    }
     : pinnedAnnouncement;
   const historicalChampionships = HISTORICAL_TOURNAMENT_COUNT;
   const championshipCount = Math.max(liveStats.tournaments || 0, historicalChampionships);
 
-  const liveMatch = liveTournament && liveTournament.matches 
+  const liveMatch = liveTournament && liveTournament.matches
     ? (liveTournament.matches.find((m) => m.round === (liveTournament.currentRound || 3) && m.result === "Pending") || liveTournament.matches[0])
     : { white: "Bosy Ayman", black: "Omar Ezz", round: 3 };
 
@@ -1022,9 +1022,9 @@ const HomePage = () => {
                 <div className="live-board-players-row">
                   <div className="live-player-cell live-player-white">
                     <div className="live-avatar-frame">
-                      <img 
-                        src={getPlayerAvatarUrl(liveMatch?.white || "Bosy Ayman", customAvatars)} 
-                        alt={liveMatch?.white || "White"} 
+                      <img
+                        src={getPlayerAvatarUrl(liveMatch?.white || "Bosy Ayman", customAvatars)}
+                        alt={liveMatch?.white || "White"}
                         className="live-avatar-img"
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                       />
@@ -1041,9 +1041,9 @@ const HomePage = () => {
 
                   <div className="live-player-cell live-player-black">
                     <div className="live-avatar-frame">
-                      <img 
-                        src={getPlayerAvatarUrl(liveMatch?.black || "Abdelrahman Mohamed", customAvatars)} 
-                        alt={liveMatch?.black || "Black"} 
+                      <img
+                        src={getPlayerAvatarUrl(liveMatch?.black || "Abdelrahman Mohamed", customAvatars)}
+                        alt={liveMatch?.black || "Black"}
                         className="live-avatar-img"
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                       />
@@ -1057,8 +1057,8 @@ const HomePage = () => {
             </div>
 
             <div className="live-tourney-right">
-              <a 
-                href={`/tournamentdetails?id=${liveTournament._id || '6aa0079fa457e9dc7b1adac1'}`} 
+              <a
+                href={`/tournamentdetails?id=${liveTournament._id || '6aa0079fa457e9dc7b1adac1'}`}
                 className="live-tourney-cta-btn"
               >
                 <span>Watch Live Standings & Bracket</span>
@@ -1253,90 +1253,25 @@ const HomePage = () => {
           </p>
         </div>
 
-        {/* 📱 2-Level Mobile Tournament Navigation Pattern (Level 1: Compact Header Trigger) */}
-        <div className="winners-mobile-nav-wrapper">
-          <button 
-            type="button"
-            className="winners-mobile-nav-trigger"
-            onClick={() => setWinnersMenuOpen(true)}
-            aria-label="Switch Tournament"
-          >
-            <div className="winners-mobile-nav-left">
-              <span className="winners-mobile-nav-menu-icon">☰</span>
-              <span className="winners-mobile-nav-icon">{activeTournament.icon}</span>
-              <div className="winners-mobile-nav-text">
-                <span className="winners-mobile-nav-section-label">Selected Tournament</span>
-                <span className="winners-mobile-nav-active-title">
-                  {activeTournament.name}
-                  <span className="winners-mobile-nav-badge">{activeTournament.badge}</span>
-                </span>
-              </div>
-            </div>
-            <div className="winners-mobile-nav-right">
-              <span className="winners-mobile-nav-switch-hint">Switch</span>
-              <span className="winners-mobile-nav-arrow">›</span>
-            </div>
-          </button>
-        </div>
-
-        {/* 📱 Mobile Expandable Menu Overlay & Drawer (Level 2) */}
-        {winnersMenuOpen && (
-          <div className="winners-mobile-menu-overlay" onClick={() => setWinnersMenuOpen(false)}>
-            <div 
-              className="winners-mobile-menu-drawer"
-              onClick={(e) => e.stopPropagation()}
+        {/* 📱 Mobile Select Dropdown (hidden on desktop) */}
+        <div className="winners-mobile-select-wrapper">
+          <div className="winners-mobile-select-inner">
+            <span className="winners-mobile-select-icon">{activeTournament.icon}</span>
+            <select
+              className="winners-mobile-select"
+              value={activeTournamentIndex}
+              onChange={(e) => setActiveTournamentIndex(Number(e.target.value))}
+              aria-label="Select Tournament"
             >
-              <div className="winners-mobile-menu-header">
-                <div className="winners-mobile-menu-title-row">
-                  <span className="winners-menu-icon">🏆</span>
-                  <h3>Select Championship</h3>
-                </div>
-                <button 
-                  type="button" 
-                  className="winners-mobile-menu-close" 
-                  onClick={() => setWinnersMenuOpen(false)}
-                  aria-label="Close menu"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="winners-mobile-menu-subtitle">
-                Choose a recent flagship tournament to inspect the winners and podium results:
-              </div>
-
-              <div className="winners-mobile-menu-list">
-                {recentTournaments.map((t, idx) => {
-                  const isActive = idx === activeTournamentIndex;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`winners-mobile-menu-item ${isActive ? 'active-item' : ''}`}
-                      onClick={() => {
-                        setActiveTournamentIndex(idx);
-                        setWinnersMenuOpen(false);
-                      }}
-                    >
-                      <span className="winners-item-status-icon">{isActive ? '✓' : '•'}</span>
-                      <span className="winners-item-icon">{t.icon}</span>
-                      <div className="winners-item-content">
-                        <div className="winners-item-title-row">
-                          <span className="winners-item-title">{t.name}</span>
-                          <span className={`winners-item-badge ${isActive ? 'active-badge' : ''}`}>{t.badge}</span>
-                        </div>
-                        <span className="winners-item-desc">
-                          📅 {t.date} • 📍 {t.location}
-                        </span>
-                      </div>
-                      <span className="winners-item-arrow">›</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {recentTournaments.map((t, idx) => (
+                <option key={t.id} value={idx}>
+                  {t.icon} {t.name}
+                </option>
+              ))}
+            </select>
+            <span className="winners-mobile-select-chevron">▾</span>
           </div>
-        )}
+        </div>
 
         {/* Desktop Segmented Selector for Tournaments */}
         <div className="tournament-pills-scroll-wrapper winners-desktop-pills">
@@ -1372,14 +1307,14 @@ const HomePage = () => {
             const isGold = winner.medal === "gold";
             const isSilver = winner.medal === "silver";
             const isTeamCard = !!(activeTournament.isTeam || winner.members);
-            
+
             return (
-              <div 
-                key={wIdx} 
+              <div
+                key={wIdx}
                 className={`podium-card podium-card--${winner.medal} ${isGold ? "podium-card--gold" : ""} ${isTeamCard ? "podium-card--team" : ""}`}
               >
                 <div className="podium-card-main">
-                  <div 
+                  <div
                     className={`podium-avatar-wrapper ${isTeamCard ? "podium-avatar-wrapper--team" : ""}`}
                     style={isTeamCard && winner.logoBg ? { background: winner.logoBg } : {}}
                   >
@@ -1571,25 +1506,25 @@ const HomePage = () => {
 
         {/* Filter Tabs */}
         <div className="tacticians-filter-bar">
-          <button 
+          <button
             className={`tactician-filter-btn ${tacticiansFilter === "all" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("all")}
           >
             All Members ({campusTacticians.length})
           </button>
-          <button 
+          <button
             className={`tactician-filter-btn ${tacticiansFilter === "champions" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("champions")}
           >
             🏆 Campus Champions ({campusTacticians.filter(t => t.isChampion).length})
           </button>
-          <button 
+          <button
             className={`tactician-filter-btn ${tacticiansFilter === "leaders" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("leaders")}
           >
             👑 Club Leadership ({campusTacticians.filter(t => t.isLeader).length})
           </button>
-          <button 
+          <button
             className={`tactician-filter-btn ${tacticiansFilter === "competitors" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("competitors")}
           >
@@ -1603,15 +1538,15 @@ const HomePage = () => {
             displayedTacticians.map((player, idx) => {
               const isSelf = loggedInEmail && player.email && player.email.toLowerCase() === loggedInEmail.toLowerCase();
               return (
-                <div 
-                  key={player.email || idx} 
+                <div
+                  key={player.email || idx}
                   className={`tactician-card premium-card ${isSelf ? "is-self-card" : ""}`}
                   onClick={() => handleOpenTacticianModal(player)}
                 >
                   <div className="tactician-card-header">
                     <div className="tactician-avatar-wrap">
-                      <img 
-                        src={player.profileImage || getPlayerAvatarUrl(player.name, customAvatars)} 
+                      <img
+                        src={player.profileImage || getPlayerAvatarUrl(player.name, customAvatars)}
                         alt={player.name}
                         className="tactician-avatar-img"
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
@@ -1627,8 +1562,8 @@ const HomePage = () => {
                         </span>
                       )}
                       {player.email && (
-                        <span 
-                          className="tactician-email-chip" 
+                        <span
+                          className="tactician-email-chip"
                           onClick={(e) => handleCopyEmail(player.email, e)}
                           title={`Click to copy ${player.email}`}
                         >
@@ -1644,7 +1579,7 @@ const HomePage = () => {
                     <div className="tactician-title-row">
                       <h3 className="tactician-name">{player.name}</h3>
                       {isAdmin && (
-                        <a 
+                        <a
                           href={`/profile?email=${encodeURIComponent(player.email)}`}
                           className="tactician-card-admin-pill"
                           onClick={(e) => e.stopPropagation()}
@@ -1682,7 +1617,7 @@ const HomePage = () => {
 
                   <div className="tactician-card-footer" onClick={(e) => e.stopPropagation()}>
                     {isSelf ? (
-                      <a 
+                      <a
                         href="/profile"
                         className="tactician-self-profile-btn"
                         title="Manage your profile and view your challenge invitations"
@@ -1692,7 +1627,7 @@ const HomePage = () => {
                       </a>
                     ) : (
                       <>
-                        <button 
+                        <button
                           className={`tactician-cheer-btn ${cheerBursts[player.name] ? "bursting" : ""}`}
                           onClick={(e) => handleQuickCheer(player.name, player.email, e)}
                           title="Send a cheer to this player"
@@ -1701,7 +1636,7 @@ const HomePage = () => {
                           <span>{(player.email && tacticianCheers[player.email.toLowerCase()] !== undefined) ? tacticianCheers[player.email.toLowerCase()] : (tacticianCheers[player.name] ?? player.cheers ?? 0)}</span>
                         </button>
 
-                        <button 
+                        <button
                           className={`tactician-follow-btn ${followingState[(player.email || '').trim().toLowerCase()] ? "active" : ""}`}
                           onClick={(e) => handleToggleFollow(player.email, player.name, e)}
                           title={followingState[(player.email || '').trim().toLowerCase()] ? "Following" : "Follow"}
@@ -1719,7 +1654,7 @@ const HomePage = () => {
                           )}
                         </button>
 
-                        <button 
+                        <button
                           className="tactician-challenge-direct-btn"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1731,7 +1666,7 @@ const HomePage = () => {
                           <span>Duel</span>
                         </button>
 
-                        <a 
+                        <a
                           href={`/profile?email=${encodeURIComponent(player.email)}`}
                           className="tactician-connect-btn"
                           title="View Full Profile & Dossier"
@@ -1766,8 +1701,8 @@ const HomePage = () => {
       {tacticianModalOpen && selectedTactician && (
         <div className="tactician-modal-overlay" onClick={() => setTacticianModalOpen(false)}>
           <div className="tactician-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="tactician-modal-close" 
+            <button
+              className="tactician-modal-close"
               onClick={() => setTacticianModalOpen(false)}
               aria-label="Close Profile"
             >
@@ -1780,9 +1715,9 @@ const HomePage = () => {
 
             <div className="tactician-modal-header">
               <div className="tactician-modal-avatar-frame">
-                <img 
-                  src={selectedTactician.profileImage || getPlayerAvatarUrl(selectedTactician.name, customAvatars)} 
-                  alt={selectedTactician.name} 
+                <img
+                  src={selectedTactician.profileImage || getPlayerAvatarUrl(selectedTactician.name, customAvatars)}
+                  alt={selectedTactician.name}
                   className="tactician-modal-avatar"
                   onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                 />
@@ -1792,11 +1727,11 @@ const HomePage = () => {
                 <div className="tactician-modal-badge">{selectedTactician.badge}</div>
                 <h2 className="tactician-modal-name">{selectedTactician.name}</h2>
                 <p className="tactician-modal-title">{selectedTactician.bio ? selectedTactician.bio : "Zewail City Chess Club Tactician"}</p>
-                
+
                 {/* Email Display with Copy */}
                 {selectedTactician.email && (
-                  <div 
-                    className="modal-email-chip" 
+                  <div
+                    className="modal-email-chip"
                     onClick={() => handleCopyEmail(selectedTactician.email)}
                     title="Click to copy student email"
                   >
@@ -1819,7 +1754,7 @@ const HomePage = () => {
 
             {/* Direct Profile Link Row */}
             <div className="tactician-modal-links-bar">
-              <a 
+              <a
                 href={`/profile?email=${encodeURIComponent(selectedTactician.email)}`}
                 className="btn-modal-full-profile"
               >
@@ -1827,7 +1762,7 @@ const HomePage = () => {
               </a>
 
               {isAdmin && (
-                <a 
+                <a
                   href={`/profile?email=${encodeURIComponent(selectedTactician.email)}`}
                   className="btn-modal-admin-ctrl"
                 >
@@ -1860,7 +1795,7 @@ const HomePage = () => {
             {/* Bio & Tactical Details */}
             <div className="tactician-modal-section">
               <h4>Tactical Attributes &amp; Preferences</h4>
-              
+
               <div className="tactician-attributes-row">
                 <div className="attribute-item">
                   <span className="attr-label">Signature Opening:</span>
@@ -1876,7 +1811,7 @@ const HomePage = () => {
             {/* Cheer & Challenge Actions */}
             <div className="tactician-modal-actions-box">
               <div className="tactician-cheer-action-row">
-                <button 
+                <button
                   className={`modal-cheer-cta ${modalCheered ? "active" : ""}`}
                   onClick={handleModalCheer}
                 >
@@ -1925,8 +1860,8 @@ const HomePage = () => {
                     <div className="challenge-inputs-row">
                       <div className="challenge-input-group">
                         <label>Time Control</label>
-                        <select 
-                          value={challengeTimeControl} 
+                        <select
+                          value={challengeTimeControl}
                           onChange={(e) => setChallengeTimeControl(e.target.value)}
                         >
                           <option value="3+2 Blitz">⚡ 3+2 Blitz</option>
@@ -1939,8 +1874,8 @@ const HomePage = () => {
 
                       <div className="challenge-input-group">
                         <label>Campus Venue</label>
-                        <select 
-                          value={challengeLocation} 
+                        <select
+                          value={challengeLocation}
                           onChange={(e) => setChallengeLocation(e.target.value)}
                         >
                           <option value="Academic Building Lounge">Academic Building Lounge</option>
@@ -1952,8 +1887,8 @@ const HomePage = () => {
                     </div>
 
                     <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="ppm-btn-message"
                         onClick={() => handleCopyInviteText(selectedTactician)}
                         style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "10px", borderRadius: "10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#eee", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700 }}
@@ -1992,8 +1927,8 @@ const HomePage = () => {
         </div>
         <div className="gallery-grid">
           {galleryImages.map((url, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className="gallery-card premium-card"
               onClick={() => setActiveLightboxIndex(i)}
               style={{ cursor: "pointer" }}
@@ -2015,8 +1950,8 @@ const HomePage = () => {
       {activeLightboxIndex !== null && (
         <div className="gallery-lightbox-overlay" onClick={() => setActiveLightboxIndex(null)}>
           <div className="gallery-lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="lightbox-close-btn" 
+            <button
+              className="lightbox-close-btn"
               onClick={() => setActiveLightboxIndex(null)}
               aria-label="Close Lightbox"
             >
@@ -2024,7 +1959,7 @@ const HomePage = () => {
             </button>
 
             {/* Navigation buttons */}
-            <button 
+            <button
               className="lightbox-nav-btn lightbox-prev-btn"
               onClick={handlePrevLightbox}
               aria-label="Previous image"
@@ -2033,14 +1968,14 @@ const HomePage = () => {
             </button>
 
             <div className="lightbox-image-wrapper">
-              <img 
-                src={galleryImages[activeLightboxIndex]} 
-                alt={`ZC Chess Club Moment ${activeLightboxIndex + 1}`} 
+              <img
+                src={galleryImages[activeLightboxIndex]}
+                alt={`ZC Chess Club Moment ${activeLightboxIndex + 1}`}
                 className="lightbox-img"
               />
             </div>
 
-            <button 
+            <button
               className="lightbox-nav-btn lightbox-next-btn"
               onClick={handleNextLightbox}
               aria-label="Next image"

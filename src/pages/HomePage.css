@@ -1143,12 +1143,69 @@
 }
 
 /* Tournament Navigation Pills */
+/* ── Mobile-only tournament selector ── */
+.winners-mobile-select-wrapper {
+  display: none; /* hidden on desktop */
+  padding: 0 16px;
+  margin: 20px auto 4px;
+  max-width: 480px;
+  width: 100%;
+}
+
+.winners-mobile-select-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(26, 23, 17, 0.85);
+  border: 1.5px solid rgba(243, 193, 68, 0.4);
+  border-radius: 12px;
+  padding: 0 14px;
+  height: 50px;
+  gap: 10px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  backdrop-filter: blur(8px);
+}
+
+.winners-mobile-select-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.winners-mobile-select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f0ead8;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 8px;
+}
+
+.winners-mobile-select option {
+  background: #1a1710;
+  color: #f0ead8;
+  font-weight: 600;
+}
+
+.winners-mobile-select-chevron {
+  font-size: 1rem;
+  color: #f3c144;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
 .tournament-pills-scroll-wrapper {
   width: 100%;
   display: flex;
   justify-content: center;
   margin: 28px auto 24px;
 }
+
 
 .tournament-pills-bar {
   display: flex;
@@ -1161,6 +1218,7 @@
   border-radius: 999px;
   max-width: 900px;
 }
+
 
 .tournament-pill-btn {
   background: transparent;
@@ -1733,10 +1791,14 @@
 
 .podium-name {
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: #ffffff;
   margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .podium-detail {
@@ -3066,11 +3128,13 @@
   }
 
   .podium-name {
-    font-size: 1.02rem;
+    font-size: 0.82rem;
     font-weight: 800;
     color: #ffffff;
-    white-space: normal;
-    word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
     margin: 0;
     line-height: 1.25;
   }
@@ -6150,4 +6214,4 @@
   .location-section h2 {
     font-size: 1.45rem;
   }
-}
+}

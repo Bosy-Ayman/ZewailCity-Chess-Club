@@ -314,7 +314,7 @@ const getAppBaseUrl = () => {
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
     return 'https://zc-chess-club.vercel.app';
   }
-  return 'http://localhost:3000';
+  return 'https://zc-chess-club.vercel.app';
 };
 
 const generateWinnerCelebrationEmailHtml = ({
