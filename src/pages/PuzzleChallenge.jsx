@@ -243,6 +243,34 @@ export default function PuzzleChallenge() {
   const [certActionLoading, setCertActionLoading] = useState(false);
   const [certStatusMsg, setCertStatusMsg] = useState("");
 
+  const [solutionBoardWidth, setSolutionBoardWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      if (window.innerWidth <= 480) return Math.min(290, window.innerWidth - 64);
+      if (window.innerWidth <= 768) return 300;
+      if (window.innerWidth <= 1024) return 380;
+      return 430;
+    }
+    return 430;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== "undefined") {
+        if (window.innerWidth <= 480) {
+          setSolutionBoardWidth(Math.min(290, window.innerWidth - 64));
+        } else if (window.innerWidth <= 768) {
+          setSolutionBoardWidth(300);
+        } else if (window.innerWidth <= 1024) {
+          setSolutionBoardWidth(380);
+        } else {
+          setSolutionBoardWidth(430);
+        }
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const isCurrentTactician = (entry) => {
     if (!entry) return false;
     const emailMatch = entry.email && userEmail && entry.email.trim().toLowerCase() === userEmail;
@@ -260,14 +288,17 @@ export default function PuzzleChallenge() {
 
     try {
       setCertActionLoading(true);
-      setCertStatusMsg(`Generating & emailing PDF certificate to ${targetName}...`);
+      setCertStatusMsg(`Generating & emailing official PDF certificate to ${targetName}...`);
       
+      const solvedCount = entry.solvedCount || (entry.solvedPuzzles || []).length || 0;
+      const pointsOrScore = `${entry.score || 0} pts (${solvedCount} solved)`;
+
       const certResult = await generateWinnerCertificate({
         playerName: targetName,
         rank: rankStr,
         tournamentTitle: tourney?.title || "Puzzle Tactics Arena",
         tournamentType: "Puzzle Tactics Arena",
-        pointsOrScore: `${entry.score || 0} pts (${entry.solvedCount || 0} solved)`,
+        pointsOrScore: pointsOrScore,
         format: "pdf",
         download: false
       });
@@ -281,7 +312,7 @@ export default function PuzzleChallenge() {
           tournamentTitle: tourney?.title || "Puzzle Tactics Arena",
           tournamentType: "Puzzle Tactics Arena",
           rank: rankStr,
-          pointsOrScore: `${entry.score || 0} pts`,
+          pointsOrScore: pointsOrScore,
           pdfBase64: certResult?.pdfBase64 || ""
         })
       });
@@ -301,28 +332,70 @@ export default function PuzzleChallenge() {
     }
   };
 
+
   const handleMassSendTournamentCertificates = async (tourney) => {
     if (!tourney?._id) return;
-    if (!window.confirm(`Email official Certificates of Tactical Appreciation / Excellence with PDF attached to ALL participants in "${tourney.title}"?`)) {
+    const standings = getTournamentStandings(tourney);
+    if (!standings || standings.length === 0) {
+      alert("No recorded participants/solvers found for this puzzle challenge arena.");
+      return;
+    }
+
+    if (!window.confirm(`Email official Certificates of Tactical Appreciation / Excellence with PDF attached to ALL ${standings.length} participants in "${tourney.title}"?`)) {
       return;
     }
 
     try {
       setCertActionLoading(true);
-      setCertStatusMsg("Dispatching official certificates with PDF attached to all tacticians...");
+      let successCount = 0;
+      const total = standings.length;
 
-      const res = await fetch(`${API_BASE}/api/puzzle-tournaments/${tourney._id}/send-certificates`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
+      for (let idx = 0; idx < total; idx++) {
+        const entry = standings[idx];
+        const pName = getPlayerDisplayName(entry);
+        const rankStr = idx === 0 ? "Champion (1st Place)" : idx === 1 ? "Runner-Up (2nd Place)" : idx === 2 ? "3rd Place" : `#${idx + 1} Rank Solver`;
+        const solvedCount = entry.solvedCount || (entry.solvedPuzzles || []).length || 0;
+        const pointsOrScore = `${entry.score || 0} pts (${solvedCount} solved)`;
+        const targetEmail = entry.email || (playerNamesByEmail ? Object.keys(playerNamesByEmail).find(em => playerNamesByEmail[em]?.toLowerCase() === pName.toLowerCase()) : null) || "";
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCertStatusMsg(`🎉 ${data.message || `Certificates successfully dispatched to ${data.sentCount} tacticians!`}`);
-        setTimeout(() => setCertStatusMsg(""), 6000);
-      } else {
-        throw new Error(data.error || "Failed to dispatch certificates");
+        setCertStatusMsg(`Generating & emailing official certificate (${idx + 1}/${total}) to ${pName}...`);
+
+        try {
+          const certResult = await generateWinnerCertificate({
+            playerName: pName,
+            rank: rankStr,
+            tournamentTitle: tourney.title || "Puzzle Tactics Arena",
+            tournamentType: "Puzzle Tactics Arena",
+            pointsOrScore: pointsOrScore,
+            format: "pdf",
+            download: false
+          });
+
+          const res = await fetch(`${API_BASE}/api/certificates/send-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipientEmail: targetEmail,
+              recipientName: pName,
+              tournamentTitle: tourney.title || "Puzzle Tactics Arena",
+              tournamentType: "Puzzle Tactics Arena",
+              rank: rankStr,
+              pointsOrScore: pointsOrScore,
+              pdfBase64: certResult?.pdfBase64 || ""
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            successCount++;
+          }
+        } catch (itemErr) {
+          console.warn(`Failed to dispatch cert for ${pName}:`, itemErr);
+        }
       }
+
+      setCertStatusMsg(`🎉 All ${successCount} of ${total} tactician certificates successfully generated & emailed with PDF attached!`);
+      setTimeout(() => setCertStatusMsg(""), 7000);
     } catch (err) {
       setCertStatusMsg(`❌ Error dispatching certificates: ${err.message}`);
       setTimeout(() => setCertStatusMsg(""), 6000);
@@ -2106,7 +2179,7 @@ export default function PuzzleChallenge() {
                               <Chessboard
                                 position={currentFen}
                                 boardOrientation={solutionBoardOrientation}
-                                boardWidth={Math.min(320, typeof window !== "undefined" ? Math.max(260, window.innerWidth - 64) : 320)}
+                                boardWidth={solutionBoardWidth}
                                 arePiecesDraggable={false}
                                 customDarkSquareStyle={{ backgroundColor: "#b58863" }}
                                 customLightSquareStyle={{ backgroundColor: "#f0d9b5" }}

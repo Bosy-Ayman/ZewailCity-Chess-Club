@@ -4068,7 +4068,7 @@ app.post('/api/tournaments/:id/broadcast-winner', async (req, res) => {
   }
 });
 
-// --- Server-side Vector PDF Certificate Generator ---
+// --- Server-side Vector PDF Certificate Generator (Unified Ivory & Gold Design) ---
 async function generateVectorCertificatePdfBuffer({
   playerName,
   rank = "Honored Participant",
@@ -4079,123 +4079,194 @@ async function generateVectorCertificatePdfBuffer({
   date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
   isPuzzle = false
 }) {
-  const sanitize = (str) => (str || "").toString().replace(/[()\\]/g, "");
+  const sanitize = (str) => (str || "").toString().replace(/[()]/g, "").replace(/[^\x20-\x7E]/g, "-");
   const cleanPlayer = sanitize(playerName);
   const cleanTitle = sanitize(tournamentTitle);
   const cleanType = sanitize(tournamentType);
   const rankStr = (rank || "").toString().toLowerCase();
-  const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1";
-  const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2";
-  const isThird = rankStr.includes("3rd") || rankStr === "3";
+  const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1" || rankStr === "#1";
+  const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2" || rankStr === "#2";
+  const isThird = rankStr.includes("3rd") || rankStr === "3" || rankStr === "#3";
   const isPodium = isChamp || isRunnerUp || isThird;
 
-  const mainHeader = isPodium 
-    ? (isPuzzle ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF EXCELLENCE & MERIT")
-    : (isPuzzle ? "CERTIFICATE OF TACTICAL APPRECIATION" : "CERTIFICATE OF PARTICIPATION & APPRECIATION");
+  const mainHeader = isPodium
+    ? "CERTIFICATE OF EXCELLENCE & MERIT"
+    : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
 
-  const citation = isPodium
-    ? (isPuzzle 
-        ? "In recognition of extraordinary tactical foresight and speed," 
-        : "In recognition of exceptional strategic mastery and tactical rigor,")
-    : (isPuzzle
-        ? "In grateful appreciation and recognition of tactical dedication,"
-        : "In grateful appreciation of passionate participation and sportsmanship,");
+  const honorDistinction = isChamp
+    ? "GRAND CHAMPION  -  FIRST PLACE"
+    : isRunnerUp
+    ? "RUNNER-UP FINALIST  -  SECOND PLACE"
+    : isThird
+    ? "THIRD PLACE PODIUM DISTINCTION"
+    : isPuzzle
+    ? "HONORED TACTICAL COMPETITOR"
+    : "HONORED TOURNAMENT COMPETITOR";
 
-  const rankBadgeText = isChamp ? "CHAMPION (1ST PLACE)" : isRunnerUp ? "RUNNER-UP (2ND PLACE)" : isThird ? "3RD PLACE PODIUM" : (sanitize(rank) || "DISTINGUISHED PARTICIPANT");
-  const subCitation = isPodium ? "finishing as the honored" : "competing with honor and distinction in";
+  const scoreText = pointsOrScore ? " (" + sanitize(pointsOrScore) + ")" : "";
+
+  const citation1 = isPodium
+    ? "For exceptional strategic rigor, sportsmanship, and outstanding competitive mastery,"
+    : "In grateful recognition of passionate sportsmanship, strategic rigor, and honorable participation as an";
+  const citation2 = isPodium
+    ? "having achieved the distinguished standing of"
+    : "active competitor with distinction as an";
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([842, 595]);
-  
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
-  const fontTimesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
-  const fontCourier = await pdfDoc.embedFont(StandardFonts.Courier);
+  const W = 842, H = 595;
 
-  // Background
-  page.drawRectangle({ x: 0, y: 0, width: 842, height: 595, color: rgb(0.05, 0.04, 0.03) });
-  
-  // Chessboard Watermark
-  for (let y = 0; y < 595; y += 40) {
-    for (let x = 0; x < 842; x += 40) {
-      if ((Math.floor(x/40) + Math.floor(y/40)) % 2 === 1) {
-        page.drawRectangle({ x, y, width: 40, height: 40, color: rgb(0.08, 0.07, 0.05) });
-      }
+  const fontBold        = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontRegular     = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontTimesBold   = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const fontTimesItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const fontCourier     = await pdfDoc.embedFont(StandardFonts.Courier);
+
+  const cx = W / 2;
+  const drawCentered = (text, y, font, size, color) => {
+    const safeText = text.replace(/[^\x20-\x7E]/g, " ");
+    const tw = font.widthOfTextAtSize(safeText, size);
+    page.drawText(safeText, { x: cx - tw / 2, y, font, size, color });
+    return tw;
+  };
+
+  // Color palette: Warm Ivory & Gold (matching frontend)
+  const inkBlack   = rgb(0.06, 0.045, 0.03);
+  const inkBrown   = rgb(0.29, 0.22, 0.13);
+  const goldDark   = rgb(0.48, 0.36, 0.10);
+  const goldMid    = rgb(0.55, 0.41, 0.13);
+  const goldBright = rgb(0.83, 0.66, 0.24);
+  const greyBrown  = rgb(0.42, 0.35, 0.25);
+  const lightBrown = rgb(0.55, 0.47, 0.38);
+  const parchment  = rgb(0.99, 0.97, 0.93);
+  const blushColor = rgb(0.76, 0.58, 0.25);
+  const transparent = { color: rgb(0, 0, 0), opacity: 0 };
+
+  // 1. Warm parchment background
+  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: parchment });
+
+  // Corner vignette blushes
+  for (let i = 0; i < 5; i++) {
+    const s = 200 - i * 35;
+    const op = Math.max(0, 0.035 - i * 0.006);
+    if (s > 0) {
+      page.drawRectangle({ x: 0, y: H - s, width: s, height: s, color: blushColor, opacity: op });
+      page.drawRectangle({ x: W - s, y: H - s, width: s, height: s, color: blushColor, opacity: op });
+      page.drawRectangle({ x: 0, y: 0, width: s, height: s, color: blushColor, opacity: op });
+      page.drawRectangle({ x: W - s, y: 0, width: s, height: s, color: blushColor, opacity: op });
     }
   }
 
-  // Borders
-  page.drawRectangle({ x: 20, y: 20, width: 802, height: 555, borderColor: rgb(0.95, 0.76, 0.27), borderWidth: 4 });
-  page.drawRectangle({ x: 28, y: 28, width: 786, height: 539, borderColor: rgb(0.95, 0.76, 0.27), borderWidth: 1 });
+  // 2. Framing
+  const pad = 24;
+  page.drawRectangle({ x: pad, y: pad, width: W - pad * 2, height: H - pad * 2, borderColor: goldDark, borderWidth: 2.2, ...transparent });
+  page.drawRectangle({ x: pad + 5, y: pad + 5, width: W - (pad + 5) * 2, height: H - (pad + 5) * 2, borderColor: goldBright, borderWidth: 0.9, ...transparent });
+  page.drawRectangle({ x: pad + 10, y: pad + 10, width: W - (pad + 10) * 2, height: H - (pad + 10) * 2, borderColor: goldMid, borderWidth: 0.5, opacity: 0.4, color: rgb(0,0,0) });
 
-  const drawCenteredText = (text, y, font, size, color, centerX = 421) => {
-    const width = font.widthOfTextAtSize(text, size);
-    page.drawText(text, { x: centerX - width / 2, y, font, size, color });
-    return width;
-  };
+  // 3. Header Section
+  let logoImg = null;
+  try {
+    const logoPath = path.join(__dirname, '../public/Icons/chess-clublogo.png');
+    if (fs.existsSync(logoPath)) {
+      logoImg = await pdfDoc.embedPng(fs.readFileSync(logoPath));
+      const logoSize = 42;
+      page.drawImage(logoImg, { x: cx - logoSize / 2, y: H - 65, width: logoSize, height: logoSize, opacity: 0.95 });
+    }
+  } catch (e) {}
 
-  const gold = rgb(0.95, 0.76, 0.27);
-  const white = rgb(1, 1, 1);
-  const offWhite = rgb(0.82, 0.78, 0.72);
-  const grey = rgb(0.68, 0.64, 0.58);
+  // University name
+  drawCentered("ZEWAIL CITY OF SCIENCE, TECHNOLOGY AND INNOVATION", H - 78, fontBold, 6.5, greyBrown);
 
-  drawCenteredText("ZEWAIL CITY CHESS CLUB", 520, fontBold, 18, gold);
-  drawCenteredText(mainHeader, 470, fontTimesBold, 24, white);
-  drawCenteredText("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", 430, fontRegular, 12, grey);
-  
-  drawCenteredText(cleanPlayer, 370, fontTimesBold, 36, rgb(0.98, 0.84, 0.28));
-  
-  drawCenteredText(citation, 320, fontRegular, 14, offWhite);
-  drawCenteredText(subCitation, 300, fontRegular, 14, offWhite);
-  drawCenteredText("in the " + cleanTitle, 260, fontTimesBold, 20, white);
+  // Thin rule
+  page.drawLine({ start: { x: cx - 180, y: H - 84 }, end: { x: cx + 180, y: H - 84 }, thickness: 0.6, color: goldMid, opacity: 0.35 });
 
-  const rankText = `${rankBadgeText} ${pointsOrScore ? `- ${sanitize(pointsOrScore)}` : ""}`;
-  const rankWidth = fontBold.widthOfTextAtSize(rankText, 15) + 40;
-  const rankX = 421 - (rankWidth / 2);
-  
-  page.drawRectangle({ x: rankX, y: 205, width: rankWidth, height: 34, borderColor: gold, borderWidth: 1.5 });
-  drawCenteredText(rankText, 216, fontBold, 15, gold);
+  // Club name
+  drawCentered("ZEWAIL CITY CHESS CLUB", H - 105, fontTimesBold, 15, inkBlack);
 
-  drawCenteredText(`Format: ${cleanType} - Venue: Zewail City of Science and Technology`, 175, fontRegular, 11, grey);
-  drawCenteredText(`Date of Conferral: ${sanitize(date)}`, 155, fontRegular, 11, grey);
+  // Certificate title
+  drawCentered(mainHeader, H - 134, fontTimesBold, 19, goldDark);
 
-  // Signatures
-  page.drawLine({ start: { x: 130, y: 95 }, end: { x: 290, y: 95 }, thickness: 1, color: gold });
-  drawCenteredText(isPuzzle ? "Alaa Salama" : "Ahmed Elkhodiry", 107, fontTimesItalic, 18, rgb(1, 0.85, 0.35), 210);
-  drawCenteredText(isPuzzle ? "PUZZLE ARBITER" : "CLUB PRESIDENT", 75, fontRegular, 9, gold, 210);
+  // Laurel / Diamond divider
+  const divY = H - 148;
+  page.drawLine({ start: { x: cx - 140, y: divY }, end: { x: cx - 14, y: divY }, thickness: 0.8, color: goldMid, opacity: 0.5 });
+  page.drawLine({ start: { x: cx + 14, y: divY }, end: { x: cx + 140, y: divY }, thickness: 0.8, color: goldMid, opacity: 0.5 });
+  page.drawRectangle({ x: cx - 4, y: divY - 4, width: 8, height: 8, color: goldMid, rotate: { type: 'degrees', angle: 45 } });
 
-  page.drawLine({ start: { x: 552, y: 95 }, end: { x: 712, y: 95 }, thickness: 1, color: gold });
-  drawCenteredText("Omar Hafez", 107, fontTimesItalic, 18, rgb(1, 0.85, 0.35), 632);
-  drawCenteredText("VICE PRESIDENT", 75, fontRegular, 9, gold, 632);
+  // 4. Recipient Section
+  drawCentered("THIS CERTIFICATE IS PROUDLY CONFERRED UPON", H - 170, fontRegular, 7.5, greyBrown);
+  drawCentered(cleanPlayer, H - 208, fontTimesBold, 26, inkBlack);
 
-  drawCenteredText(`Official Verification ID: ${certCode} - zc-chess-club.vercel.app`, 30, fontCourier, 9, rgb(0.6, 0.5, 0.4));
+  // Underline
+  const nameUnderW = Math.min(fontTimesBold.widthOfTextAtSize(cleanPlayer, 26) + 50, 360);
+  const nameUnderY = H - 216;
+  page.drawLine({ start: { x: cx - nameUnderW / 2, y: nameUnderY }, end: { x: cx + nameUnderW / 2, y: nameUnderY }, thickness: 0.9, color: goldMid, opacity: 0.65 });
+  page.drawCircle({ x: cx, y: nameUnderY, size: 2.2, color: goldMid });
 
-  // Stamp Embedding
+  // 5. Citation text
+  drawCentered(citation1, H - 238, fontTimesItalic, 9.5, inkBrown);
+  drawCentered(citation2, H - 251, fontTimesItalic, 9.5, inkBrown);
+
+  // Honor distinction badge
+  const fullHonor = honorDistinction + scoreText;
+  const honorW = fontBold.widthOfTextAtSize(fullHonor, 10.5) + 30;
+  const honorBadgeY = H - 280;
+  page.drawRectangle({ x: cx - honorW / 2, y: honorBadgeY, width: honorW, height: 19, borderColor: goldMid, borderWidth: 0.9, ...transparent });
+  drawCentered(fullHonor, honorBadgeY + 5, fontBold, 10.5, goldDark);
+
+  // 6. Tournament Context
+  drawCentered("in the " + cleanTitle, H - 308, fontTimesBold, 11, inkBlack);
+  drawCentered("Format: " + cleanType + "   -   Venue: Zewail City of Science and Technology", H - 324, fontRegular, 7.5, greyBrown);
+  drawCentered("Date of Official Conferral: " + sanitize(date), H - 336, fontRegular, 7.5, greyBrown);
+
+  // Separator rule
+  page.drawLine({ start: { x: 70, y: H - 350 }, end: { x: W - 70, y: H - 350 }, thickness: 0.6, color: goldMid, opacity: 0.3 });
+
+  // 7. Tri-Column Authority Section (Ahmed Left, Stamp Center, Omar Right)
+  const sig1X = cx - 210; // Left column (Ahmed Elkhodiry)
+  const sig2X = cx + 210; // Right column (Omar Hafez)
+  const sigLineY = H - 410;
+
+  // Signature Lines
+  page.drawLine({ start: { x: sig1X - 55, y: sigLineY }, end: { x: sig1X + 55, y: sigLineY }, thickness: 0.9, color: goldMid, opacity: 0.7 });
+  page.drawLine({ start: { x: sig2X - 55, y: sigLineY }, end: { x: sig2X + 55, y: sigLineY }, thickness: 0.9, color: goldMid, opacity: 0.7 });
+
+  // Signature script names
+  const n1w = fontTimesItalic.widthOfTextAtSize("Ahmed Elkhodiry", 12);
+  const n2w = fontTimesItalic.widthOfTextAtSize("Omar Hafez", 12);
+  page.drawText("Ahmed Elkhodiry", { x: sig1X - n1w / 2, y: sigLineY + 8, font: fontTimesItalic, size: 12, color: inkBlack });
+  page.drawText("Omar Hafez", { x: sig2X - n2w / 2, y: sigLineY + 8, font: fontTimesItalic, size: 12, color: inkBlack });
+
+  // Printed Names & Titles
+  const p1w = fontTimesBold.widthOfTextAtSize("Ahmed Elkhodiry", 8.5);
+  const p2w = fontTimesBold.widthOfTextAtSize("Omar Hafez", 8.5);
+  page.drawText("Ahmed Elkhodiry", { x: sig1X - p1w / 2, y: sigLineY - 11, font: fontTimesBold, size: 8.5, color: inkBlack });
+  page.drawText("Omar Hafez", { x: sig2X - p2w / 2, y: sigLineY - 11, font: fontTimesBold, size: 8.5, color: inkBlack });
+
+  const t1w = fontBold.widthOfTextAtSize("CLUB PRESIDENT", 6.5);
+  const t2w = fontBold.widthOfTextAtSize("VICE PRESIDENT", 6.5);
+  page.drawText("CLUB PRESIDENT", { x: sig1X - t1w / 2, y: sigLineY - 20, font: fontBold, size: 6.5, color: goldMid });
+  page.drawText("VICE PRESIDENT", { x: sig2X - t2w / 2, y: sigLineY - 20, font: fontBold, size: 6.5, color: goldMid });
+
+  const s1w = fontRegular.widthOfTextAtSize("Zewail City Chess Club", 6);
+  const s2w = fontRegular.widthOfTextAtSize("Zewail City Chess Club", 6);
+  page.drawText("Zewail City Chess Club", { x: sig1X - s1w / 2, y: sigLineY - 28, font: fontRegular, size: 6, color: lightBrown });
+  page.drawText("Zewail City Chess Club", { x: sig2X - s2w / 2, y: sigLineY - 28, font: fontRegular, size: 6, color: lightBrown });
+
+  // Center Official Stamp
   try {
     const stampPath = path.join(__dirname, '../public/Icons/official-stamp.png');
     if (fs.existsSync(stampPath)) {
-      const stampBytes = fs.readFileSync(stampPath);
-      const stampImage = await pdfDoc.embedPng(stampBytes);
-      const desiredWidth = 100;
-      const desiredHeight = (stampImage.height / stampImage.width) * desiredWidth;
-      page.drawImage(stampImage, {
-        x: 421 - desiredWidth / 2,
-        y: 105 - desiredHeight / 2,
-        width: desiredWidth,
-        height: desiredHeight,
-        opacity: 0.85
-      });
-    } else {
-      // Fallback seal if PNG not found
-      page.drawRectangle({ x: 371, y: 105, width: 100, height: 100, borderColor: gold, borderWidth: 2 });
-      drawCenteredText("ZC CHESS", 110, fontBold, 10, gold, 421);
-      drawCenteredText("CLUB", 97, fontBold, 10, gold, 421);
-      drawCenteredText("SEAL", 85, fontBold, 8, gold, 421);
+      const stampImg = await pdfDoc.embedPng(fs.readFileSync(stampPath));
+      const sSize = 74;
+      page.drawImage(stampImg, { x: cx - sSize / 2, y: H - 436, width: sSize, height: sSize, opacity: 0.88 });
     }
-  } catch (err) {
-    console.warn("Could not embed official stamp:", err);
-  }
+  } catch (e) {}
+
+  // 8. Footer Credential ID
+  drawCentered(
+    "Official Credential ID: " + (certCode || "ZC-CERT-VERIFIED") + "   -   Verified by Office of Arbiters   -   zc-chess-club.vercel.app",
+    26, fontCourier, 6.2, lightBrown
+  );
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
@@ -4337,9 +4408,9 @@ const generateOfficialCertificateEmailHtml = ({
           <table class="signatures-row" width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td width="50%" align="center" valign="top">
-                <div class="sig-name-script">Alaa Salama</div>
-                <p class="sig-name-print">Alaa Salama</p>
-                <p class="sig-role">${isPuzzle ? "Puzzle Arbiter & Organizing Head" : "Chief Arbiter & Organizing Head"}</p>
+                <div class="sig-name-script">Omar Hafez</div>
+                <p class="sig-name-print">Omar Hafez</p>
+                <p class="sig-role">Vice President</p>
               </td>
               <td width="50%" align="center" valign="top">
                 <div class="sig-name-script">Ahmed Elkhodiry</div>
@@ -4369,8 +4440,8 @@ const generateOfficialCertificateEmailHtml = ({
 // POST: Universal single certificate email dispatcher with attached PDF
 app.post('/api/certificates/send-email', async (req, res) => {
   try {
+    let { recipientEmail } = req.body;
     const {
-      recipientEmail,
       recipientName,
       tournamentTitle,
       tournamentType = "Tournament",
@@ -4379,8 +4450,18 @@ app.post('/api/certificates/send-email', async (req, res) => {
       pdfBase64 = ""
     } = req.body;
 
-    if (!recipientEmail || !recipientName) {
-      return res.status(400).json({ error: "recipientEmail and recipientName are required" });
+    if (!recipientName) {
+      return res.status(400).json({ error: "recipientName is required" });
+    }
+
+    if (!recipientEmail) {
+      // Try to resolve email via findPlayerContact if missing
+      const contact = await findPlayerContact(recipientName, null);
+      if (contact && contact.email) {
+        recipientEmail = contact.email;
+      } else {
+        return res.status(400).json({ error: `No email address found for ${recipientName}. Please ensure they are registered.` });
+      }
     }
 
     const cleanName = recipientName.trim();
@@ -4395,8 +4476,8 @@ app.post('/api/certificates/send-email', async (req, res) => {
     const isPodium = isChamp || isRunnerUp || isThird;
 
     const certTitle = isPodium 
-      ? (isPuzzle ? "CERTIFICATE OF TACTICAL EXCELLENCE" : "CERTIFICATE OF EXCELLENCE & ACHIEVEMENT")
-      : (isPuzzle ? "CERTIFICATE OF TACTICAL APPRECIATION" : "CERTIFICATE OF PARTICIPATION & APPRECIATION");
+      ? "CERTIFICATE OF EXCELLENCE & ACHIEVEMENT"
+      : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
 
     let pdfBuffer;
     if (pdfBase64 && typeof pdfBase64 === "string" && pdfBase64.length > 50) {
@@ -4585,35 +4666,39 @@ app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
     const tournament = await PuzzleTournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Puzzle tournament not found" });
 
-    // Gather solvers
+    // Gather solvers — schema uses `leaderboard` (scored entries) and `participants` (all registrants)
     const solvers = [];
     const seenEmails = new Set();
 
-    if (tournament.solvers && Array.isArray(tournament.solvers)) {
-      tournament.solvers.forEach((s) => {
-        if (s && (s.name || s.email)) {
-          const email = (s.email || "").toLowerCase().trim();
-          if (email && !seenEmails.has(email)) {
+    // 1. Leaderboard entries have scores — add first so winners get correct rank
+    if (tournament.leaderboard && Array.isArray(tournament.leaderboard)) {
+      // Sort leaderboard by score desc so rank index is correct
+      const sorted = [...tournament.leaderboard].sort((a, b) => (b.score || 0) - (a.score || 0));
+      sorted.forEach((s) => {
+        if (s && s.email) {
+          const email = s.email.toLowerCase().trim();
+          if (!seenEmails.has(email)) {
             seenEmails.add(email);
-            solvers.push(s);
+            solvers.push({ name: s.name || email, email, score: s.score || 0, solvedCount: s.solvedCount || 0 });
           }
         }
       });
     }
 
-    // Also look in registered participants / attempts if any
-    if (tournament.registrations && Array.isArray(tournament.registrations)) {
-      tournament.registrations.forEach(r => {
+    // 2. Add all registered participants who didn't score yet (participation cert)
+    if (tournament.participants && Array.isArray(tournament.participants)) {
+      tournament.participants.forEach(r => {
         const email = (r.email || "").toLowerCase().trim();
         if (email && !seenEmails.has(email)) {
           seenEmails.add(email);
-          solvers.push({ name: r.name, email: email, score: 0, solvedCount: 0 });
+          solvers.push({ name: r.name || email, email, score: 0, solvedCount: 0 });
         }
       });
     }
 
+    // 3. Fallback: try to resolve emails via User collection for any leaderboard entry missing email
     if (solvers.length === 0) {
-      return res.status(400).json({ error: "No recorded solvers found for this puzzle challenge arena." });
+      return res.status(400).json({ error: "No participants or solvers found for this puzzle challenge arena." });
     }
 
     // Sort by score desc, time asc

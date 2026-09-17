@@ -19,6 +19,8 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
+  const [certActionLoading, setCertActionLoading] = useState(false);
+  const [certStatusMsg, setCertStatusMsg] = useState("");
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
 
   // Interactive Player Preview Modal State
@@ -566,17 +568,7 @@ const isBlackWinner = (result) => {
   };
 
   const handleDispatchCertificates = async () => {
-    if (!tournamentId) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/send-certificates`, {
-        method: "POST"
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to dispatch certificates");
-      alert(data.message || "Official certificates successfully emailed to winners!");
-    } catch (err) {
-      alert("Error sending certificates: " + err.message);
-    }
+    return handleMassEmailCertificates();
   };
 
   // Export Official Tournament Summary Card as PNG Image
@@ -869,6 +861,117 @@ const isBlackWinner = (result) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  // ── Certificate helpers ──────────────────────────────────────────────────
+  const handleEmailPlayerCertificate = async (playerName, playerEmail, rankStr, pointsStr) => {
+    try {
+      setCertActionLoading(true);
+      setCertStatusMsg(`Generating & emailing official PDF certificate to ${playerName}...`);
+      
+      const certResult = await generateWinnerCertificate({
+        playerName: playerName,
+        rank: rankStr,
+        tournamentTitle: tournament?.title || "ZC Chess Tournament",
+        tournamentType: tournament?.type || "Swiss Championship",
+        pointsOrScore: pointsStr || "",
+        format: "pdf",
+        download: false
+      });
+
+      const res = await fetch(`${API_BASE}/api/certificates/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: playerEmail,
+          recipientName: playerName,
+          tournamentTitle: tournament?.title || "ZC Chess Tournament",
+          tournamentType: tournament?.type || "Tournament",
+          rank: rankStr,
+          pointsOrScore: pointsStr || "",
+          pdfBase64: certResult?.pdfBase64 || ""
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCertStatusMsg(`✅ Certificate emailed to ${playerEmail || playerName} with official PDF attached!`);
+        setTimeout(() => setCertStatusMsg(""), 5000);
+      } else {
+        throw new Error(data.error || "Failed to email certificate");
+      }
+    } catch (err) {
+      setCertStatusMsg(`❌ Error: ${err.message}`);
+      setTimeout(() => setCertStatusMsg(""), 6000);
+    } finally {
+      setCertActionLoading(false);
+    }
+  };
+
+  const handleMassEmailCertificates = async (playersList = [], standingsMap = {}) => {
+    if (!tournamentId) return;
+    const targetPlayers = (playersList && playersList.length > 0) ? playersList : (tournament?.players || []);
+    if (!targetPlayers || targetPlayers.length === 0) {
+      alert("No players found in this tournament.");
+      return;
+    }
+    if (!window.confirm(`Email official certificates with PDF to ALL ${targetPlayers.length} participants in "${tournament?.title}"?`)) return;
+    
+    try {
+      setCertActionLoading(true);
+      let successCount = 0;
+      const total = targetPlayers.length;
+
+      for (let idx = 0; idx < total; idx++) {
+        const p = targetPlayers[idx];
+        const pName = typeof p === "string" ? p : p.name;
+        const pEmail = typeof p === "object" ? p.email : "";
+        const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
+        const pointsStr = p.points != null ? `${p.points} pts` : "";
+
+        setCertStatusMsg(`Generating & emailing official certificate (${idx + 1}/${total}) to ${pName}...`);
+
+        try {
+          const certResult = await generateWinnerCertificate({
+            playerName: pName,
+            rank: rankStr,
+            tournamentTitle: tournament?.title || "ZC Chess Tournament",
+            tournamentType: tournament?.type || "Swiss Championship",
+            pointsOrScore: pointsStr,
+            format: "pdf",
+            download: false
+          });
+
+          const res = await fetch(`${API_BASE}/api/certificates/send-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipientEmail: pEmail,
+              recipientName: pName,
+              tournamentTitle: tournament?.title || "ZC Chess Tournament",
+              tournamentType: tournament?.type || "Tournament",
+              rank: rankStr,
+              pointsOrScore: pointsStr,
+              pdfBase64: certResult?.pdfBase64 || ""
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            successCount++;
+          }
+        } catch (itemErr) {
+          console.warn(`Failed to dispatch cert for ${pName}:`, itemErr);
+        }
+      }
+
+      setCertStatusMsg(`🎉 All ${successCount} of ${total} tournament certificates successfully generated & emailed with PDF attached!`);
+      setTimeout(() => setCertStatusMsg(""), 7000);
+    } catch (err) {
+      setCertStatusMsg(`❌ Error: ${err.message}`);
+      setTimeout(() => setCertStatusMsg(""), 6000);
+    } finally {
+      setCertActionLoading(false);
+    }
   };
 
   // Calculate Swiss Standings from live database matches (FIDE rules)
@@ -1312,18 +1415,8 @@ const isBlackWinner = (result) => {
                       </button>
                     )}
 
-                    {/* Email Winner Certificates button for staff */}
-                    {(tournament.status === "Completed" || (tournament.rounds > 0 && sortedRounds.length >= tournament.rounds)) && (
-                      <button 
-                        className="add-btn" 
-                        onClick={handleDispatchCertificates}
-                        style={{ background: "linear-gradient(135deg, #9b59b6, #8e44ad)", color: "#fff", fontWeight: "800" }}
-                        title="Email official certificates with club stamp directly to tournament winners"
-                      >
-                        ✉️ Email Winner Certificates
-                      </button>
-                    )}
-                    
+                    {/* Email Certificates removed as requested */}
+
                     {/* Add Match Pairing only makes sense for Knockout if no bracket is generated yet */}
                     {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
                       <button className="add-btn" onClick={() => setMatchModalOpen(true)}>
@@ -1474,8 +1567,61 @@ const isBlackWinner = (result) => {
                     </div>
                   </div>
 
-                  {/* Swiss Standings Table & Mobile Cards */}
-                  <h2 className="section-title">🏆 Swiss System Standings (Live Table)</h2>
+                  {/* Swiss Standings & Honors Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                    <div>
+                      <h2 className="section-title" style={{ margin: 0 }}>🏆 Swiss System Standings & Honors</h2>
+                      <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
+                        {isStaff
+                          ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
+                          : "Players can view and download their personalized certificate."}
+                      </p>
+                    </div>
+                    {isStaff && (
+                      <button
+                        type="button"
+                        disabled={certActionLoading}
+                        onClick={() => {
+                          const sMap = {};
+                          swissStandings.forEach((p, i) => { sMap[p.name] = { rank: i, points: p.points }; });
+                          handleMassEmailCertificates(tournament?.playersList || [], sMap);
+                        }}
+                        style={{
+                          background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                          color: "#12100d",
+                          fontWeight: "900",
+                          border: "none",
+                          padding: "8px 18px",
+                          borderRadius: "8px",
+                          fontSize: "0.82rem",
+                          cursor: certActionLoading ? "wait" : "pointer",
+                          boxShadow: "0 4px 14px rgba(243,193,68,0.35)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px"
+                        }}
+                        title="Dispatch official certificates with PDF to ALL participants"
+                      >
+                        <span>✉️</span>
+                        <span>Email Certificates to All (PDF Attached)</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {certStatusMsg && (
+                    <div style={{
+                      padding: "10px 16px",
+                      marginBottom: "14px",
+                      borderRadius: "8px",
+                      background: certStatusMsg.startsWith("❌") ? "rgba(231,76,60,0.15)" : "rgba(72,187,120,0.15)",
+                      border: certStatusMsg.startsWith("❌") ? "1px solid #e74c3c" : "1px solid #48bb78",
+                      color: certStatusMsg.startsWith("❌") ? "#ff7675" : "#68d391",
+                      fontSize: "0.85rem",
+                      fontWeight: "700"
+                    }}>
+                      {certStatusMsg}
+                    </div>
+                  )}
                   
                   {/* Desktop Table View */}
                   <div className="application-table-wrapper tournaments-desktop-table" style={{ marginBottom: "40px" }}>
@@ -1491,6 +1637,7 @@ const isBlackWinner = (result) => {
                           <th>Rating</th>
                           <th>Major</th>
                           <th style={{ textAlign: "center" }}>Honors Certificate</th>
+                          {isStaff && <th style={{ textAlign: "center" }}>Email PDF</th>}
                           {isStaff && <th>Actions</th>}
                         </tr>
                       </thead>
@@ -1575,6 +1722,28 @@ const isBlackWinner = (result) => {
                                   </span>
                                 )}
                               </td>
+                              {isStaff && (
+                                <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                  <button
+                                    type="button"
+                                    disabled={certActionLoading}
+                                    onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rankStr, p.points != null ? `${p.points} pts` : "")}
+                                    style={{
+                                      background: "rgba(255,255,255,0.07)",
+                                      border: "1px solid rgba(255,255,255,0.2)",
+                                      color: "#e2d9cc",
+                                      padding: "5px 9px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: "700",
+                                      cursor: certActionLoading ? "wait" : "pointer"
+                                    }}
+                                    title={`Email official PDF certificate to ${p.email || p.name}`}
+                                  >
+                                    ✉️ Email PDF
+                                  </button>
+                                </td>
+                              )}
                               {isStaff && (
                                 <td>
                                   <button
@@ -2331,6 +2500,295 @@ const isBlackWinner = (result) => {
                       </div>
                     </>
                   )}
+
+                  {/* ── Knockout Standings & Honors ─────────────────────── */}
+                  {(() => {
+                    const players = tournament?.playersList || [];
+                    if (players.length === 0) return null;
+
+                    // Build a ranking: winner first, then runner-up, then rest alphabetically
+                    const matchesArr = tournament?.matches || [];
+                    const maxRound = matchesArr.length > 0 ? Math.max(...matchesArr.map(m => m.round || 1)) : 0;
+                    const finalMatch = maxRound > 0 ? matchesArr.filter(m => (m.round || 1) === maxRound).find(m => m.black !== "BYE") : null;
+                    const champName = finalMatch ? (isWhiteWinner(finalMatch.result) ? finalMatch.white : (isBlackWinner(finalMatch.result) ? finalMatch.black : null)) : (tournament?.winner || null);
+                    const runnerUpName = finalMatch ? (isWhiteWinner(finalMatch.result) ? finalMatch.black : (isBlackWinner(finalMatch.result) ? finalMatch.white : null)) : null;
+
+                    const sorted = [...players].sort((a, b) => {
+                      if (a.name === champName) return -1;
+                      if (b.name === champName) return 1;
+                      if (a.name === runnerUpName) return -1;
+                      if (b.name === runnerUpName) return 1;
+                      return 0;
+                    });
+
+                    const knockoutRankStr = (pName, idx) => {
+                      if (pName === champName) return "Grand Champion • First Place";
+                      if (pName === runnerUpName) return "Runner-Up Finalist • Second Place";
+                      return `#${idx + 1} Rank Competitor`;
+                    };
+
+                    return (
+                      <div style={{ marginTop: "40px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                          <div>
+                            <h2 className="section-title" style={{ margin: 0 }}>🏆 Knockout Tournament Standings & Honors</h2>
+                            <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
+                              {isStaff
+                                ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
+                                : "Players can view and download their personalized certificate."}
+                            </p>
+                          </div>
+                          {isStaff && (
+                            <button
+                              type="button"
+                              disabled={certActionLoading}
+                              onClick={() => {
+                                const sMap = {};
+                                sorted.forEach((p, i) => { sMap[p.name] = { rank: i }; });
+                                handleMassEmailCertificates(sorted, sMap);
+                              }}
+                              style={{
+                                background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                                color: "#12100d",
+                                fontWeight: "900",
+                                border: "none",
+                                padding: "8px 18px",
+                                borderRadius: "8px",
+                                fontSize: "0.82rem",
+                                cursor: certActionLoading ? "wait" : "pointer",
+                                boxShadow: "0 4px 14px rgba(243,193,68,0.35)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px"
+                              }}
+                              title="Dispatch official certificates with PDF to ALL participants"
+                            >
+                              <span>✉️</span>
+                              <span>Email Certificates to All (PDF Attached)</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {certStatusMsg && (
+                          <div style={{
+                            padding: "10px 16px",
+                            marginBottom: "14px",
+                            borderRadius: "8px",
+                            background: certStatusMsg.startsWith("❌") ? "rgba(231,76,60,0.15)" : "rgba(72,187,120,0.15)",
+                            border: certStatusMsg.startsWith("❌") ? "1px solid #e74c3c" : "1px solid #48bb78",
+                            color: certStatusMsg.startsWith("❌") ? "#ff7675" : "#68d391",
+                            fontSize: "0.85rem",
+                            fontWeight: "700"
+                          }}>
+                            {certStatusMsg}
+                          </div>
+                        )}
+
+                        {/* Desktop Table */}
+                        <div className="application-table-wrapper tournaments-desktop-table">
+                          <table className="application-table">
+                            <thead>
+                              <tr>
+                                <th>Rank</th>
+                                <th>Player</th>
+                                <th>Rating</th>
+                                <th>Major</th>
+                                <th style={{ textAlign: "center" }}>Honors Certificate</th>
+                                {isStaff && <th style={{ textAlign: "center" }}>Email PDF</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sorted.map((p, idx) => {
+                                const isMe = Boolean(
+                                  (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                                  (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                                );
+                                const canViewCert = isStaff || isMe;
+                                const rStr = knockoutRankStr(p.name, idx);
+                                const rankColor = p.name === champName ? "#f3c144" : p.name === runnerUpName ? "#d0d0d0" : "#e8e8e8";
+                                const rankLabel = p.name === champName ? "🥇 Champion" : p.name === runnerUpName ? "🥈 Finalist" : `#${idx + 1}`;
+                                return (
+                                  <tr key={idx} style={{ background: p.name === champName ? "rgba(243,193,68,0.08)" : "transparent" }}>
+                                    <td style={{ fontWeight: "bold", color: rankColor }}>{rankLabel}</td>
+                                    <td style={{ fontWeight: "600", color: "#fff" }}>
+                                      <div className="tournament-player-cell" onClick={() => openPlayerPreview(p.name, p)} title={`Click to view ${p.name}'s Profile Card`}>
+                                        <div className="player-avatar-ring">
+                                          <img
+                                            src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                            alt={p.name}
+                                            className="player-avatar-mini"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                          />
+                                        </div>
+                                        <span className="player-name-text">{p.name}</span>
+                                        {isMe && (
+                                          <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td>{p.rating || "—"}</td>
+                                    <td>{p.major || "—"}</td>
+                                    <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                      {canViewCert ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => generateWinnerCertificate({
+                                            playerName: p.name,
+                                            rank: rStr,
+                                            tournamentTitle: tournament?.title || "ZC Chess Tournament",
+                                            tournamentType: tournament?.type || "Knockout",
+                                            pointsOrScore: "",
+                                            format: "pdf"
+                                          })}
+                                          style={{
+                                            background: isMe
+                                              ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                              : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                            border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                            color: isMe ? "#12100d" : "#f3c144",
+                                            padding: "5px 12px",
+                                            borderRadius: "6px",
+                                            fontSize: "0.78rem",
+                                            fontWeight: "800",
+                                            cursor: "pointer",
+                                            boxShadow: isMe ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "5px"
+                                          }}
+                                          title={isMe ? "Download your official certificate" : `Download certificate for ${p.name}`}
+                                        >
+                                          <span>📜</span>
+                                          <span>{isMe ? "My Certificate" : "Certificate (PDF)"}</span>
+                                        </button>
+                                      ) : (
+                                        <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }}>🔒 Private</span>
+                                      )}
+                                    </td>
+                                    {isStaff && (
+                                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                        <button
+                                          type="button"
+                                          disabled={certActionLoading}
+                                          onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rStr, "")}
+                                          style={{
+                                            background: "rgba(255,255,255,0.07)",
+                                            border: "1px solid rgba(255,255,255,0.2)",
+                                            color: "#e2d9cc",
+                                            padding: "5px 9px",
+                                            borderRadius: "6px",
+                                            fontSize: "0.75rem",
+                                            fontWeight: "700",
+                                            cursor: certActionLoading ? "wait" : "pointer"
+                                          }}
+                                          title={`Email official PDF certificate to ${p.email || p.name}`}
+                                        >
+                                          ✉️ Email PDF
+                                        </button>
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile Cards */}
+                        <div className="tournaments-mobile-cards">
+                          {sorted.map((p, idx) => {
+                            const isMe = Boolean(
+                              (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                              (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                            );
+                            const canViewCert = isStaff || isMe;
+                            const rStr = knockoutRankStr(p.name, idx);
+                            const rankColor = p.name === champName ? "#f3c144" : p.name === runnerUpName ? "#d0d0d0" : "#e8e8e8";
+                            const rankLabel = p.name === champName ? "🥇 Champion" : p.name === runnerUpName ? "🥈 Finalist" : `#${idx + 1} Rank`;
+                            return (
+                              <div key={idx} className="mobile-tournament-card" style={{ borderColor: p.name === champName ? "rgba(243,193,68,0.5)" : "rgba(57,52,40,0.6)" }}>
+                                <div className="mobile-card-header">
+                                  <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: rankColor }}>{rankLabel}</span>
+                                  <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "0.9rem" }}>{p.rating ? `${p.rating} elo` : "—"}</span>
+                                </div>
+                                <div className="mobile-player-cell" onClick={() => openPlayerPreview(p.name, p)}>
+                                  <img
+                                    src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                    alt={p.name}
+                                    className="player-avatar-mini"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                  />
+                                  <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
+                                  {isMe && (
+                                    <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
+                                  )}
+                                </div>
+                                <div className="mobile-card-details">
+                                  <div className="detail-item">
+                                    <span className="detail-label">Major</span>
+                                    <span className="detail-val">{p.major || "—"}</span>
+                                  </div>
+                                </div>
+                                {canViewCert && (
+                                  <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => generateWinnerCertificate({
+                                        playerName: p.name,
+                                        rank: rStr,
+                                        tournamentTitle: tournament?.title || "ZC Chess Tournament",
+                                        tournamentType: tournament?.type || "Knockout",
+                                        pointsOrScore: "",
+                                        format: "pdf"
+                                      })}
+                                      style={{
+                                        flex: 1,
+                                        background: isMe
+                                          ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
+                                          : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
+                                        border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
+                                        color: isMe ? "#12100d" : "#f3c144",
+                                        padding: "7px 12px",
+                                        borderRadius: "6px",
+                                        fontSize: "0.8rem",
+                                        fontWeight: "800",
+                                        cursor: "pointer",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "5px"
+                                      }}
+                                    >
+                                      📜 {isMe ? "My Certificate" : "PDF Cert"}
+                                    </button>
+                                    {isStaff && (
+                                      <button
+                                        type="button"
+                                        disabled={certActionLoading}
+                                        onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rStr, "")}
+                                        style={{
+                                          background: "rgba(255,255,255,0.07)",
+                                          border: "1px solid rgba(255,255,255,0.2)",
+                                          color: "#e2d9cc",
+                                          padding: "7px 12px",
+                                          borderRadius: "6px",
+                                          fontSize: "0.8rem",
+                                          fontWeight: "700",
+                                          cursor: certActionLoading ? "wait" : "pointer"
+                                        }}
+                                      >
+                                        ✉️ Email PDF
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </>

@@ -237,7 +237,8 @@ export default function GlobalWinnerAlert({ notifications = [], customAvatars = 
               handleOpenCelebration();
             }}
           >
-            🎉 Celebrate Champion
+            <span className="btn-text-desktop">🎉 Celebrate Champion</span>
+            <span className="btn-text-mobile">🎉 Celebrate</span>
           </button>
           <button
             type="button"
