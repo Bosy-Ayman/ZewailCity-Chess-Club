@@ -1288,6 +1288,20 @@ const HomePage = () => {
             ))}
           </div>
         </div>
+        
+
+        <div className="winners-mobile-select">
+          <select
+            value={activeTournamentIndex}
+            onChange={(e) => setActiveTournamentIndex(Number(e.target.value))}
+          >
+            {recentTournaments.map((t, idx) => (
+              <option key={t.id} value={idx}>
+                {t.icon} {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Active Tournament Info Header (Desktop) */}
         <div className="active-tournament-banner winners-desktop-banner">
@@ -1505,7 +1519,8 @@ const HomePage = () => {
         )}
 
         {/* Filter Tabs */}
-        <div className="tacticians-filter-bar">
+       {/* Desktop Filter Tabs */}
+        <div className="tacticians-filter-bar tacticians-desktop-filter-bar">
           <button
             className={`tactician-filter-btn ${tacticiansFilter === "all" ? "active" : ""}`}
             onClick={() => setTacticiansFilter("all")}
@@ -1530,6 +1545,20 @@ const HomePage = () => {
           >
             ⚡ Active Players ({campusTacticians.filter(t => t.isActivePlayer).length})
           </button>
+        </div>
+
+        {/* Mobile Filter Select */}
+        <div className="tacticians-mobile-select">
+          <select
+            value={tacticiansFilter}
+            onChange={(e) => setTacticiansFilter(e.target.value)}
+            aria-label="Filter community members"
+          >
+            <option value="all">All Members ({campusTacticians.length})</option>
+            <option value="champions">🏆 Campus Champions ({campusTacticians.filter(t => t.isChampion).length})</option>
+            <option value="leaders">👑 Club Leadership ({campusTacticians.filter(t => t.isLeader).length})</option>
+            <option value="competitors">⚡ Active Players ({campusTacticians.filter(t => t.isActivePlayer).length})</option>
+          </select>
         </div>
 
         {/* Tacticians Grid (Showcase 3-6 preview members on Homepage) */}

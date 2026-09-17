@@ -1296,6 +1296,44 @@
   min-width: 0;
 }
 
+/* Desktop */
+.winners-mobile-select {
+  display: none !important;
+}
+
+/* Mobile */
+@media screen and (max-width: 768px) {
+  .tournament-pills-scroll-wrapper.winners-desktop-pills {
+    display: none !important;
+  }
+
+  .winners-mobile-select {
+    display: block !important;
+    width: 100%;
+    padding-bottom: 16px;
+
+  }
+
+  .winners-mobile-select select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 13px 40px 13px 16px; /* extra right padding for the arrow */
+    background: rgba(20, 18, 14, 0.95);
+    color: white;
+    border: 1px solid rgba(243, 193, 68, 0.35);
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 14px;
+  }
+}
+
 .winners-mobile-nav-menu-icon {
   font-size: 1.25rem;
   color: #f3c144;
@@ -5734,6 +5772,69 @@
     padding: 0;
   }
 
+
+
+.tacticians-mobile-select {
+  display: none;
+}
+/*4 GRID */
+
+@media (max-width: 768px) {
+  .pillars-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .pillar-card {
+    padding: 16px 12px !important;
+  }
+
+  .pillar-card p {
+    font-size: 0.82rem !important;
+  }
+
+  /* Make the 3rd (last) card span both columns to fill the gap */
+  .pillars-grid .pillar-card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+
+
+
+@media screen and (max-width: 768px) {
+  .tacticians-filter-bar.tacticians-desktop-filter-bar {
+    display: none !important;
+  }
+
+  .tacticians-mobile-select {
+    display: block !important;
+    width: 100%;
+    padding: 2px 2px 10px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+
+  .tacticians-mobile-select select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 13px 40px 13px 16px; /* extra right padding for the arrow */
+    background: rgba(20, 18, 14, 0.95);
+    color: white;
+    border: 1px solid rgba(243, 193, 68, 0.35);
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 14px;
+  }
+}
   /* Filter bar horizontal scroll on mobile */
   .tacticians-filter-bar {
     display: flex;
