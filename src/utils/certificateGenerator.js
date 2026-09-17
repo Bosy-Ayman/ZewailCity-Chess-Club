@@ -91,16 +91,25 @@ export function blobToBase64(blob) {
  * Load the official stamp PNG as-is (no pixel masking — draw at 82% opacity with warm tone)
  */
 async function loadOfficialStampImage() {
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  const loaded = await new Promise((resolve) => {
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    let settled = false;
+    const finish = (result) => {
+      if (!settled) {
+        settled = true;
+        resolve(result && img.naturalWidth > 0 ? img : null);
+      }
+    };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
     img.src = "/Icons/official-stamp.png";
-    setTimeout(() => resolve(false), 800);
+    if (img.complete && img.naturalWidth > 0) {
+      finish(true);
+    } else {
+      setTimeout(() => finish(false), 4000);
+    }
   });
-  if (!loaded || !img.naturalWidth) return null;
-  return img;
 }
 
 /**
@@ -306,16 +315,27 @@ export async function generateWinnerCertificate({
   drawCornerFlourish(width - 36, height - 36, -1, -1);
 
   // ─── 3. Club Crest Header ───────────────────────────────────────────────────
-  const logo = new Image();
-  logo.crossOrigin = "anonymous";
-  await new Promise((resolve) => {
-    logo.onload = () => resolve(true);
-    logo.onerror = () => resolve(false);
-    logo.src = "/Icons/chess-clublogo.png";
-    setTimeout(resolve, 500);
+  const logo = await new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    let settled = false;
+    const finish = (res) => {
+      if (!settled) {
+        settled = true;
+        resolve(res && img.naturalWidth > 0 ? img : null);
+      }
+    };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    img.src = "/Icons/chess-clublogo.png";
+    if (img.complete && img.naturalWidth > 0) {
+      finish(true);
+    } else {
+      setTimeout(() => finish(false), 4000);
+    }
   });
 
-  if (logo.complete && logo.naturalWidth > 0) {
+  if (logo && logo.naturalWidth > 0) {
     ctx.save();
     ctx.shadowColor = "rgba(139, 104, 32, 0.25)";
     ctx.shadowBlur = 14;

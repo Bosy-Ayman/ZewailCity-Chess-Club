@@ -217,37 +217,95 @@ export const getUserTournamentAchievements = (user, dbTournaments = []) => {
 
   const wonSet = new Set();
   const podiumSet = new Set();
+  const combinedHistoricalMap = new Map();
 
-  // 1. Check historical input tournaments
+  // 1. Add static historical timeline tournaments
   const historicalList = getHistoricalTournamentsForUser(user);
   historicalList.forEach(item => {
     if (item.isChampion) {
       wonSet.add(item.title);
     }
     podiumSet.add(`${item.title} (${item.award})`);
+    combinedHistoricalMap.set(item.title.toLowerCase().trim(), item);
   });
 
-  // 2. Check live/localhost database tournaments
+  // 2. Add live completed tournaments & puzzle arenas
   (dbTournaments || []).forEach(t => {
-    if (t.status === "Completed") {
-      const winName = (t.winner || "").toLowerCase().trim();
-      const firstPlayerName = (t.playersList && t.playersList[0] && t.playersList[0].name ? t.playersList[0].name.toLowerCase().trim() : "");
-      
-      if (
-        (winName && (winName === cleanName || winName === cleanEmail)) ||
-        (!winName && firstPlayerName && (firstPlayerName === cleanName || firstPlayerName === cleanEmail))
-      ) {
-        wonSet.add(t.title);
-        podiumSet.add(`${t.title} (🥇 1st Place)`);
+    const isCompleted = t.status === "Completed" || t.status === "completed" || t.status === "closed" || t.status === "Finished";
+    if (!isCompleted) return;
+
+    const tTitle = t.title || "ZC Chess Tournament";
+    const tTitleKey = tTitle.toLowerCase().trim();
+    const isPuzzle = (t.category === "puzzle") || (t.type || "").toLowerCase().includes("puzzle") || (t.type || "").toLowerCase().includes("tactic");
+
+    let isUserParticipant = false;
+    let userPlace = t.userResult?.place || null;
+    let userRankStr = t.userResult?.rank || "";
+    let userScore = t.userResult?.score || "";
+    let isChamp = t.userResult?.isChampion || false;
+
+    // Check winner directly
+    const winName = (t.winner || "").toLowerCase().trim();
+    if (winName && (winName === cleanName || winName === cleanEmail || cleanName.includes(winName))) {
+      isChamp = true;
+      userPlace = 1;
+      userRankStr = "🥇 1st Place Champion";
+      isUserParticipant = true;
+    }
+
+    // Check podium
+    if (Array.isArray(t.podium) && t.podium.length > 0) {
+      const podEntry = t.podium.find(p => p.name && (p.name.toLowerCase() === cleanName || p.name.toLowerCase() === cleanEmail));
+      if (podEntry) {
+        isUserParticipant = true;
+        userPlace = podEntry.place || userPlace;
+        if (podEntry.points != null && !userScore) userScore = `${podEntry.points} pts`;
+        if (userPlace === 1) {
+          isChamp = true;
+          userRankStr = "🥇 1st Place Champion";
+        } else if (userPlace === 2) {
+          userRankStr = "🥈 2nd Place";
+        } else if (userPlace === 3) {
+          userRankStr = "🥉 3rd Place";
+        } else if (userPlace) {
+          userRankStr = `#${userPlace} Place`;
+        }
+      }
+    }
+
+    // Check registrations / playersList / leaderboard
+    const regMatch = Array.isArray(t.registrations) ? t.registrations.some(r => (r.email && r.email.toLowerCase() === cleanEmail) || (r.name && r.name.toLowerCase() === cleanName)) : false;
+    const playerMatch = Array.isArray(t.playersList) ? t.playersList.some(p => (typeof p === 'string' ? p.toLowerCase() === cleanName : (p.name && p.name.toLowerCase() === cleanName) || (p.email && p.email.toLowerCase() === cleanEmail))) : false;
+    const playersObjMatch = Array.isArray(t.players) ? t.players.some(p => (p.name && p.name.toLowerCase() === cleanName) || (p.email && p.email.toLowerCase() === cleanEmail)) : false;
+    const lbMatch = Array.isArray(t.leaderboard) ? t.leaderboard.some(e => (e.email && e.email.toLowerCase() === cleanEmail) || (e.name && e.name.toLowerCase() === cleanName)) : false;
+
+    if (regMatch || playerMatch || playersObjMatch || lbMatch) {
+      isUserParticipant = true;
+    }
+
+    if (isUserParticipant) {
+      if (isChamp) {
+        wonSet.add(tTitle);
+        podiumSet.add(`${tTitle} (🥇 1st Place)`);
+      } else if (userPlace && userPlace <= 3) {
+        podiumSet.add(`${tTitle} (${userRankStr || `#${userPlace}`})`);
       }
 
-      if (Array.isArray(t.podium)) {
-        t.podium.forEach(p => {
-          const pName = (p.name || "").toLowerCase().trim();
-          if (pName && (pName === cleanName || pName === cleanEmail)) {
-            if (p.place === 1) wonSet.add(t.title);
-            podiumSet.add(`${t.title} (#${p.place})`);
-          }
+      const awardLabel = userRankStr || (userScore ? `${userScore}` : (isPuzzle ? "Honored Tactician" : "Honored Competitor"));
+
+      // Only add or override if not already in combined map
+      if (!combinedHistoricalMap.has(tTitleKey)) {
+        combinedHistoricalMap.set(tTitleKey, {
+          id: t._id || `event-${Date.now()}`,
+          title: tTitle,
+          type: t.type || t.format || (isPuzzle ? "Puzzle Tactics Arena" : "Swiss Championship"),
+          category: isPuzzle ? "puzzle" : "tournament",
+          date: t.startDate || new Date().toISOString().split("T")[0],
+          location: t.location || "Zewail City of Science and Technology",
+          award: awardLabel,
+          place: userPlace || 4,
+          score: userScore,
+          isChampion: isChamp
         });
       }
     }
@@ -255,6 +313,7 @@ export const getUserTournamentAchievements = (user, dbTournaments = []) => {
 
   const wonTournaments = Array.from(wonSet);
   const podiumTournaments = Array.from(podiumSet);
+  const fullHistoricalList = Array.from(combinedHistoricalMap.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   let primaryBadge = null;
   if (wonTournaments.length > 1) {
@@ -271,6 +330,6 @@ export const getUserTournamentAchievements = (user, dbTournaments = []) => {
     isChampion: wonTournaments.length > 0,
     isPodium: podiumTournaments.length > 0,
     primaryBadge,
-    historicalList
+    historicalList: fullHistoricalList
   };
 };

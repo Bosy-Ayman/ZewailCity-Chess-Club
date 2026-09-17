@@ -1912,33 +1912,94 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
             ) : (
               <div className="tournament-grid-dashboard">
                 {tournaments.map((t) => {
-                  const reg = t.registrations?.find((r) => r.email === (profile?.email || loggedInEmail));
-                  const isPlayer = t.playersList?.some((p) => p.name === profile?.name);
-                  
+                  const reg = t.registrations?.find((r) => r.email && profile?.email && r.email.toLowerCase() === profile.email.toLowerCase());
+                  const isPlayer = (t.playersList || []).some((p) => typeof p === 'string' ? p.toLowerCase() === (profile?.name || '').toLowerCase() : p.name && (p.name.toLowerCase() === (profile?.name || '').toLowerCase() || (profile?.email && p.email && p.email.toLowerCase() === profile.email.toLowerCase())));
+                  const isCompleted = t.status === "Completed" || t.status === "completed" || t.status === "closed" || t.status === "Finished";
+                  const isPuzzle = t.category === "puzzle" || (t.type || "").toLowerCase().includes("puzzle");
+
                   let status = "Pending Review";
-                  if (isPlayer) status = "Playing (Approved)";
-                  else if (reg) status = reg.status;
+                  if (isCompleted) {
+                    status = "Completed";
+                  } else if (isPlayer) {
+                    status = "Playing (Approved)";
+                  } else if (reg) {
+                    status = reg.status === "Approved" ? "Playing (Approved)" : reg.status;
+                  }
+
+                  const userRankStr = t.userResult?.rank || (t.userResult?.isChampion ? "🥇 1st Place Champion" : (isPuzzle ? "Honored Tactician" : "Honored Competitor"));
+                  const userScoreStr = t.userResult?.score || "";
 
                   return (
-                    <div key={t._id} className="tournament-card-dashboard glass-panel">
+                    <div 
+                      key={t._id} 
+                      className="tournament-card-dashboard glass-panel"
+                      style={{
+                        borderColor: isCompleted && t.userResult?.isChampion ? "rgba(243, 193, 68, 0.45)" : undefined,
+                        borderLeft: isCompleted && t.userResult?.isChampion ? "3px solid #f3c144" : undefined
+                      }}
+                    >
                       <div className="t-header">
                         <div>
-                          <div className="t-format-pill">{t.format || t.type || "Swiss System"}</div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
+                            <div className="t-format-pill">{t.format || t.type || "Swiss System"}</div>
+                            {isPuzzle && (
+                              <span style={{
+                                display: "inline-block",
+                                padding: "2px 8px",
+                                borderRadius: "10px",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                background: "rgba(139,92,246,0.15)",
+                                color: "#a78bfa",
+                                border: "1px solid rgba(139,92,246,0.3)"
+                              }}>
+                                🧩 Puzzle Arena
+                              </span>
+                            )}
+                          </div>
                           <h3 className="t-title">{t.title}</h3>
                         </div>
-                        <span className={`t-status ${status.toLowerCase().includes('approved') || status.toLowerCase().includes('playing') ? 'approved' : ''}`}>
-                          {status}
+                        <span className={`t-status ${isCompleted ? 'approved' : (status.toLowerCase().includes('approved') || status.toLowerCase().includes('playing') ? 'approved' : '')}`} style={{ background: isCompleted ? "rgba(72,187,120,0.15)" : undefined, color: isCompleted ? "#68d391" : undefined, border: isCompleted ? "1px solid #48bb78" : undefined }}>
+                          {isCompleted ? "✅ Completed" : status}
                         </span>
                       </div>
+
+                      {/* Completed Result Banner */}
+                      {isCompleted && (
+                        <div style={{
+                          background: "rgba(243, 193, 68, 0.08)",
+                          border: "1px solid rgba(243, 193, 68, 0.25)",
+                          borderRadius: "10px",
+                          padding: "10px 14px",
+                          margin: "12px 0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: "8px"
+                        }}>
+                          <div>
+                            <span style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "0.5px", color: "#a89f91", display: "block", fontWeight: 700 }}>
+                              Final Standing & Honors
+                            </span>
+                            <span style={{ fontSize: "0.95rem", fontWeight: 800, color: t.userResult?.isChampion ? "#f3c144" : "#e2e8f0" }}>
+                              {userRankStr} {userScoreStr && <span style={{ color: "#a89f91", fontSize: "0.85rem", fontWeight: 600 }}>({userScoreStr})</span>}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "1.2rem" }}>
+                            {t.userResult?.isChampion ? "🏆" : (t.userResult?.place === 2 ? "🥈" : (t.userResult?.place === 3 ? "🥉" : "📜"))}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="t-info-grid">
                         <div className="t-info-col">
                           <Calendar size={14} className="t-icon" />
-                          <span><strong>Date:</strong> {t.startDate}</span>
+                          <span><strong>Date:</strong> {t.startDate ? new Date(t.startDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "TBD"}</span>
                         </div>
                         <div className="t-info-col">
                           <Compass size={14} className="t-icon" />
-                          <span><strong>Location:</strong> {t.location}</span>
+                          <span><strong>Location:</strong> {t.location || "Zewail City"}</span>
                         </div>
                         <div className="t-info-col">
                           <Swords size={14} className="t-icon" />
@@ -1946,18 +2007,76 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                         </div>
                       </div>
 
-                      {isPlayer && renderMatches(t)}
+                      {!isCompleted && isPlayer && renderMatches(t)}
 
-                      {t.status === "Upcoming" && (
-                        <div className="t-actions">
-                          <button 
+                      {/* Action buttons for completed vs upcoming */}
+                      {isCompleted ? (
+                        <div style={{ marginTop: "14px", display: "flex", gap: "8px", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "12px" }}>
+                          <button
                             type="button"
-                            onClick={() => handleLeaveTournament(t._id)}
-                            className="btn-leave-tournament"
+                            onClick={() => {
+                              generateWinnerCertificate({
+                                playerName: profile?.name || "Player",
+                                rank: userRankStr,
+                                tournamentTitle: t.title,
+                                tournamentType: t.type || (isPuzzle ? "Puzzle Tactics Arena" : "Swiss Championship"),
+                                pointsOrScore: userScoreStr,
+                                date: t.startDate ? new Date(t.startDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+                                location: t.location || "Zewail City of Science and Technology",
+                                format: "pdf"
+                              });
+                            }}
+                            style={{
+                              background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                              color: "#12100d",
+                              border: "none",
+                              padding: "8px 14px",
+                              borderRadius: "8px",
+                              fontSize: "0.82rem",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                              boxShadow: "0 2px 10px rgba(243,193,68,0.35)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px"
+                            }}
+                            title="Download your official diploma certificate (PDF)"
                           >
-                            Leave Tournament
+                            <span>📜</span>
+                            <span>{isOwnProfile ? "My Certificate (PDF)" : "Certificate (PDF)"}</span>
                           </button>
+
+                          <a
+                            href={isPuzzle ? "/puzzles" : `/tournaments/${t._id}`}
+                            style={{
+                              background: "rgba(255, 255, 255, 0.06)",
+                              color: "#e2d9cc",
+                              border: "1px solid rgba(255, 255, 255, 0.15)",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px"
+                            }}
+                          >
+                            <span>{isPuzzle ? "View Arena ➔" : "View Results ➔"}</span>
+                          </a>
                         </div>
+                      ) : (
+                        t.status === "Upcoming" && (
+                          <div className="t-actions">
+                            <button 
+                              type="button"
+                              onClick={() => handleLeaveTournament(t._id)}
+                              className="btn-leave-tournament"
+                            >
+                              Leave Tournament
+                            </button>
+                          </div>
+                        )
                       )}
                     </div>
                   );
@@ -2063,9 +2182,10 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                                   onClick={() => {
                                     generateWinnerCertificate({
                                       playerName: profile?.name || "Player",
-                                      rank: certRankStr,
+                                      rank: ht.award || certRankStr,
                                       tournamentTitle: ht.title,
                                       tournamentType: ht.type,
+                                      pointsOrScore: ht.score || "",
                                       date: new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
                                       location: ht.location || "Zewail City of Science and Technology",
                                       format: "pdf"
@@ -2186,9 +2306,10 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                               onClick={() => {
                                 generateWinnerCertificate({
                                   playerName: profile?.name || "Player",
-                                  rank: ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`,
+                                  rank: ht.award || (ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`),
                                   tournamentTitle: ht.title,
                                   tournamentType: ht.type,
+                                  pointsOrScore: ht.score || "",
                                   date: new Date(ht.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
                                   location: ht.location || "Zewail City of Science and Technology",
                                   format: "pdf"

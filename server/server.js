@@ -2648,17 +2648,182 @@ app.get('/api/users/registered-emails', async (req, res) => {
   }
 });
 
-// GET: fetch tournaments registered by user email
+// GET: fetch tournaments & puzzle challenges registered/completed by user email or name
 app.get('/api/users/:email/tournaments', async (req, res) => {
   try {
-    const userEmail = req.params.email.toLowerCase();
+    const rawParam = decodeURIComponent(req.params.email || '').trim();
+    if (!rawParam) return res.json([]);
+
+    const emailRegex = new RegExp(`^${rawParam.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const user = await User.findOne({
+      $or: [
+        { email: emailRegex },
+        { name: emailRegex }
+      ]
+    });
+
+    const userEmail = (user?.email || rawParam).toLowerCase().trim();
+    const userName = (user?.name || rawParam).trim();
+    const cleanUserEmailRegex = new RegExp(`^${userEmail.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+    const cleanUserNameRegex = userName ? new RegExp(`^${userName.replace(/[-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') : cleanUserEmailRegex;
+
+    // 1. Find standard Tournaments
     const tournaments = await Tournament.find({
       $or: [
-        { 'registrations.email': userEmail },
-        { 'playersList.name': { $regex: userEmail, $options: 'i' } }
+        { 'registrations.email': cleanUserEmailRegex },
+        { 'registrations.name': cleanUserNameRegex },
+        { 'playersList.name': cleanUserNameRegex },
+        { 'playersList.name': cleanUserEmailRegex },
+        { 'players.name': cleanUserNameRegex },
+        { 'players.email': cleanUserEmailRegex },
+        { winner: cleanUserNameRegex },
+        { winner: cleanUserEmailRegex },
+        { 'podium.name': cleanUserNameRegex }
       ]
     }).sort({ startDate: -1 });
-    res.json(tournaments);
+
+    // 2. Find Puzzle Tournaments (Tactics Arenas)
+    const puzzleTournaments = await PuzzleTournament.find({
+      $or: [
+        { 'participants.email': cleanUserEmailRegex },
+        { 'participants.name': cleanUserNameRegex },
+        { 'leaderboard.email': cleanUserEmailRegex },
+        { 'leaderboard.name': cleanUserNameRegex },
+        { 'solvers.email': cleanUserEmailRegex },
+        { 'solvers.name': cleanUserNameRegex }
+      ]
+    }).sort({ createdAt: -1 });
+
+    const results = [];
+
+    // Format standard tournaments
+    tournaments.forEach(t => {
+      const isCompleted = t.status === 'Completed' || t.status === 'Finished';
+      let userPlace = null;
+      let userRankStr = '';
+      let userScore = '';
+      let isChamp = false;
+
+      // Check winner
+      const winName = (t.winner || '').toLowerCase().trim();
+      if (winName && (winName === userName.toLowerCase() || winName === userEmail)) {
+        userPlace = 1;
+        userRankStr = '🥇 1st Place Champion';
+        isChamp = true;
+      }
+
+      // Check podium
+      if (Array.isArray(t.podium) && t.podium.length > 0) {
+        const podEntry = t.podium.find(p => p.name && (p.name.toLowerCase() === userName.toLowerCase() || p.name.toLowerCase() === userEmail));
+        if (podEntry) {
+          userPlace = podEntry.place || userPlace;
+          if (podEntry.points != null) userScore = `${podEntry.points} pts`;
+          if (userPlace === 1) {
+            userRankStr = '🥇 1st Place Champion';
+            isChamp = true;
+          } else if (userPlace === 2) {
+            userRankStr = '🥈 2nd Place';
+          } else if (userPlace === 3) {
+            userRankStr = '🥉 3rd Place';
+          } else if (userPlace) {
+            userRankStr = `#${userPlace} Place`;
+          }
+        }
+      }
+
+      // Check players list / swiss points
+      if (Array.isArray(t.players) && t.players.length > 0) {
+        const pObj = t.players.find(p => p.name && (p.name.toLowerCase() === userName.toLowerCase() || p.name.toLowerCase() === userEmail));
+        if (pObj && pObj.points != null && !userScore) {
+          userScore = `${pObj.points} pts`;
+        }
+      }
+
+      if (isCompleted && !userRankStr) {
+        userRankStr = 'Honored Competitor';
+      }
+
+      results.push({
+        _id: t._id,
+        title: t.title,
+        type: t.type || t.format || 'Swiss Championship',
+        format: t.format || t.type || 'Swiss Championship',
+        category: 'tournament',
+        startDate: t.startDate,
+        location: t.location || 'Zewail City of Science and Technology',
+        status: t.status,
+        players: t.players || t.playersList?.length || 0,
+        playersList: t.playersList || [],
+        registrations: t.registrations || [],
+        winner: t.winner,
+        podium: t.podium,
+        matches: t.matches || [],
+        userResult: {
+          place: userPlace,
+          rank: userRankStr,
+          score: userScore,
+          isChampion: isChamp
+        }
+      });
+    });
+
+    // Format puzzle tournaments
+    puzzleTournaments.forEach(pt => {
+      const isClosed = pt.status === 'closed' || (pt.endDate && new Date(pt.endDate) < new Date());
+      const rawLeaderboard = (pt.leaderboard || []).sort((a, b) => (b.score || 0) - (a.score || 0));
+      
+      const userLbIdx = rawLeaderboard.findIndex(e => 
+        (e.email && e.email.toLowerCase() === userEmail) ||
+        (e.name && e.name.toLowerCase() === userName.toLowerCase())
+      );
+
+      let userPlace = userLbIdx !== -1 ? userLbIdx + 1 : null;
+      let userScore = '';
+      let userRankStr = '';
+      let isChamp = false;
+
+      if (userLbIdx !== -1) {
+        const entry = rawLeaderboard[userLbIdx];
+        const solved = entry.solvedCount || (entry.solvedPuzzles || []).length || 0;
+        userScore = `${entry.score || 0} pts (${solved} solved)`;
+        if (userPlace === 1) {
+          userRankStr = '🥇 1st Place Champion';
+          isChamp = true;
+        } else if (userPlace === 2) {
+          userRankStr = '🥈 Runner-Up (2nd Place)';
+        } else if (userPlace === 3) {
+          userRankStr = '🥉 3rd Place';
+        } else if (userPlace) {
+          userRankStr = `#${userPlace} Rank Solver`;
+        }
+      } else if (isClosed) {
+        userRankStr = 'Honored Tactician';
+      }
+
+      results.push({
+        _id: pt._id,
+        title: pt.title,
+        type: 'Puzzle Tactics Arena',
+        format: 'Puzzle Tactics Arena',
+        category: 'puzzle',
+        startDate: pt.startDate || (pt.createdAt ? new Date(pt.createdAt).toISOString().split('T')[0] : ''),
+        endDate: pt.endDate,
+        location: 'Zewail City Chess Arena',
+        status: isClosed ? 'Completed' : 'Active',
+        players: (pt.participants || []).length || (pt.leaderboard || []).length,
+        playersList: (pt.participants || []).map(p => ({ name: p.name, email: p.email })),
+        registrations: (pt.participants || []).map(p => ({ name: p.name, email: p.email, status: 'Approved' })),
+        leaderboard: pt.leaderboard || [],
+        userResult: {
+          place: userPlace,
+          rank: userRankStr,
+          score: userScore,
+          isChampion: isChamp
+        }
+      });
+    });
+
+    res.json(results);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user tournaments', details: error.message });
   }
@@ -4766,24 +4931,6 @@ app.post('/api/puzzle-tournaments/:id/send-certificates', async (req, res) => {
 });
 
 
-// GET: user's tournaments
-app.get('/api/users/:email/tournaments', async (req, res) => {
-  try {
-    const { email } = req.params;
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const tournaments = await Tournament.find({
-      $or: [
-        { 'registrations.email': email },
-        { 'playersList.name': user.name }
-      ]
-    });
-    res.json(tournaments);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch user tournaments', details: error.message });
-  }
-});
 
 // POST: register for a tournament
 app.post('/api/tournaments/:id/register', async (req, res) => {
