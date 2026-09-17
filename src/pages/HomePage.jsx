@@ -630,7 +630,7 @@ const HomePage = () => {
                         ? "⚡ Officer"
                         : u.chessTitle
                           ? `👑 ${u.chessTitle}`
-                          : (topRating > 0 ? `⚡ ${topRating} Elo` : isChampion ? "🏆 Champion" : "♟️ Club Member");
+                          : (topRating > 0 ? `⚡ ${topRating} Elo` : isChampion ? "🏆 Champion" : "🎓 ZC Student");
 
     return {
       name: u.name || emailKey.split("@")[0],
@@ -1620,7 +1620,7 @@ const HomePage = () => {
                     </div>
                     <p className="tactician-title">{player.title}</p>
 
-                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && player.role === 'member' && (
+                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && (
                       <div className="tactician-club-roles-row">
                         {player.clubRoles.map((cr, cIdx) => (
                           <span key={cIdx} className="tactician-club-role-chip" title={`${cr.position} of ${cr.department}`}>
@@ -1832,7 +1832,7 @@ const HomePage = () => {
                 </div>
                 <div className="attribute-item">
                   <span className="attr-label">Campus Role:</span>
-                  <span className="attr-val">{selectedTactician.badge || "♟️ Club Member"}</span>
+                  <span className="attr-val">{selectedTactician.badge || "🎓 ZC Student"}</span>
                 </div>
               </div>
             </div>

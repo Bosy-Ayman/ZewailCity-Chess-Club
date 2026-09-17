@@ -14,24 +14,30 @@ const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "pro
 // Helper function to resolve effective user role across both direct role and clubRoles
 export const getEffectiveUserRole = (user) => {
   if (!user) return "member";
-  if (user.role && ["president", "vice_president", "oc", "hr", "pr", "media", "trainer", "trainee"].includes(user.role)) {
-    return user.role;
-  }
+  // 1. clubRoles array is ALWAYS the primary source of truth
   if (Array.isArray(user.clubRoles) && user.clubRoles.length > 0) {
     if (user.clubRoles.some(r => r.department === "Executive High Board" && r.position === "President")) return "president";
     if (user.clubRoles.some(r => r.department === "Executive High Board" && r.position === "Vice President")) return "vice_president";
     if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee" && r.position === "Head")) return "oc";
+    if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee" && r.position === "Member")) return "member_oc";
     if (user.clubRoles.some(r => r.department === "Human Resources" && r.position === "Head")) return "hr";
+    if (user.clubRoles.some(r => r.department === "Human Resources" && r.position === "Member")) return "member_hr";
     if (user.clubRoles.some(r => r.department === "Public Relations" && r.position === "Head")) return "pr";
+    if (user.clubRoles.some(r => r.department === "Public Relations" && r.position === "Member")) return "member_pr";
     if (user.clubRoles.some(r => r.department === "Multimedia & Design" && r.position === "Head")) return "media";
+    if (user.clubRoles.some(r => r.department === "Multimedia & Design" && r.position === "Member")) return "member_media";
     if (user.clubRoles.some(r => r.department === "Training & Masterclasses" && r.position === "Head")) return "trainer";
     if (user.clubRoles.some(r => r.department === "Executive High Board")) return "president";
-    if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee")) return "oc";
-    if (user.clubRoles.some(r => r.department === "Human Resources")) return "hr";
-    if (user.clubRoles.some(r => r.department === "Public Relations")) return "pr";
-    if (user.clubRoles.some(r => r.department === "Multimedia & Design")) return "media";
+    if (user.clubRoles.some(r => r.department === "Tournament Organizing Committee")) return "member_oc";
+    if (user.clubRoles.some(r => r.department === "Human Resources")) return "member_hr";
+    if (user.clubRoles.some(r => r.department === "Public Relations")) return "member_pr";
+    if (user.clubRoles.some(r => r.department === "Multimedia & Design")) return "member_media";
     if (user.clubRoles.some(r => r.department === "Training & Masterclasses")) return "trainer";
     if (user.clubRoles.some(r => r.department === "Trainee Development Pathway")) return "trainee";
+  }
+  // 2. Direct user.role fallback
+  if (user.role && ["president", "vice_president", "oc", "member_oc", "hr", "member_hr", "pr", "member_pr", "media", "member_media", "trainer", "trainee"].includes(user.role)) {
+    return user.role;
   }
   if (user.role === "admin") return "president";
   return user.role || "member";
@@ -1342,7 +1348,27 @@ export default function AdminDashboard() {
             }
           ];
 
-          const accessibleNavItems = adminNavItems.filter(item => item.roles.includes(userRole));
+          const rawUserClubRoles = localStorage.getItem("userClubRoles");
+          let userClubRoles = [];
+          try { if (rawUserClubRoles) userClubRoles = JSON.parse(rawUserClubRoles); } catch (e) {}
+
+          const isHR = ['hr', 'member_hr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources'));
+          const isOC = ['oc', 'member_oc'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'));
+          const isPR = ['pr', 'member_pr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
+          const isMedia = ['media', 'member_media'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Multimedia & Design'));
+          const isExec = ['admin', 'president', 'vice_president'].includes(userRole);
+
+          const accessibleNavItems = adminNavItems.filter(item => {
+            if (isExec) return true;
+            if (item.id === "manage-users" && isHR) return true;
+            if (item.id === "applications" && isHR) return true;
+            if (item.id === "broadcast" && (isHR || isPR || isMedia)) return true;
+            if (item.id === "inquiries" && (isHR || isOC || isPR || isMedia)) return true;
+            if (item.id === "add-tournament" && isOC) return true;
+            if (item.id === "tournaments-list" && isOC) return true;
+            if (item.id === "manage-puzzles" && isOC) return true;
+            return item.roles.includes(userRole);
+          });
           const currentNavItem = accessibleNavItems.find(item => item.id === activeTab) || accessibleNavItems[0] || { id: activeTab, icon: "⚙️", label: "Admin Section" };
 
           return (
@@ -2060,12 +2086,16 @@ export default function AdminDashboard() {
                         <option value="president">👑 Presidents ({users.filter(u => getEffectiveUserRole(u) === 'president').length})</option>
                         <option value="vice_president">⭐ Vice Presidents ({users.filter(u => getEffectiveUserRole(u) === 'vice_president').length})</option>
                         <option value="oc">⚡ Head of OC ({users.filter(u => getEffectiveUserRole(u) === 'oc').length})</option>
+                        <option value="member_oc">✨ Member of OC ({users.filter(u => getEffectiveUserRole(u) === 'member_oc').length})</option>
                         <option value="hr">👥 Head of HR ({users.filter(u => getEffectiveUserRole(u) === 'hr').length})</option>
+                        <option value="member_hr">👥 Member of HR ({users.filter(u => getEffectiveUserRole(u) === 'member_hr').length})</option>
                         <option value="pr">📢 Head of PR ({users.filter(u => getEffectiveUserRole(u) === 'pr').length})</option>
+                        <option value="member_pr">📢 Member of PR ({users.filter(u => getEffectiveUserRole(u) === 'member_pr').length})</option>
                         <option value="media">🎨 Head of Multimedia ({users.filter(u => getEffectiveUserRole(u) === 'media').length})</option>
+                        <option value="member_media">🎨 Member of Multimedia ({users.filter(u => getEffectiveUserRole(u) === 'member_media').length})</option>
                         <option value="trainer">🎓 Head of Training ({users.filter(u => getEffectiveUserRole(u) === 'trainer').length})</option>
                         <option value="trainee">♟️ Trainees ({users.filter(u => getEffectiveUserRole(u) === 'trainee').length})</option>
-                        <option value="member">♟️ Members ({users.filter(u => getEffectiveUserRole(u) === 'member').length})</option>
+                        <option value="member">♟️ General Members ({users.filter(u => getEffectiveUserRole(u) === 'member').length})</option>
                       </select>
                     </div>
                   </div>
@@ -2168,13 +2198,17 @@ export default function AdminDashboard() {
                                     }}
                                     title="Assign Executive Privileges & Specific Role"
                                   >
-                                    <option value="member">♟️ Member</option>
+                                    <option value="member">🎓 ZC Student</option>
                                     <option value="president">👑 President</option>
                                     <option value="vice_president">⭐ Vice President</option>
                                     <option value="oc">⚡ Head of OC</option>
+                                    <option value="member_oc">✨ Member of OC</option>
                                     <option value="hr">👥 Head of HR</option>
+                                    <option value="member_hr">👥 Member of HR</option>
                                     <option value="pr">📢 Head of PR</option>
+                                    <option value="member_pr">📢 Member of PR</option>
                                     <option value="media">🎨 Head of Multimedia</option>
+                                    <option value="member_media">🎨 Member of Multimedia</option>
                                     <option value="trainer">🎓 Head of Training</option>
                                     <option value="trainee">♟️ Trainee</option>
                                   </select>
@@ -2303,13 +2337,17 @@ export default function AdminDashboard() {
                                 }}
                                 title="Change Specific Role"
                               >
-                                <option value="member">♟️ Member</option>
+                                <option value="member">🎓 ZC Student</option>
                                 <option value="president">👑 President</option>
                                 <option value="vice_president">⭐ Vice President</option>
                                 <option value="oc">⚡ Head of OC</option>
+                                <option value="member_oc">✨ Member of OC</option>
                                 <option value="hr">👥 Head of HR</option>
+                                <option value="member_hr">👥 Member of HR</option>
                                 <option value="pr">📢 Head of PR</option>
+                                <option value="member_pr">📢 Member of PR</option>
                                 <option value="media">🎨 Head of Multimedia</option>
+                                <option value="member_media">🎨 Member of Multimedia</option>
                                 <option value="trainer">🎓 Head of Training</option>
                                 <option value="trainee">♟️ Trainee</option>
                               </select>

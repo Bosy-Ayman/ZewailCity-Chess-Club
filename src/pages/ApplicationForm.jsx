@@ -34,7 +34,7 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
     }
 
     const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
-    fetch(`${API_BASE}/api/profile?email=${email}`)
+    fetch(`${API_BASE}/api/profile?email=${email}&viewerEmail=${email}`)
       .then(res => res.json())
       .then(data => {
         setProfile(data);

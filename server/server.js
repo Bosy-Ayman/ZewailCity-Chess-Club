@@ -4042,20 +4042,53 @@ app.put('/api/applications/:id/status', async (req, res) => {
       return res.status(404).json({ error: "Application not found" });
     }
     
-    // Update user role if application accepted
+    // Update user role & add to clubRoles if application accepted
     if (status === 'Accepted') {
-      let normalizedRole = 'member';
-      const title = (updatedApp.roleTitle || '').toLowerCase();
-      if (title.includes('oc')) normalizedRole = 'oc';
-      else if (title.includes('hr')) normalizedRole = 'hr';
-      else if (title.includes('media')) normalizedRole = 'media';
-      else if (title.includes('trainer')) normalizedRole = 'trainer';
-      else if (title.includes('trainee')) normalizedRole = 'trainee';
-      
-      await User.findOneAndUpdate(
-        { email: updatedApp.email },
-        { role: normalizedRole }
-      );
+      const userDoc = await User.findOne({ email: updatedApp.email });
+      if (userDoc) {
+        let appDept = updatedApp.department || 'General Committee';
+        let appPos = updatedApp.roleTitle || 'Member';
+
+        if (appDept.includes('OC') || appDept.includes('Organizing')) appDept = 'Tournament Organizing Committee';
+        else if (appDept.includes('HR') || appDept.includes('Human Resources')) appDept = 'Human Resources';
+        else if (appDept.includes('PR') || appDept.includes('Public Relations')) appDept = 'Public Relations';
+        else if (appDept.includes('Media') || appDept.includes('Multimedia')) appDept = 'Multimedia & Design';
+        else if (appDept.includes('Training') || appDept.includes('Trainer')) appDept = 'Training & Masterclasses';
+        else if (appDept.includes('Trainee')) appDept = 'Trainee Development Pathway';
+
+        const titleLower = (appPos || '').toLowerCase();
+        if (titleLower.includes('head')) appPos = 'Head';
+        else if (titleLower.includes('president') && !titleLower.includes('vice')) appPos = 'President';
+        else if (titleLower.includes('vice')) appPos = 'Vice President';
+        else appPos = 'Member';
+
+        let existingRoles = Array.isArray(userDoc.clubRoles) ? [...userDoc.clubRoles] : [];
+        existingRoles = existingRoles.filter(r => r.department !== appDept);
+        existingRoles.push({
+          department: appDept,
+          position: appPos,
+          assignedAt: new Date().toISOString()
+        });
+
+        let derivedRole = 'member';
+        if (existingRoles.some(r => r.department === 'Executive High Board' && r.position === 'President')) derivedRole = 'president';
+        else if (existingRoles.some(r => r.department === 'Executive High Board' && r.position === 'Vice President')) derivedRole = 'vice_president';
+        else if (existingRoles.some(r => r.department === 'Tournament Organizing Committee' && r.position === 'Head')) derivedRole = 'oc';
+        else if (existingRoles.some(r => r.department === 'Tournament Organizing Committee' && r.position === 'Member')) derivedRole = 'member_oc';
+        else if (existingRoles.some(r => r.department === 'Human Resources' && r.position === 'Head')) derivedRole = 'hr';
+        else if (existingRoles.some(r => r.department === 'Human Resources' && r.position === 'Member')) derivedRole = 'member_hr';
+        else if (existingRoles.some(r => r.department === 'Public Relations' && r.position === 'Head')) derivedRole = 'pr';
+        else if (existingRoles.some(r => r.department === 'Public Relations' && r.position === 'Member')) derivedRole = 'member_pr';
+        else if (existingRoles.some(r => r.department === 'Multimedia & Design' && r.position === 'Head')) derivedRole = 'media';
+        else if (existingRoles.some(r => r.department === 'Multimedia & Design' && r.position === 'Member')) derivedRole = 'member_media';
+        else if (existingRoles.some(r => r.department === 'Training & Masterclasses' && r.position === 'Head')) derivedRole = 'trainer';
+        else if (existingRoles.some(r => r.department === 'Trainee Development Pathway')) derivedRole = 'trainee';
+
+        await User.updateOne(
+          { email: updatedApp.email },
+          { $set: { clubRoles: existingRoles, role: derivedRole } }
+        );
+      }
 
       // 1-Click Direct In-App Notification to accepted member
       await createNotification({

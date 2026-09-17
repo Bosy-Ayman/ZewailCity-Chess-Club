@@ -109,9 +109,42 @@ export default function ClubRoles() {
     },
   ];
 
+  const userCurrentlyHoldsRole = (role) => {
+    const rawRoles = localStorage.getItem("userClubRoles");
+    let userClubRoles = [];
+    try { if (rawRoles) userClubRoles = JSON.parse(rawRoles); } catch (e) {}
+    const activeRole = (localStorage.getItem("userRole") || "member").toLowerCase();
+
+    const roleDept = (role.department || "").toLowerCase();
+
+    if (Array.isArray(userClubRoles) && userClubRoles.length > 0) {
+      const match = userClubRoles.some(cr => {
+        const d = (cr.department || "").toLowerCase();
+        return (d.includes(roleDept) || roleDept.includes(d) ||
+               (role.id === "hr" && d.includes("human")) ||
+               (role.id === "pr" && (d.includes("public") || d.includes("relations"))) ||
+               (role.id === "oc" && (d.includes("tournament") || d.includes("organ"))) ||
+               (role.id === "media" && (d.includes("media") || d.includes("multi"))) ||
+               (role.id === "trainer" && d.includes("train")) ||
+               (role.id === "trainee" && d.includes("trainee")));
+      });
+      if (match) return true;
+    }
+
+    if (activeRole === role.id ||
+       (role.id === "oc" && activeRole === "member_oc") ||
+       (role.id === "hr" && activeRole === "member_hr") ||
+       (role.id === "pr" && activeRole === "member_pr") ||
+       (role.id === "media" && activeRole === "member_media")) {
+      return true;
+    }
+
+    return false;
+  };
+
   const getExistingApplication = (role) => {
     if (!myApplications || myApplications.length === 0) return null;
-    return myApplications.find(app => {
+    const foundApp = myApplications.find(app => {
       const appDept = (app.department || "").toLowerCase();
       const appTitle = (app.roleTitle || "").toLowerCase();
       const roleDept = (role.department || "").toLowerCase();
@@ -127,6 +160,21 @@ export default function ClubRoles() {
       if (role.id === "trainee" && (appDept.includes("trainee") || appTitle.includes("trainee"))) return true;
       return false;
     });
+
+    if (!foundApp) return null;
+
+    if (foundApp.status === "Accepted") {
+      if (userCurrentlyHoldsRole(role)) {
+        return foundApp;
+      }
+      return null; // Removed member -> can apply again!
+    }
+
+    if (foundApp.status === "Rejected") {
+      return null; // Rejected -> can apply again!
+    }
+
+    return foundApp;
   };
 
   const [alreadyAppliedNotice, setAlreadyAppliedNotice] = useState(null);

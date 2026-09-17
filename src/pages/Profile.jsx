@@ -831,6 +831,44 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
   const getDynamicCampusStanding = () => {
     if (!profile) return { value: "Registered", hint: "Tactician", badgeClass: "green", detailTitle: "Club Contender" };
 
+    // Priority 0: clubRoles array is always the source of truth
+    if (Array.isArray(profile.clubRoles) && profile.clubRoles.length > 0) {
+      const sorted = [...profile.clubRoles].sort((a, b) => {
+        const rank = p => p === 'President' ? 0 : p === 'Vice President' ? 1 : p === 'Head' ? 2 : 3;
+        return rank(a.position) - rank(b.position);
+      });
+      const fmt = (cr) => {
+        const d = (cr.department || '')
+          .replace('Tournament Organizing Committee', 'OC')
+          .replace('Human Resources', 'HR')
+          .replace('Public Relations', 'PR')
+          .replace('Multimedia & Design', 'Media')
+          .replace('Training & Masterclasses', 'Training')
+          .replace('Executive High Board', 'High Board')
+          .replace('Trainee Development Pathway', 'Trainee');
+        return cr.position === 'Member' ? d + ' Member'
+          : cr.position === 'Head' ? d + ' Head'
+          : cr.position === 'President' ? 'Club President'
+          : cr.position === 'Vice President' ? 'Vice President'
+          : cr.position || 'Staff';
+      };
+      const labels = sorted.map(fmt);
+      const primaryCR = sorted[0];
+      const deptHint = (primaryCR.department || '')
+        .replace('Tournament Organizing Committee', 'OC')
+        .replace('Human Resources', 'HR')
+        .replace('Public Relations', 'PR')
+        .replace('Multimedia & Design', 'Media')
+        .replace('Training & Masterclasses', 'Training')
+        .replace('Executive High Board', 'High Board');
+      return {
+        value: labels[0],
+        hint: labels.length > 1 ? ('✨ ' + labels.slice(1).join(' & ')) : ('✨ ' + deptHint),
+        badgeClass: 'gold',
+        detailTitle: '✨ ' + labels.join(' • ')
+      };
+    }
+
     // 1. Executive Board Roles
     if (profile.role === 'president') {
       return { value: "President", hint: "👑 High Board Executive", badgeClass: "gold", detailTitle: "👑 Club President & High Board" };
@@ -1128,6 +1166,10 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                         {profile.role === 'president' && <>👑 Club President</>}
                         {profile.role === 'vice_president' && <>⭐ Vice President</>}
                         {profile.role === 'oc' && <>⚡ Head of OC</>}
+                        {profile.role === 'member_oc' && <>✨ Member of OC</>}
+                        {profile.role === 'member_hr' && <>👥 Member of HR</>}
+                        {profile.role === 'member_pr' && <>📢 Member of PR</>}
+                        {profile.role === 'member_media' && <>🎨 Member of Multimedia</>}
                         {profile.role === 'hr' && <>👥 Head of HR</>}
                         {profile.role === 'pr' && <>📢 Head of PR</>}
                         {profile.role === 'media' && <>🎨 Head of Multimedia</>}
@@ -1137,7 +1179,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                       </span>
                     ) : (
                       <span className="hero-role-badge member">
-                        ♟️ Club Member
+                        🎓 ZC Student
                       </span>
                     )
                   )}
@@ -1832,7 +1874,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   <div className="accolade-badge-card unlocked">
                     <div className="accolade-icon">👑</div>
                     <div className="accolade-info">
-                      <div className="accolade-name">Club Member</div>
+                      <div className="accolade-name">Student</div>
                       <div className="accolade-desc">Active Zewail City chess participant</div>
                     </div>
                     <CheckCircle2 size={16} className="accolade-status-icon" />
@@ -2284,7 +2326,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                               {(c.fromName || "M")[0].toUpperCase()}
                             </div>
                             <div>
-                              <h4 className="challenger-name">{c.fromName || "Club Member"}</h4>
+                              <h4 className="challenger-name">{c.fromName || "Student"}</h4>
                               <span className="challenger-email">{c.fromEmail}</span>
                             </div>
                           </div>
@@ -3732,7 +3774,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                               {hasRating ? (
                                 <span className="net-rating">⭐ {displayRating} Elo</span>
                               ) : (
-                                <span className="net-rating unrated" style={{ color: "#94a3b8" }}>♟️ Club Member</span>
+                                <span className="net-rating unrated" style={{ color: "#94a3b8" }}>🎓 ZC Student</span>
                               )}
                               {member.major && (
                                 <>

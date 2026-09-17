@@ -23,6 +23,7 @@ export default function LoginModal({ onClose }) {
       localStorage.setItem("adminToken", data.token);
       localStorage.setItem("adminEmail", data.user.email);
       localStorage.setItem("userRole", data.user.role);
+      if (data.user.clubRoles) localStorage.setItem("userClubRoles", JSON.stringify(data.user.clubRoles));
 
       // Decode Google JWT to get profile picture and name
       try {
@@ -86,6 +87,7 @@ export default function LoginModal({ onClose }) {
       localStorage.setItem("adminToken", data.token);
       localStorage.setItem("adminEmail", data.user.email);
       localStorage.setItem("userRole", data.user.role);
+      if (data.user.clubRoles) localStorage.setItem("userClubRoles", JSON.stringify(data.user.clubRoles));
       if (data.user.name) localStorage.setItem("userName", data.user.name);
       if (data.user.picture) localStorage.setItem("userAvatar", data.user.picture);
       onClose();

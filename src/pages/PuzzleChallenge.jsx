@@ -1230,7 +1230,7 @@ export default function PuzzleChallenge() {
                     </div>
                   )}
                   <div className="user-meta">
-                    <h3>{userName || "Club Member"}</h3>
+                    <h3>{userName || "Student"}</h3>
                     <span className="role-tag">Tactician</span>
                   </div>
                 </div>

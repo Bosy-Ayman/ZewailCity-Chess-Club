@@ -10,6 +10,27 @@ import { chessAudio } from "../utils/chessAudio";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
+const deriveAuthorityRoleFromClubRoles = (clubRoles, fallbackRole = 'member') => {
+  if (Array.isArray(clubRoles) && clubRoles.length > 0) {
+    if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'President')) return 'president';
+    if (clubRoles.some(r => r.department === 'Executive High Board' && r.position === 'Vice President')) return 'vice_president';
+    if (clubRoles.some(r => r.department === 'Tournament Organizing Committee' && r.position === 'Head')) return 'oc';
+    if (clubRoles.some(r => r.department === 'Human Resources' && r.position === 'Head')) return 'hr';
+    if (clubRoles.some(r => r.department === 'Public Relations' && r.position === 'Head')) return 'pr';
+    if (clubRoles.some(r => r.department === 'Multimedia & Design' && r.position === 'Head')) return 'media';
+    if (clubRoles.some(r => r.department === 'Training & Masterclasses' && r.position === 'Head')) return 'trainer';
+    if (clubRoles.some(r => r.department === 'Executive High Board')) return 'president';
+    if (clubRoles.some(r => r.department === 'Tournament Organizing Committee')) return 'oc';
+    if (clubRoles.some(r => r.department === 'Human Resources')) return 'hr';
+    if (clubRoles.some(r => r.department === 'Public Relations')) return 'pr';
+    if (clubRoles.some(r => r.department === 'Multimedia & Design')) return 'media';
+    if (clubRoles.some(r => r.department === 'Training & Masterclasses')) return 'trainer';
+    if (clubRoles.some(r => r.department === 'Trainee Development Pathway')) return 'trainee';
+  }
+  if (fallbackRole === 'admin') return 'president';
+  return fallbackRole || 'member';
+};
+
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: "♟", end: true },
   { to: "/community", label: "Community", icon: "👥" },
@@ -31,6 +52,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem("adminToken"));
   const [userRole, setUserRole] = useState(() => localStorage.getItem("userRole") || null);
+  const [userClubRoles, setUserClubRoles] = useState(() => { try { return JSON.parse(localStorage.getItem("userClubRoles") || "[]"); } catch { return []; } });
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem("adminEmail") || "");
   const [userName, setUserName] = useState(() => {
     const email = localStorage.getItem("adminEmail") || "";
@@ -286,9 +308,14 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
             setUserName(data.name);
             safeSetLocalStorage("userName", data.name);
           }
-          if (data.role) {
-            setUserRole(data.role);
-            safeSetLocalStorage("userRole", data.role);
+          const effectiveRole = (Array.isArray(data.clubRoles) && data.clubRoles.length > 0)
+            ? deriveAuthorityRoleFromClubRoles(data.clubRoles, data.role)
+            : (data.role || "member");
+          setUserRole(effectiveRole);
+          safeSetLocalStorage("userRole", effectiveRole);
+          if (Array.isArray(data.clubRoles)) {
+            setUserClubRoles(data.clubRoles);
+            safeSetLocalStorage("userClubRoles", JSON.stringify(data.clubRoles));
           }
         }
       } catch (err) {
@@ -313,6 +340,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
     window.addEventListener("userAvatarUpdated", handleAvatarUpdate);
     window.addEventListener("userNameUpdated", handleAvatarUpdate);
     window.addEventListener("userRoleUpdated", handleAvatarUpdate);
+    window.addEventListener("userClubRolesUpdated", handleAvatarUpdate);
     window.addEventListener("storage", handleAvatarUpdate);
 
     const params = new URLSearchParams(window.location.search);
@@ -664,7 +692,43 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="drawer-user-name">{userName || userEmail.split('@')[0]}</span>
                 <span className="drawer-user-email">{userEmail}</span>
                 <div className="drawer-sub-badges-row">
-                  {userRole && <span className="drawer-role-tag">{userRole}</span>}
+                  {(() => {
+                    const labels = [];
+                    if (Array.isArray(userClubRoles) && userClubRoles.length > 0) {
+                      userClubRoles.forEach(cr => {
+                        if (cr.position && cr.department) {
+                          const deptShort = (cr.department || '')
+                            .replace('Tournament Organizing Committee', 'OC')
+                            .replace('Human Resources', 'HR')
+                            .replace('Public Relations', 'PR')
+                            .replace('Multimedia & Design', 'Media')
+                            .replace('Training & Masterclasses', 'Training')
+                            .replace('Executive High Board', 'High Board')
+                            .replace('Trainee Development Pathway', 'Trainee');
+                          labels.push(`✨ ${cr.position === 'Member' ? deptShort + ' Member' : cr.position === 'Head' ? deptShort + ' Head' : cr.position} `);
+                        }
+                      });
+                    }
+                    if (labels.length === 0 && userRole && userRole !== 'member') {
+                      const roleMap = {
+                        president: '👑 President',
+                        vice_president: '⭐ Vice President',
+                        oc: '⚡ Head of OC',
+                        member_oc: '✨ Member of OC',
+                        hr: '👥 Head of HR',
+                        member_hr: '👥 Member of HR',
+                        pr: '📢 Head of PR',
+                        member_pr: '📢 Member of PR',
+                        media: '🎨 Head of Multimedia',
+                        member_media: '🎨 Member of Multimedia',
+                        trainer: '🎓 Head of Training',
+                        trainee: '♟️ Trainee'
+                      };
+                      labels.push(roleMap[userRole] || userRole);
+                    }
+                    if (labels.length === 0) labels.push('🎓 ZC Student');
+                    return labels.map((l, i) => <span key={i} className="drawer-role-tag">{l}</span>);
+                  })()}
                   <span className="drawer-active-community-badge" title="Active tacticians in campus community">
                     <span className="live-dot-pulse" /> {activeTacticians} Online
                   </span>
@@ -710,7 +774,8 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
               </Link>
 
               {/* Management section for admins/presidents/vps/hr/oc */}
-              {(['admin', 'president', 'vice_president', 'hr', 'oc'].includes(userRole)) && (
+              {(['admin', 'president', 'vice_president', 'hr', 'oc'].includes(userRole)
+                || (Array.isArray(userClubRoles) && userClubRoles.length > 0)) && (
                 <>
                   <div className="drawer-section-label" style={{ marginTop: "12px" }}>Management</div>
                   <Link to="/admin" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
@@ -745,13 +810,24 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 </>
               )}
 
-              {userRole === 'hr' && (
-                <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
-                  <span className="drawer-link-icon">📋</span> Applications
-                </Link>
+              {(['hr', 'member_hr'].includes(userRole) || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources'))) && (
+                <>
+                  <Link to="/admin?tab=manage-users" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">👥</span> Manage Users
+                  </Link>
+                  <Link to="/admin?tab=applications" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">📋</span> Applications
+                  </Link>
+                  <Link to="/admin?tab=broadcast" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">📢</span> Broadcast & Email
+                  </Link>
+                  <Link to="/admin?tab=inquiries" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
+                    <span className="drawer-link-icon">📬</span> Inquiries & Messages
+                  </Link>
+                </>
               )}
 
-              {userRole === 'oc' && (
+              {(userRole === 'oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'))) && (
                 <>
                   <Link to="/admin?tab=add-tournament" className="drawer-link drawer-link--sub" onClick={closeUserDrawer}>
                     <span className="drawer-link-icon">➕</span> Add Tournament

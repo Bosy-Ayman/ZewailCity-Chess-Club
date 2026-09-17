@@ -2191,7 +2191,7 @@ export default function EventHistory() {
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                             <span style={{ fontSize: "0.84rem", color: "#e2e8f0" }}>
-                              {matchedUser.role === "admin" ? "👑 Club Officer" : "♟️ Club Member"}
+                              {matchedUser.role === "admin" ? "👑 Club Officer" : "🎓 ZC Student"}
                               {(matchedUser.fideRating || matchedUser.chessComRating || matchedUser.lichessRating) ? ` • ⭐ ${matchedUser.fideRating || matchedUser.chessComRating || matchedUser.lichessRating} Elo` : ""}
                             </span>
                             <a

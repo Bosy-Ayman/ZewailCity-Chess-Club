@@ -730,7 +730,7 @@ const Community = () => {
                           </span>
                         ) : (
                           <span className="member-badge-standard">
-                            ♟️ Club Member
+                            🎓 ZC Student
                           </span>
                         )}
 
@@ -780,7 +780,7 @@ const Community = () => {
                           : (member.bio ? member.bio : "Zewailian Chess Tactician")}
                       </p>
 
-                      {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && member.role === 'member' && (
+                      {Array.isArray(member.clubRoles) && member.clubRoles.length > 0 && (
                         <div className="member-club-roles-row">
                           {member.clubRoles.map((cr, cIdx) => (
                             <span key={cIdx} className="member-club-role-chip" title={`${cr.position} of ${cr.department}`}>
@@ -1018,7 +1018,7 @@ const Community = () => {
                   </div>
                   <div className="tactician-modal-hero-info">
                     <div className="tactician-modal-badge">
-                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 High Board Executive' : m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '🎓 Head of Training' : (Array.isArray(m.clubRoles) && m.clubRoles.length > 0 ? `✨ ${m.clubRoles[0].position}` : '♟️ Club Member'))}
+                      {m.role === 'president' ? '👑 Club President' : m.role === 'vice_president' ? '⭐ Vice President' : m.role === 'admin' ? '👑 High Board Executive' : m.chessTitle ? `${m.chessTitle} Titled` : (m.role === 'oc' ? '🏆 OC Head' : m.role === 'hr' ? '🤝 HR Head' : m.role === 'pr' ? '📢 PR Head' : m.role === 'media' ? '🎨 Media Head' : m.role === 'trainer' ? '🎓 Head of Training' : (Array.isArray(m.clubRoles) && m.clubRoles.length > 0 ? `✨ ${m.clubRoles[0].position}` : '🎓 ZC Student'))}
                     </div>
                     <h2 className="tactician-modal-name">{m.name || m.email?.split('@')[0]}</h2>
                     <p className="tactician-modal-title">
@@ -1114,7 +1114,7 @@ const Community = () => {
                          m.role === 'trainee' ? '♟️ Club Trainee' :
                          (Array.isArray(m.clubRoles) && m.clubRoles.length > 0) ? `✨ ${m.clubRoles[0].position || 'Staff'} (${m.clubRoles[0].department || ''})` :
                          m.chessTitle ? `🎖️ ${m.chessTitle} Titleholder` :
-                         '♟️ Club Member'}
+                         '🎓 ZC Student'}
                       </span>
                     </div>
                   </div>
