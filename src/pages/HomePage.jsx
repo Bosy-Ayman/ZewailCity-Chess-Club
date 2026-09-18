@@ -1258,7 +1258,7 @@ const HomePage = () => {
           <div className="winners-mobile-select-inner">
             <span className="winners-mobile-select-icon">{activeTournament.icon}</span>
             <select
-              className="winners-mobile-select"
+              className="winners-mobile-select-native"
               value={activeTournamentIndex}
               onChange={(e) => setActiveTournamentIndex(Number(e.target.value))}
               aria-label="Select Tournament"
@@ -1288,20 +1288,7 @@ const HomePage = () => {
             ))}
           </div>
         </div>
-        
 
-        <div className="winners-mobile-select">
-          <select
-            value={activeTournamentIndex}
-            onChange={(e) => setActiveTournamentIndex(Number(e.target.value))}
-          >
-            {recentTournaments.map((t, idx) => (
-              <option key={t.id} value={idx}>
-                {t.icon} {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
 
         {/* Active Tournament Info Header (Desktop) */}
         <div className="active-tournament-banner winners-desktop-banner">

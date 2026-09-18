@@ -1146,10 +1146,11 @@
 /* ── Mobile-only tournament selector ── */
 .winners-mobile-select-wrapper {
   display: none; /* hidden on desktop */
-  padding: 0 16px;
+  padding: 0 8px;
   margin: 20px auto 4px;
-  max-width: 480px;
+  max-width: 640px;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .winners-mobile-select-inner {
@@ -1158,26 +1159,26 @@
   align-items: center;
   background: rgba(26, 23, 17, 0.85);
   border: 1.5px solid rgba(243, 193, 68, 0.4);
-  border-radius: 12px;
-  padding: 0 14px;
-  height: 50px;
-  gap: 10px;
+  border-radius: 14px;
+  padding: 0 18px;
+  height: 60px;
+  gap: 12px;
   box-shadow: 0 4px 18px rgba(0,0,0,0.35);
   backdrop-filter: blur(8px);
 }
 
 .winners-mobile-select-icon {
-  font-size: 1.25rem;
+  font-size: 1.45rem;
   flex-shrink: 0;
 }
 
-.winners-mobile-select {
+.winners-mobile-select-native {
   flex: 1;
   background: transparent;
   border: none;
   outline: none;
   color: #f0ead8;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   font-weight: 700;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   appearance: none;
@@ -1186,7 +1187,7 @@
   padding-right: 8px;
 }
 
-.winners-mobile-select option {
+.winners-mobile-select-native option {
   background: #1a1710;
   color: #f0ead8;
   font-weight: 600;
@@ -1296,41 +1297,14 @@
   min-width: 0;
 }
 
-/* Desktop */
-.winners-mobile-select {
-  display: none !important;
-}
-
-/* Mobile */
+/* Mobile: show the icon+chevron select pill, hide the desktop pills bar */
 @media screen and (max-width: 768px) {
   .tournament-pills-scroll-wrapper.winners-desktop-pills {
     display: none !important;
   }
 
-  .winners-mobile-select {
+  .winners-mobile-select-wrapper {
     display: block !important;
-    width: 100%;
-    padding-bottom: 16px;
-
-  }
-
-  .winners-mobile-select select {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 13px 40px 13px 16px; /* extra right padding for the arrow */
-    background: rgba(20, 18, 14, 0.95);
-    color: white;
-    border: 1px solid rgba(243, 193, 68, 0.35);
-    border-radius: 14px;
-    font-size: 15px;
-    font-weight: 700;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-    background-size: 14px;
   }
 }
 
@@ -5810,7 +5784,9 @@
   .tacticians-mobile-select {
     display: block !important;
     width: 100%;
-    padding: 2px 2px 10px;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 8px 10px;
     box-sizing: border-box;
     position: relative;
   }
@@ -5819,19 +5795,23 @@
   .tacticians-mobile-select select {
     width: 100%;
     box-sizing: border-box;
-    padding: 13px 40px 13px 16px; /* extra right padding for the arrow */
-    background: rgba(20, 18, 14, 0.95);
-    color: white;
-    border: 1px solid rgba(243, 193, 68, 0.35);
+    height: 60px;
+    padding: 0 40px 0 18px; /* extra right padding for the arrow */
+    background: rgba(26, 23, 17, 0.85);
+    color: #f0ead8;
+    border: 1.5px solid rgba(243, 193, 68, 0.4);
     border-radius: 14px;
-    font-size: 15px;
+    font-size: 1.02rem;
     font-weight: 700;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    backdrop-filter: blur(8px);
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 16px center;
+    background-position: right 18px center;
     background-size: 14px;
   }
 }
