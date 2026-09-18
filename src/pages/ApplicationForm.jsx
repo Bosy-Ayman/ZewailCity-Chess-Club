@@ -50,81 +50,69 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
     setProfile({ ...profile, [name]: value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccess(false);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
+  setError(null);
+  setSuccess(false);
 
-    // Validate that profile details exist
-    if (!profile.name || !profile.idNumber || !profile.phone || !profile.major) {
-      setError("Please complete all basic information fields. Toggle 'Verify / Edit Profile Fields' to enter missing details.");
-      setIsLoading(false);
-      return;
+  // Validate that profile details exist
+  if (!profile.name || !profile.idNumber || !profile.phone || !profile.major) {
+    setError("Please complete all basic information fields. Toggle 'Verify / Edit Profile Fields' to enter missing details.");
+    setIsLoading(false);
+    return;
+  }
+
+  // Reliable collection of ALL named form fields
+  const formData = new FormData(e.target);
+  const roleSpecificData = {};
+
+  // These are the basic fields – we do NOT put them inside roleSpecificData
+  const basicKeys = new Set([
+    "name", "email", "idNumber", "phone", "major", "batch",
+    "role-choice", "roleTitle", "department"
+  ]);
+
+  for (const [key, value] of formData.entries()) {
+    if (!basicKeys.has(key) && value !== undefined && String(value).trim() !== "") {
+      roleSpecificData[key] = value;
     }
+  }
 
-    const formElements = e.target.elements;
-    
-    // --- 1. Gather All Form Data ---
-    const payload = {
-      // --- Section 1: Basic Info from Profile ---
-      name: profile.name,
-      email: profile.email,
-      idNumber: profile.idNumber,
-      phone: profile.phone,
-      major: profile.major,
-      batch: profile.batch || "2026",
-      
-      // --- Role Info ---
-      roleTitle: title || "Member",
-      department: department || title || "General Committee",
-    };
-
-    // Find and add all role-specific fields (like 'hr-experience')
-    if (roleSpecificContent?.props?.children) {
-        const specificInputs = roleSpecificContent.props.children;
-        React.Children.forEach(specificInputs, (section) => {
-            if (section && section.props && section.props.children) {
-                React.Children.forEach(section.props.children, (input) => {
-                    if (input && input.props && input.props.name) {
-                        payload[input.props.name] = formElements[input.props.name]?.value;
-                    }
-                    if (input && input.props && input.props.htmlFor) {
-                         const matchingInput = formElements[input.props.htmlFor];
-                         if (matchingInput && matchingInput.name) {
-                             payload[matchingInput.name] = matchingInput.value;
-                         }
-                    }
-                });
-            }
-        });
-    }
-
-    // --- 2. Send Data to API ---
-    try {
-      const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
-      const response = await fetch(`${API_BASE}/api/applications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setSuccess(true);
-        e.target.reset();
-      } else {
-        setError(result.error || 'Submission failed. Please try again.');
-      }
-    } catch (err) {
-      setError('A network error occurred. Please check your connection.');
-    } finally {
-      setIsLoading(false);
-    }
+  const payload = {
+    name: profile.name,
+    email: profile.email,
+    idNumber: profile.idNumber,
+    phone: profile.phone,
+    major: profile.major,
+    batch: profile.batch || "2026",
+    roleTitle: title || "Member",
+    department: department || title || "General Committee",
+    roleSpecificData,               // ← Admin looks for this
   };
+
+  try {
+    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+    const response = await fetch(`${API_BASE}/api/applications`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      setSuccess(true);
+      e.target.reset();
+    } else {
+      setError(result.error || "Submission failed. Please try again.");
+    }
+  } catch (err) {
+    setError("A network error occurred. Please check your connection.");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="form-page-wrapper">

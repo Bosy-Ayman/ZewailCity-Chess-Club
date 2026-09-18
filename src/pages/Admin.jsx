@@ -11,6 +11,38 @@ import { safeFetchJson, compressImage } from "../utils/api";
 // API Base URL - works for both local and production
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
+// Human-readable labels for every role-specific field
+const ROLE_QUESTION_LABELS = {
+  // ── OC Member ──────────────────────────────────────────────
+  "oc-member-previous-app": "Have you ever applied to this role before? (include batch/year)",
+  "swiss-avail": "Available to help organize the Swiss tournament (after 4:00 PM)?",
+  "knockout-avail": "Available to help organize the Knockout tournament (throughout the day)?",
+  "oc-member-desc": "Additional Description",
+
+  // ── PR Member ──────────────────────────────────────────────
+  "pr-experience": "Previous experience in public relations, sponsorship, outreach, or student representation?",
+  "pr-experience-details": "Describe your outreach / communication / marketing experience",
+  "pr-partnerships": "How would you approach securing sponsorships or collaborating with other clubs?",
+
+  // ── HR Member ──────────────────────────────────────────────
+  "hr-experience": "Previous experience related to this role (recruitment, record-keeping, event registration)?",
+  "hr-experience-details": "What experiences do you have in this field?",
+
+  // ── Trainee ────────────────────────────────────────────────
+  "trainee-skill-level": "Current chess skill level",
+  "trainee-goals": "Main goals for joining the ZC Chess Club",
+
+  // ── Trainer ────────────────────────────────────────────────
+  "chess-score": "Highest rating (chess.com / Lichess / FIDE)",
+  "trainer-previous-app": "Have you ever applied to this role before?",
+  "trainer-availability": "Days/times available on campus for training sessions",
+  "sunday-avail": "Sunday availability",
+  "monday-avail": "Monday availability",
+  "tuesday-avail": "Tuesday availability",
+  "wednesday-avail": "Wednesday availability",
+  "thursday-avail": "Thursday availability",
+};
+
 // Helper function to resolve effective user role across both direct role and clubRoles
 export const getEffectiveUserRole = (user) => {
   if (!user) return "member";
@@ -1320,48 +1352,94 @@ export default function AdminDashboard() {
   };
 
   // Utility to format role specific details
-  const PrettyRoleData = ({ data }) => {
-    const formatKey = (key) =>
-      key.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+// Utility to format role specific details with human-readable questions
+// Utility to format role-specific answers with readable questions
+const PrettyRoleData = ({ data }) => {
+  // If the backend wrapped the answers one level deeper, unwrap it
+  let answers = data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    // Common case: { roleSpecificData: { ... } } or { RoleSpecificData: { ... } }
+    if (data.roleSpecificData && typeof data.roleSpecificData === "object") {
+      answers = data.roleSpecificData;
+    } else if (data.RoleSpecificData && typeof data.RoleSpecificData === "object") {
+      answers = data.RoleSpecificData;
+    }
+  }
 
-    const renderData = (obj) => {
-      if (obj === null || obj === undefined)
-        return <em style={{ color: "#888" }}>Not provided</em>;
-
-      if (Array.isArray(obj)) {
-        return obj.map((item, i) => (
-          <div key={i} className="pretty-role-array-item">
-            <h4>Entry #{i + 1}</h4>
-            {renderData(item)}
-          </div>
-        ));
-      }
-
-      if (typeof obj === "object" && obj !== null) {
-        return Object.entries(obj).map(([k, v]) => (
-          <div key={k} className="pretty-field">
-            <strong>{formatKey(k)}:</strong>
-            <div style={{ paddingLeft: "15px" }}>{renderData(v)}</div>
-          </div>
-        ));
-      }
-
-      return <span>{obj}</span>;
-    };
-
+  if (!answers || typeof answers !== "object" || Array.isArray(answers) || Object.keys(answers).length === 0) {
     return (
-      <div className="pretty-role-data">
-        {Object.keys(data || {}).length === 0 ? (
-          <p style={{ color: "#caba91", fontStyle: "italic" }}>
-            No role-specific data provided.
-          </p>
-        ) : (
-          renderData(data)
-        )}
-      </div>
+      <p style={{ color: "#caba91", fontStyle: "italic", margin: 0 }}>
+        No role-specific data provided.
+      </p>
     );
+  }
+
+  const formatValue = (val) => {
+    if (val === null || val === undefined || val === "") {
+      return <em style={{ color: "#888" }}>Not provided</em>;
+    }
+    if (val === true || val === "yes") return "Yes";
+    if (val === false || val === "no") return "No";
+    // If somehow still an object, show it cleanly instead of [object Object]
+    if (typeof val === "object") {
+      return (
+        <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: "0.85rem" }}>
+          {JSON.stringify(val, null, 2)}
+        </pre>
+      );
+    }
+    return String(val);
   };
 
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {Object.entries(answers).map(([key, value]) => {
+        // Skip Mongo internal fields
+        if (key.startsWith("_") || key === "id" || key === "__v") return null;
+
+        const question =
+          ROLE_QUESTION_LABELS[key] ||
+          key
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+
+        return (
+          <div
+            key={key}
+            style={{
+              background: "rgba(255, 255, 255, 0.03)",
+              border: "1px solid rgba(243, 193, 68, 0.2)",
+              borderRadius: "10px",
+              padding: "12px 16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "0.82rem",
+                color: "#f3c144",
+                fontWeight: 600,
+                marginBottom: "6px",
+                lineHeight: 1.35,
+              }}
+            >
+              {question}
+            </div>
+            <div
+              style={{
+                fontSize: "0.95rem",
+                color: "#e8e0d0",
+                lineHeight: 1.5,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {formatValue(value)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
   return (
     <div className="admin-wrapper">
       <Header sidebarOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
@@ -4016,8 +4094,7 @@ export default function AdminDashboard() {
               </div>
               <hr className="modal-divider" />
               <h4>Role-Specific Answers</h4>
-              <PrettyRoleData data={selectedApp.roleSpecificData} />
-              
+              <PrettyRoleData data={selectedApp.roleSpecificData || selectedApp} />
               {selectedApp.status === "Pending" && (
                 <div className="modal-action-buttons" style={{ display: "flex", gap: "10px", marginTop: "25px", justifyContent: "flex-end" }}>
                   <button 
