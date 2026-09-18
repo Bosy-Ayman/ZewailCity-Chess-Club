@@ -43,6 +43,73 @@ export const getEffectiveUserRole = (user) => {
   return user.role || "member";
 };
 
+// Assignable club roles — a user can now hold more than one of these at once.
+const CLUB_ROLE_OPTIONS = [
+  { key: 'president', label: '👑 President', department: 'Executive High Board', position: 'President' },
+  { key: 'vice_president', label: '⭐ Vice President', department: 'Executive High Board', position: 'Vice President' },
+  { key: 'oc', label: '⚡ Head of OC', department: 'Tournament Organizing Committee', position: 'Head' },
+  { key: 'member_oc', label: '✨ Member of OC', department: 'Tournament Organizing Committee', position: 'Member' },
+  { key: 'hr', label: '👥 Head of HR', department: 'Human Resources', position: 'Head' },
+  { key: 'member_hr', label: '👥 Member of HR', department: 'Human Resources', position: 'Member' },
+  { key: 'pr', label: '📢 Head of PR', department: 'Public Relations', position: 'Head' },
+  { key: 'member_pr', label: '📢 Member of PR', department: 'Public Relations', position: 'Member' },
+  { key: 'media', label: '🎨 Head of Multimedia', department: 'Multimedia & Design', position: 'Head' },
+  { key: 'member_media', label: '🎨 Member of Multimedia', department: 'Multimedia & Design', position: 'Member' },
+  { key: 'trainer', label: '🎓 Head of Training', department: 'Training & Masterclasses', position: 'Head' },
+  { key: 'trainee', label: '♟️ Trainee', department: 'Trainee Development Pathway', position: 'Trainee' },
+];
+
+// Priority order used only to derive a single legacy "role" string for old
+// code paths that still read u.role (e.g. delete-button guard).
+const ROLE_PRIORITY = [
+  'president', 'vice_president', 'oc', 'hr', 'pr', 'media', 'trainer',
+  'member_oc', 'member_hr', 'member_pr', 'member_media', 'trainee'
+];
+
+const getSelectedRoleKeysFromClubRoles = (clubRoles) => {
+  if (!Array.isArray(clubRoles)) return [];
+  return CLUB_ROLE_OPTIONS
+    .filter(opt => clubRoles.some(r => r.department === opt.department && r.position === opt.position))
+    .map(opt => opt.key);
+};
+
+const computeLegacyRoleFromKeys = (selectedKeys) => {
+  const found = ROLE_PRIORITY.find(key => selectedKeys.includes(key));
+  return found || 'member';
+};
+
+// Returns the list of admin tab IDs this role is actually allowed to view.
+// Used to validate the `?tab=` URL param so it can't be used to bypass RBAC.
+export const getAccessibleAdminTabs = (userRole) => {
+  const rawUserClubRoles = localStorage.getItem("userClubRoles");
+  let userClubRoles = [];
+  try { if (rawUserClubRoles) userClubRoles = JSON.parse(rawUserClubRoles); } catch (e) {}
+
+  const isExec = ['admin', 'president', 'vice_president'].includes(userRole);
+  const isHeadHR = userRole === 'hr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Human Resources' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+  const isHeadOC = userRole === 'oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+  const isHeadPR = userRole === 'pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+  const isHeadMedia = userRole === 'media' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Multimedia & Design' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+  const isHeadTrainer = userRole === 'trainer' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Training & Masterclasses' && (r.position === 'Head' || r.position === 'President' || r.position === 'Vice President')));
+
+  const isOCMember = userRole === 'member_oc' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Tournament Organizing Committee'));
+  const isPRMember = userRole === 'member_pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
+
+  if (isExec) {
+    return ["add-tournament", "tournaments-list", "applications", "manage-users", "manage-puzzles", "broadcast", "inquiries"];
+  }
+
+  const tabIds = [];
+  if (isHeadHR) tabIds.push("manage-users", "applications", "broadcast", "inquiries");
+  if (isHeadOC) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles", "inquiries");
+  else if (isOCMember) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles");
+  if (isHeadPR || isPRMember) tabIds.push("broadcast", "inquiries");
+  if (isHeadMedia) tabIds.push("broadcast", "inquiries");
+  if (isHeadTrainer) tabIds.push("manage-puzzles");
+
+  return Array.from(new Set(tabIds));
+};
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,6 +149,7 @@ export default function AdminDashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [applications, setApplications] = useState([]);
   const [users, setUsers] = useState([]);
+  const [roleModal, setRoleModal] = useState({ isOpen: false, user: null, selectedKeys: [] });
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [inquiries, setInquiries] = useState([]);
@@ -214,7 +282,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Users
-      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
+      if (["admin", "president", "vice_president", "oc", "hr", "pr", "media"].includes(userRole)) {
         try {
           const userData = await safeFetchJson(`${API_BASE}/api/users`);
           if (Array.isArray(userData)) setUsers(userData);
@@ -224,7 +292,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Inquiries / Contact Dispatches
-      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
+      if (["admin", "president", "vice_president", "oc", "hr", "pr", "media"].includes(userRole)) {
         try {
           const inqData = await safeFetchJson(`${API_BASE}/api/contact`);
           if (Array.isArray(inqData)) setInquiries(inqData);
@@ -234,7 +302,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch Dispatched Announcements & Emails History
-      if (userRole === "admin" || userRole === "president" || userRole === "vice_president" || userRole === "oc" || userRole === "hr") {
+      if (["admin", "president", "vice_president", "hr", "pr", "media"].includes(userRole)) {
         try {
           const logData = await safeFetchJson(`${API_BASE}/api/admin/broadcast-logs`);
           if (Array.isArray(logData)) setBroadcastLogs(logData);
@@ -258,22 +326,49 @@ export default function AdminDashboard() {
       navigate("/?login=true");
       return;
     }
-    if (userRole !== "admin" && userRole !== "president" && userRole !== "vice_president" && userRole !== "oc" && userRole !== "hr") {
+
+    const allowedAdminRoles = [
+      "admin", "president", "vice_president",
+      "oc", "hr", "pr", "media", "trainer",
+      "member_oc", "member_pr"
+    ];
+    if (!allowedAdminRoles.includes(userRole)) {
       navigate("/");
       return;
     }
-    
-    // Set default active tab based on query param or role
+
+    const accessibleTabs = getAccessibleAdminTabs(userRole);
+    if (accessibleTabs.length === 0) {
+      // This role has a valid admin login but no permitted tabs — bounce out.
+      navigate("/");
+      return;
+    }
+
+    // Pick a safe default tab for this role, falling back to the first
+    // tab they're actually permitted to see.
+    let defaultTab = "add-tournament";
+    if (userRole === "hr") defaultTab = "applications";
+    else if (userRole === "pr" || userRole === "member_pr" || userRole === "media") defaultTab = "broadcast";
+    else if (userRole === "trainer") defaultTab = "manage-puzzles";
+    if (!accessibleTabs.includes(defaultTab)) {
+      defaultTab = accessibleTabs[0];
+    }
+
+    // Validate the ?tab= param against this role's permitted tabs —
+    // never trust it blindly, or anyone can type ?tab=broadcast in the URL.
     const params = new URLSearchParams(location.search);
     const tabParam = params.get("tab");
-    if (tabParam) {
+
+    if (tabParam && accessibleTabs.includes(tabParam)) {
       setActiveTab(tabParam);
-    } else if (userRole === "hr") {
-      setActiveTab("applications");
     } else {
-      setActiveTab("add-tournament");
+      setActiveTab(defaultTab);
+      if (tabParam) {
+        // Strip the unauthorized tab out of the URL bar too
+        navigate(`/admin?tab=${defaultTab}`, { replace: true });
+      }
     }
-    
+
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, userRole, location.search]);
@@ -303,33 +398,45 @@ export default function AdminDashboard() {
     }
   };
 
-  // Direct Role & Executive Privileges Assignment (without applying)
-  const handleDirectRoleChange = async (targetUser, newRole) => {
+  const openRoleModal = (user) => {
+    setRoleModal({
+      isOpen: true,
+      user,
+      selectedKeys: getSelectedRoleKeysFromClubRoles(user.clubRoles)
+    });
+  };
+
+  const closeRoleModal = () => setRoleModal({ isOpen: false, user: null, selectedKeys: [] });
+
+  const toggleRoleKey = (key) => {
+    setRoleModal(prev => ({
+      ...prev,
+      selectedKeys: prev.selectedKeys.includes(key)
+        ? prev.selectedKeys.filter(k => k !== key)
+        : [...prev.selectedKeys, key]
+    }));
+  };
+
+  const handleSaveUserRoles = async () => {
+    const targetUser = roleModal.user;
+    if (!targetUser) return;
+
     setErrorMessage("");
     setSuccessMessage("");
 
-    // Optimistic UI update so table and cards reflect selection instantly
+    const newClubRoles = CLUB_ROLE_OPTIONS
+      .filter(opt => roleModal.selectedKeys.includes(opt.key))
+      .map(opt => ({ department: opt.department, position: opt.position }));
+    const legacyRole = computeLegacyRoleFromKeys(roleModal.selectedKeys);
+
+    // Optimistic UI update
     setUsers(prev => prev.map(u => {
       if (u.email?.toLowerCase() === targetUser.email?.toLowerCase()) {
-        const deptMap = {
-          president: [{ department: 'Executive High Board', position: 'President' }],
-          vice_president: [{ department: 'Executive High Board', position: 'Vice President' }],
-          oc: [{ department: 'Tournament Organizing Committee', position: 'Head' }],
-          hr: [{ department: 'Human Resources', position: 'Head' }],
-          pr: [{ department: 'Public Relations', position: 'Head' }],
-          media: [{ department: 'Multimedia & Design', position: 'Head' }],
-          trainer: [{ department: 'Training & Masterclasses', position: 'Head' }],
-          trainee: [{ department: 'Trainee Development Pathway', position: 'Trainee' }],
-          member: []
-        };
-        return {
-          ...u,
-          role: newRole,
-          clubRoles: deptMap[newRole] || []
-        };
+        return { ...u, role: legacyRole, clubRoles: newClubRoles };
       }
       return u;
     }));
+    closeRoleModal();
 
     try {
       const adminEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "chesszc@zewailcity.edu.eg";
@@ -339,21 +446,23 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           adminEmail,
           targetEmail: targetUser.email,
-          role: newRole
+          role: legacyRole,
+          clubRoles: newClubRoles
         })
       });
 
-      // If updating the currently logged-in user, synchronize localStorage live
       const currentEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
       if (targetUser.email?.toLowerCase() === currentEmail.toLowerCase()) {
-        localStorage.setItem("userRole", newRole);
+        localStorage.setItem("userRole", legacyRole);
+        localStorage.setItem("userClubRoles", JSON.stringify(newClubRoles));
         window.dispatchEvent(new Event("userRoleUpdated"));
+        window.dispatchEvent(new Event("userClubRolesUpdated"));
       }
 
-      setSuccessMessage(`👑 Role updated to ${newRole.toUpperCase()} for ${targetUser.name}! Direct appointment email & in-app notification dispatched.`);
+      setSuccessMessage(`👑 Roles updated for ${targetUser.name}! Direct appointment email & in-app notification dispatched.`);
       fetchData();
     } catch (err) {
-      setErrorMessage(err.message || "Failed to update user role.");
+      setErrorMessage(err.message || "Failed to update user roles.");
       fetchData();
     }
   };
@@ -2186,36 +2295,28 @@ export default function AdminDashboard() {
                                   </div>
                                 </td>
                                 <td>
-                                  <select
-                                    value={getEffectiveUserRole(u)}
-                                    onChange={(e) => handleDirectRoleChange(u, e.target.value)}
+                                  <button
+                                    type="button"
+                                    onClick={() => openRoleModal(u)}
                                     style={{
-                                      background: getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.25)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.2)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                                      color: (getEffectiveUserRole(u) === "president" || getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "#f3c144" : getEffectiveUserRole(u) === "vice_president" ? "#c084fc" : "#d0d0d0",
-                                      border: `1px solid ${getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.6)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.5)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: "6px",
+                                      width: "100%",
+                                      background: "rgba(243, 193, 68, 0.12)",
+                                      color: "#f3c144",
+                                      border: "1px solid rgba(243, 193, 68, 0.35)",
                                       borderRadius: "6px",
-                                      padding: "4px 8px",
+                                      padding: "6px 10px",
                                       fontSize: "0.8rem",
                                       fontWeight: "700",
-                                      cursor: "pointer",
-                                      width: "100%"
+                                      cursor: "pointer"
                                     }}
-                                    title="Assign Executive Privileges & Specific Role"
+                                    title="Manage this member's roles"
                                   >
-                                    <option value="member">🎓 ZC Student</option>
-                                    <option value="president">👑 President</option>
-                                    <option value="vice_president">⭐ Vice President</option>
-                                    <option value="oc">⚡ Head of OC</option>
-                                    <option value="member_oc">✨ Member of OC</option>
-                                    <option value="hr">👥 Head of HR</option>
-                                    <option value="member_hr">👥 Member of HR</option>
-                                    <option value="pr">📢 Head of PR</option>
-                                    <option value="member_pr">📢 Member of PR</option>
-                                    <option value="media">🎨 Head of Multimedia</option>
-                                    <option value="member_media">🎨 Member of Multimedia</option>
-                                    <option value="trainer">🎓 Head of Training</option>
-                                    <option value="trainee">♟️ Trainee</option>
-                                  </select>
+                                    🛠️ {Array.isArray(u.clubRoles) && u.clubRoles.length > 0 ? "Manage Roles" : "Assign Roles"}
+                                  </button>
                                   {Array.isArray(u.clubRoles) && u.clubRoles.length > 0 && (
                                     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
                                       {u.clubRoles.map((cr, cIdx) => (
@@ -2326,35 +2427,22 @@ export default function AdminDashboard() {
                                   <div style={{ fontSize: "0.8rem", color: "#bab19c" }}>{u.email}</div>
                                 </div>
                               </div>
-                              <select
-                                value={getEffectiveUserRole(u)}
-                                onChange={(e) => handleDirectRoleChange(u, e.target.value)}
+                              <button
+                                type="button"
+                                onClick={() => openRoleModal(u)}
                                 style={{
-                                  background: getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.25)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.2)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                                  color: (getEffectiveUserRole(u) === "president" || getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "#f3c144" : getEffectiveUserRole(u) === "vice_president" ? "#c084fc" : "#d0d0d0",
-                                  border: `1px solid ${getEffectiveUserRole(u) === "president" ? "rgba(243, 193, 68, 0.6)" : getEffectiveUserRole(u) === "vice_president" ? "rgba(168, 85, 247, 0.5)" : (getEffectiveUserRole(u) === "admin" || getEffectiveUserRole(u) === "oc" || getEffectiveUserRole(u) === "hr" || getEffectiveUserRole(u) === "pr" || getEffectiveUserRole(u) === "media" || getEffectiveUserRole(u) === "trainer") ? "rgba(243, 193, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
+                                  background: "rgba(243, 193, 68, 0.12)",
+                                  color: "#f3c144",
+                                  border: "1px solid rgba(243, 193, 68, 0.35)",
                                   borderRadius: "6px",
-                                  padding: "4px 8px",
+                                  padding: "4px 10px",
                                   fontSize: "0.8rem",
                                   fontWeight: "700",
                                   cursor: "pointer"
                                 }}
-                                title="Change Specific Role"
                               >
-                                <option value="member">🎓 ZC Student</option>
-                                <option value="president">👑 President</option>
-                                <option value="vice_president">⭐ Vice President</option>
-                                <option value="oc">⚡ Head of OC</option>
-                                <option value="member_oc">✨ Member of OC</option>
-                                <option value="hr">👥 Head of HR</option>
-                                <option value="member_hr">👥 Member of HR</option>
-                                <option value="pr">📢 Head of PR</option>
-                                <option value="member_pr">📢 Member of PR</option>
-                                <option value="media">🎨 Head of Multimedia</option>
-                                <option value="member_media">🎨 Member of Multimedia</option>
-                                <option value="trainer">🎓 Head of Training</option>
-                                <option value="trainee">♟️ Trainee</option>
-                              </select>
+                                🛠️ Manage Roles
+                              </button>
                             </div>
                             {Array.isArray(u.clubRoles) && u.clubRoles.length > 0 && (
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", margin: "6px 0 10px" }}>
@@ -3953,6 +4041,75 @@ export default function AdminDashboard() {
                   Application Status: {selectedApp.status}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Multi-Role Assignment Modal */}
+        {roleModal.isOpen && roleModal.user && (
+          <div className="modal-overlay" onClick={closeRoleModal}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "460px" }}>
+              <button className="modal-close-btn" onClick={closeRoleModal} aria-label="Close role editor">
+                <X size={18} />
+              </button>
+              <h3 style={{ color: "#fff", margin: "0 0 6px", fontSize: "1.15rem" }}>
+                🛠️ Manage Roles for {roleModal.user.name}
+              </h3>
+              <p style={{ color: "#bab19c", fontSize: "0.85rem", margin: "0 0 16px" }}>
+                Select all department roles that apply. A member can hold more than one role at once — leave everything unchecked for a general ZC Student.
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "320px", overflowY: "auto", marginBottom: "18px" }}>
+                {CLUB_ROLE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      background: roleModal.selectedKeys.includes(opt.key) ? "rgba(243, 193, 68, 0.15)" : "rgba(255, 255, 255, 0.04)",
+                      border: `1px solid ${roleModal.selectedKeys.includes(opt.key) ? "rgba(243, 193, 68, 0.5)" : "rgba(255, 255, 255, 0.1)"}`
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={roleModal.selectedKeys.includes(opt.key)}
+                      onChange={() => toggleRoleKey(opt.key)}
+                      style={{ accentColor: "#f3c144", cursor: "pointer" }}
+                    />
+                    <span style={{ color: roleModal.selectedKeys.includes(opt.key) ? "#f3c144" : "#ddd", fontWeight: 600, fontSize: "0.88rem" }}>
+                      {opt.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {roleModal.selectedKeys.length === 0 && (
+                <p style={{ color: "#caba91", fontSize: "0.78rem", fontStyle: "italic", margin: "0 0 14px" }}>
+                  No roles selected — this member will be treated as a general ZC Student.
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={closeRoleModal}
+                  style={{ padding: "8px 16px", borderRadius: "8px", background: "rgba(255,255,255,0.08)", color: "#ddd", border: "1px solid #444", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveUserRoles}
+                  style={{ padding: "8px 20px", borderRadius: "8px", background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800", border: "none", cursor: "pointer" }}
+                >
+                  💾 Save Roles
+                </button>
+              </div>
             </div>
           </div>
         )}
