@@ -3789,6 +3789,11 @@
   margin-bottom: 34px;
 }
 
+/* Mobile Filter Select - hidden by default on desktop */
+.tacticians-mobile-select {
+  display: none !important;
+}
+
 .tactician-filter-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -5748,9 +5753,6 @@
 
 
 
-.tacticians-mobile-select {
-  display: none;
-}
 /*4 GRIDd */
 
 @media (max-width: 768px) {
