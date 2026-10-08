@@ -2920,9 +2920,17 @@ app.get('/api/tournaments', async (req, res) => {
     if (cached) return res.json(cached);
 
     const tournaments = await Tournament.find().sort({ startDate: 1 }).lean();
-    // Dynamically compute player count to ensure it's always accurate
+    // Dynamically compute player count and filter orphan registrations
     const dynamicTournaments = tournaments.map(t => {
       t.players = t.playersList ? t.playersList.length : 0;
+      if (Array.isArray(t.registrations) && Array.isArray(t.playersList)) {
+        const validNames = new Set(t.playersList.map(p => (p.name || '').trim().toLowerCase()).filter(Boolean));
+        const validEmails = new Set(t.playersList.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean));
+        t.registrations = t.registrations.filter(r => 
+          (r.name && validNames.has(r.name.trim().toLowerCase())) || 
+          (r.email && validEmails.has(r.email.trim().toLowerCase()))
+        );
+      }
       return t;
     });
     setCached('tournaments_all', dynamicTournaments, 5000);
@@ -2942,6 +2950,15 @@ app.get('/api/tournaments/:id', async (req, res) => {
     const obj = tournament.toObject();
     obj.players = obj.playersList ? obj.playersList.length : 0;
 
+    if (Array.isArray(obj.registrations) && Array.isArray(obj.playersList)) {
+      const validNames = new Set(obj.playersList.map(p => (p.name || '').trim().toLowerCase()).filter(Boolean));
+      const validEmails = new Set(obj.playersList.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean));
+      obj.registrations = obj.registrations.filter(r => 
+        (r.name && validNames.has(r.name.trim().toLowerCase())) || 
+        (r.email && validEmails.has(r.email.trim().toLowerCase()))
+      );
+    }
+
     // Collect all player names in this tournament
     const playerNames = new Set();
     if (obj.playersList) {
@@ -2960,7 +2977,7 @@ app.get('/api/tournaments/:id', async (req, res) => {
         { name: { $in: nameArray } },
         { email: { $in: nameArray } }
       ]
-    }).select('name email profileImage major batch fideRating fideId chessTitle favOpening bio cheers availability');
+    }).select('name email profileImage major batch fideRating fideId chessComRating lichessRating rating chessTitle favOpening bio cheers availability');
 
     const playerAvatars = {};
     const playerProfiles = {};
@@ -2970,6 +2987,11 @@ app.get('/api/tournaments/:id', async (req, res) => {
         if (u.name) playerAvatars[u.name.trim()] = u.profileImage;
         if (u.email) playerAvatars[u.email.trim()] = u.profileImage;
       }
+      const effectiveRating = (u.chessComRating > 0 && u.chessComRating) ||
+                              (u.fideRating > 0 && u.fideRating) ||
+                              (u.lichessRating > 0 && u.lichessRating) ||
+                              (u.rating > 0 && u.rating) ||
+                              0;
       const profileData = {
         name: u.name,
         email: u.email,
@@ -2977,6 +2999,10 @@ app.get('/api/tournaments/:id', async (req, res) => {
         major: u.major || "",
         batch: u.batch || "",
         fideRating: u.fideRating || 0,
+        chessComRating: u.chessComRating || 0,
+        lichessRating: u.lichessRating || 0,
+        rating: u.rating || 0,
+        effectiveRating: effectiveRating,
         fideId: u.fideId || "",
         chessTitle: u.chessTitle || "",
         favOpening: u.favOpening || "",
@@ -4009,14 +4035,26 @@ app.delete('/api/tournaments/:id/players/:playerName', async (req, res) => {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
-    const playerIndex = tournament.playersList.findIndex(p => p.name === req.params.playerName);
-    if (playerIndex === -1) {
-      return res.status(404).json({ error: "Player not found in tournament list" });
-    }
+    const targetName = (req.params.playerName || "").trim().toLowerCase();
 
-    tournament.playersList.splice(playerIndex, 1);
-    tournament.players = tournament.playersList.length; // Keep count field in sync
+    // 1. Remove from playersList (case-insensitive)
+    const initialPlayersListLen = (tournament.playersList || []).length;
+    tournament.playersList = (tournament.playersList || []).filter(
+      p => p.name && p.name.trim().toLowerCase() !== targetName
+    );
+
+    // 2. Remove from registrations (case-insensitive by name or email)
+    tournament.registrations = (tournament.registrations || []).filter(
+      r => (r.name && r.name.trim().toLowerCase() !== targetName) && 
+           (r.email && r.email.trim().toLowerCase() !== targetName)
+    );
+
+    // 3. Keep player count in sync
+    tournament.players = tournament.playersList.length;
     
+    // Clear server cache so frontend updates immediately
+    clearCache('tournaments');
+
     await tournament.save();
     res.json({ message: `Successfully removed player ${req.params.playerName}!`, data: tournament });
   } catch (error) {
@@ -5004,9 +5042,14 @@ app.post('/api/tournaments/:id/register', async (req, res) => {
     
     // Check if user is already in playersList (just in case)
     if (!tournament.playersList.some(p => p.name === name)) {
+      const userRating = (joiningUser?.chessComRating > 0 && joiningUser.chessComRating) ||
+                         (joiningUser?.fideRating > 0 && joiningUser.fideRating) ||
+                         (joiningUser?.lichessRating > 0 && joiningUser.lichessRating) ||
+                         (joiningUser?.rating > 0 && joiningUser.rating) ||
+                         0;
       tournament.playersList.push({ 
         name, 
-        rating: joiningUser?.fideRating || joiningUser?.chessComRating || 1500, // Rating from profile or default
+        rating: userRating, 
         major: joiningUser?.major || 'N/A' 
       });
       tournament.players = tournament.playersList.length;

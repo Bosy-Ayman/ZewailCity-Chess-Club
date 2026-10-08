@@ -791,48 +791,6 @@ const isBlackWinner = (result) => {
     document.body.removeChild(link);
   };
 
-  // Export Tournament Pairings & Match Results as PGN
-  const handleExportPGN = () => {
-    if (!tournament) return;
-    const matches = tournament.matches || [];
-    if (matches.length === 0) {
-      alert("No matches recorded to export yet!");
-      return;
-    }
-
-    const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
-    let pgnContent = `[Event "${cleanTitle}"]\n[Site "Zewail City of Science and Technology"]\n[Date "${tournament.startDate || new Date().toISOString().split("T")[0]}"]\n[TournamentType "${tournament.type || "Swiss"}"]\n\n`;
-
-    matches.forEach((m, idx) => {
-      const white = m.white || "White";
-      const black = m.black || "Black";
-      const round = m.round || 1;
-      let result = m.result || "*";
-      if (result === "1 - 0") result = "1-0";
-      if (result === "0 - 1") result = "0-1";
-      if (result === "1/2 - 1/2" || result === "½ - ½" || result === "Draw") result = "1/2-1/2";
-      if (result === "Pending") result = "*";
-
-      pgnContent += `[Event "${cleanTitle}"]\n`;
-      pgnContent += `[Site "Zewail City"]\n`;
-      pgnContent += `[Date "${tournament.startDate || "2026.09.09"}"]\n`;
-      pgnContent += `[Round "${round}.${idx + 1}"]\n`;
-      pgnContent += `[White "${white}"]\n`;
-      pgnContent += `[Black "${black}"]\n`;
-      pgnContent += `[Result "${result}"]\n\n`;
-      pgnContent += `${result}\n\n`;
-    });
-
-    const blob = new Blob([pgnContent], { type: "application/x-chess-pgn;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${cleanTitle.replace(/\s+/g, "_")}_Matches.pgn`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
 
   // Export Standings and Results as CSV
   const handleExportCSV = () => {
@@ -978,10 +936,20 @@ const isBlackWinner = (result) => {
   const calculateSwissStandings = (players = [], matches = []) => {
     const statsMap = {};
     players.forEach((p) => {
+      const profile = tournament?.playerProfiles?.[p.name] || 
+                      tournament?.playerProfiles?.[p.name?.trim()] || 
+                      tournament?.playerProfiles?.[p.name?.trim()?.toLowerCase()];
+      const effectiveRating = profile?.effectiveRating || 
+                              (profile?.chessComRating > 0 && profile.chessComRating) || 
+                              (profile?.fideRating > 0 && profile.fideRating) || 
+                              (profile?.lichessRating > 0 && profile.lichessRating) || 
+                              (p.rating && p.rating > 0 && p.rating !== 1500 ? p.rating : null) || 
+                              (profile?.rating > 0 && profile.rating) || 
+                              0;
       statsMap[p.name] = {
         name: p.name,
-        rating: p.rating || 1500,
-        major: p.major || "-",
+        rating: effectiveRating > 0 ? effectiveRating : "Unrated",
+        major: (profile && profile.major) || p.major || "-",
         played: 0,
         wins: 0,
         draws: 0,
@@ -996,7 +964,11 @@ const isBlackWinner = (result) => {
       const black = m.black;
       const isWhiteBye = black === "BYE";
 
-      if (!statsMap[white]) statsMap[white] = { name: white, rating: 1500, major: "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+      if (!statsMap[white]) {
+        const profile = tournament?.playerProfiles?.[white] || tournament?.playerProfiles?.[white?.trim()] || tournament?.playerProfiles?.[white?.trim()?.toLowerCase()];
+        const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
+        statsMap[white] = { name: white, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+      }
 
       if (isWhiteBye) {
         // BYE: full point, doesn't count as a played game in W-D-L
@@ -1005,7 +977,11 @@ const isBlackWinner = (result) => {
         return;
       }
 
-      if (!statsMap[black]) statsMap[black] = { name: black, rating: 1500, major: "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+      if (!statsMap[black]) {
+        const profile = tournament?.playerProfiles?.[black] || tournament?.playerProfiles?.[black?.trim()] || tournament?.playerProfiles?.[black?.trim()?.toLowerCase()];
+        const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
+        statsMap[black] = { name: black, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+      }
 
       statsMap[white].played += 1;
       statsMap[black].played += 1;
@@ -1069,9 +1045,15 @@ const isBlackWinner = (result) => {
       avatar: avatarUrl,
       major: profileFromDb.major || extra.major || standing?.major || "Zewail City Tactician",
       batch: profileFromDb.batch || "ZC '25",
-      rating: profileFromDb.fideRating || extra.rating || standing?.rating || 1500,
+      rating: profileFromDb.effectiveRating || 
+              (profileFromDb.chessComRating > 0 && profileFromDb.chessComRating) || 
+              (profileFromDb.fideRating > 0 && profileFromDb.fideRating) || 
+              (profileFromDb.lichessRating > 0 && profileFromDb.lichessRating) || 
+              (extra.rating && extra.rating !== 1500 && extra.rating !== 0 ? extra.rating : null) || 
+              (standing?.rating && standing?.rating !== 1500 && standing?.rating !== 0 ? standing?.rating : null) || 
+              "Unrated",
       chessTitle: profileFromDb.chessTitle || "",
-      favOpening: profileFromDb.favOpening || "Sicilian Defense / Queen's Gambit",
+      favOpening: profileFromDb.favOpening || "",
       bio: profileFromDb.bio || "Active tournament tactician competing for Zewail City honors.",
       standing: standing || null
     });
@@ -1079,7 +1061,7 @@ const isBlackWinner = (result) => {
     setCheered(false);
     setChallengeSent(false);
 
-    // Fetch fresh profile from database to ensure up-to-date cheer count and email
+    // Fetch fresh profile from database to ensure up-to-date cheer count, email, and favOpening
     const fetchFreshProfile = async () => {
       try {
         const queryUrl = profileFromDb.email 
@@ -1094,10 +1076,27 @@ const isBlackWinner = (result) => {
               if (!tournament.playerProfiles[clean]) tournament.playerProfiles[clean] = {};
               tournament.playerProfiles[clean].cheers = prof.cheers;
               if (prof.email) tournament.playerProfiles[clean].email = prof.email;
+              if (prof.favOpening !== undefined) tournament.playerProfiles[clean].favOpening = prof.favOpening;
             }
           }
-          if (prof.email) {
-            setSelectedPlayerModal(prev => (prev && prev.name === clean ? { ...prev, email: prof.email } : prev));
+          if (prof) {
+            setSelectedPlayerModal(prev => {
+              if (!prev || prev.name !== clean) return prev;
+              const freshRating = (prof.chessComRating > 0 && prof.chessComRating) || 
+                                  (prof.fideRating > 0 && prof.fideRating) || 
+                                  (prof.lichessRating > 0 && prof.lichessRating) || 
+                                  (prof.rating > 0 && prof.rating ? prof.rating : null) || 
+                                  "Unrated";
+              return {
+                ...prev,
+                email: prof.email || prev.email,
+                favOpening: prof.favOpening || "",
+                rating: freshRating,
+                major: prof.major || prev.major,
+                bio: prof.bio || prev.bio,
+                chessTitle: prof.chessTitle || prev.chessTitle
+              };
+            });
           }
         }
       } catch (e) {}
@@ -1305,7 +1304,7 @@ const isBlackWinner = (result) => {
                 })()}
 
                 <div className="tournament-export-actions">
-                  {(tournament.status === "Completed" || tournament.winner || podiumP1) && (
+                  {tournament.status === "Completed" && (
                     <button 
                       type="button"
                       onClick={() => setCelebrationModalOpen(true)}
@@ -1352,24 +1351,17 @@ const isBlackWinner = (result) => {
                       <span>Manage / Edit Info</span>
                     </button>
                   )}
-                  <button 
-                    type="button"
-                    onClick={handleExportPNG}
-                    className="export-tournament-btn png-btn"
-                    title="Download Official Branded Tournament Summary Card as PNG Image"
-                  >
-                    <span>🖼️</span>
-                    <span>Download PNG (Image)</span>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={handleExportPGN}
-                    className="export-tournament-btn pgn-btn"
-                    title="Export Match Pairings in Chess PGN format (.pgn)"
-                  >
-                    <span>♟️</span>
-                    <span>Download PGN (.pgn Moves)</span>
-                  </button>
+                  {tournament.status === "Completed" && (
+                    <button 
+                      type="button"
+                      onClick={handleExportPNG}
+                      className="export-tournament-btn png-btn"
+                      title="Download Official Branded Tournament Summary Card as PNG Image"
+                    >
+                      <span>🖼️</span>
+                      <span>Download PNG (Image)</span>
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={handleExportCSV}
@@ -1679,7 +1671,7 @@ const isBlackWinner = (result) => {
                               <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
                               <td>{p.played}</td>
                               <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
-                              <td>{p.rating}</td>
+                              <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
                               <td>{p.major}</td>
                               <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                 {canViewCert ? (
@@ -3645,7 +3637,9 @@ const isBlackWinner = (result) => {
               </div>
               <div className="player-modal-identity">
                 <h3 className="player-modal-name">{selectedPlayerModal.name}</h3>
-                <span className="player-modal-tag">{selectedPlayerModal.chessTitle}</span>
+                {selectedPlayerModal.chessTitle && (
+                  <span className="player-modal-tag">{selectedPlayerModal.chessTitle}</span>
+                )}
                 <p className="player-modal-major">{selectedPlayerModal.major} • {selectedPlayerModal.batch}</p>
               </div>
             </div>
