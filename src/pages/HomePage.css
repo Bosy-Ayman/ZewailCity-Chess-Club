@@ -5777,10 +5777,6 @@
 
 /**/
 @media screen and (max-width: 768px) {
-  .tacticians-filter-bar.tacticians-desktop-filter-bar {
-    display: none !important;
-  }
-
   .tacticians-mobile-select {
     display: block !important;
     width: 100%;
@@ -5790,7 +5786,6 @@
     box-sizing: border-box;
     position: relative;
   }
-
 
   .tacticians-mobile-select select {
     width: 100%;
@@ -5814,9 +5809,9 @@
     background-position: right 18px center;
     background-size: 14px;
   }
-}
-  /* Filter bar horizontal scroll on mobile */
-  .tacticians-filter-bar {
+
+  /* Filter bar horizontal scroll on mobile (non-desktop variant if any) */
+  .tacticians-filter-bar:not(.tacticians-desktop-filter-bar) {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -5828,6 +5823,13 @@
     scrollbar-width: none;
     width: 100%;
   }
+
+  /* Explicitly hide the desktop filter bar on mobile view so only 1 selector appears */
+  .tacticians-desktop-filter-bar,
+  .tacticians-filter-bar.tacticians-desktop-filter-bar {
+    display: none !important;
+  }
+}
   .tacticians-filter-bar::-webkit-scrollbar {
     display: none;
   }
@@ -6183,7 +6185,7 @@
   .hero-stat-lbl {
     font-size: 0.58rem;
   }
-  .tacticians-filter-bar {
+  .tacticians-filter-bar:not(.tacticians-desktop-filter-bar) {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
