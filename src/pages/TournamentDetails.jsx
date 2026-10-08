@@ -567,6 +567,7 @@ const isBlackWinner = (result) => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleDispatchCertificates = async () => {
     return handleMassEmailCertificates();
   };

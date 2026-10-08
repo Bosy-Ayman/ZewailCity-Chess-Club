@@ -146,6 +146,7 @@ const HomePage = () => {
   const otherAnnouncements = announcements.filter((a) => !a.pinned);
 
   const [activeTournamentIndex, setActiveTournamentIndex] = useState(0);
+  // eslint-disable-next-line no-unused-vars
   const [winnersMenuOpen, setWinnersMenuOpen] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
 

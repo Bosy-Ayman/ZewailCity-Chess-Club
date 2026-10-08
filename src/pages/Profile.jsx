@@ -1133,7 +1133,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                     >
                       <div 
                         className="profile-user-img" 
-                        style={{ backgroundImage: `url("${profile.profileImage || '/Icons/unknown.png'}")` }}
+                        style={{ backgroundImage: `url("${profile.profileImage || getPlayerAvatarUrl(profile.name) || '/Icons/unknown.png'}")` }}
                       >
                         <div className="profile-img-overlay">
                           <Camera size={26} />
@@ -1144,7 +1144,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                   ) : (
                     <div 
                       className="profile-user-img" 
-                      style={{ backgroundImage: `url("${profile.profileImage || '/Icons/unknown.png'}")` }}
+                      style={{ backgroundImage: `url("${profile.profileImage || getPlayerAvatarUrl(profile.name) || '/Icons/unknown.png'}")` }}
                     />
                   )}
                   <div className="avatar-status-dot" title="Active ZC Member" />
@@ -2167,6 +2167,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                 <div className="tournament-grid-dashboard">
                   {tournamentAchievements.historicalList.map((ht, idx) => {
                     const rankLabel = ht.place === 1 ? "🥇 1st" : ht.place === 2 ? "🥈 2nd" : ht.place === 3 ? "🥉 3rd" : `#${ht.place}`;
+                    // eslint-disable-next-line no-unused-vars
                     const certRankStr = ht.place === 1 ? "🥇 1st Place Champion" : ht.place === 2 ? "🥈 2nd Place" : ht.place === 3 ? "🥉 3rd Place" : `#${ht.place} Place`;
                     const categoryLabel = (ht.category || "tournament") === "puzzle" ? "🧩 Puzzle" : "♟️ Tournament";
                     const canDownloadCert = isOwnProfile || isAdmin;
