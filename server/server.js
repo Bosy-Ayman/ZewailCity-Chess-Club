@@ -1759,18 +1759,39 @@ app.get('/api/profile', async (req, res) => {
       return res.status(400).json({ error: 'Email or name query parameter is required' });
     }
 
-    let query = null;
+    let user = null;
     if (email) {
       const cleanEmail = email.trim();
       const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-      query = { email: emailRegex };
+      user = await User.findOne({ email: emailRegex });
     } else if (name) {
       const cleanName = name.trim();
-      const nameRegex = new RegExp(`^${cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-      query = { name: nameRegex };
-    }
+      const escapedName = cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      
+      // Stage 1: Exact case-insensitive name match
+      user = await User.findOne({ name: new RegExp(`^${escapedName}$`, 'i') });
 
-    let user = await User.findOne(query);
+      // Stage 2: Name contains cleanName substring
+      if (!user) {
+        user = await User.findOne({ name: new RegExp(escapedName, 'i') });
+      }
+
+      // Stage 3: Match tokens (e.g. "Salma" AND "Ashraf")
+      if (!user) {
+        const parts = cleanName.split(/\s+/).filter(Boolean);
+        if (parts.length > 0) {
+          const tokenRegexes = parts.map(p => new RegExp(p.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i'));
+          user = await User.findOne({ $and: tokenRegexes.map(r => ({ name: r })) });
+        }
+      }
+
+      // Stage 4: Email contains cleanName or name parts
+      if (!user) {
+        const parts = cleanName.split(/\s+/).filter(Boolean);
+        const emailRegexes = parts.map(p => new RegExp(p.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i'));
+        user = await User.findOne({ $and: emailRegexes.map(r => ({ email: r })) });
+      }
+    }
 
     if (!user) {
       return res.status(404).json({ 

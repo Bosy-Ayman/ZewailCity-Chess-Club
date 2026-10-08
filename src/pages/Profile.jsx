@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import { safeFetchJson, safeSetLocalStorage, compressImage } from "../utils/api";
+import { safeFetchJson, safeSetLocalStorage, compressImage, getPlayerAvatarUrl } from "../utils/api";
 import { getUserTournamentAchievements, getHistoricalTournamentsForUser, ALL_HISTORICAL_PLAYERS } from "../utils/tournamentWinners";
 import { findCommonFreeSlots, timeStringToMinutes, minutesToTimeString } from "../utils/availabilityMatcher";
 import { generateWinnerCertificate } from "../utils/certificateGenerator";
@@ -325,6 +325,26 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
       const profData = await safeFetchJson(fetchUrl);
       if (!profData) return;
+
+      if (profData.error || profData.unregistered) {
+        const searchedName = queryName || (targetEmail ? targetEmail.split('@')[0] : "Campus Tactician");
+        const fallbackAvatar = getPlayerAvatarUrl(searchedName);
+        setProfile({
+          name: searchedName,
+          email: targetEmail || "",
+          role: "member",
+          isUnregistered: true,
+          profileImage: fallbackAvatar !== "/Icons/unknown.png" ? fallbackAvatar : "",
+          major: "Zewail City Tactician",
+          batch: "ZC",
+          bio: "Competitor in Zewail City Chess Club tournaments. Has not registered a web account yet.",
+          fideRating: 0,
+          chessComRating: 0,
+          cheers: 0
+        });
+        setIsLoading(false);
+        return;
+      }
 
       const effectiveLoadedRole = deriveAuthorityRoleFromClubRoles(profData.clubRoles, profData.role);
 

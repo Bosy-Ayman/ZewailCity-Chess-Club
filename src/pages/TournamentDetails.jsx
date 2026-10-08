@@ -1090,6 +1090,7 @@ const isBlackWinner = (result) => {
               return {
                 ...prev,
                 email: prof.email || prev.email,
+                avatar: prof.profileImage || prev.avatar,
                 favOpening: prof.favOpening || "",
                 rating: freshRating,
                 major: prof.major || prev.major,
