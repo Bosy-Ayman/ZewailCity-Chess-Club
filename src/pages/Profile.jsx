@@ -320,7 +320,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
     if (!profile) setIsLoading(true);
     try {
       const fetchUrl = targetEmail 
-        ? `${API_BASE}/api/profile?email=${encodeURIComponent(targetEmail)}&viewerEmail=${encodeURIComponent(loggedInEmail)}`
+        ? `${API_BASE}/api/profile?email=${encodeURIComponent(targetEmail)}${queryName ? `&name=${encodeURIComponent(queryName)}` : ''}&viewerEmail=${encodeURIComponent(loggedInEmail)}`
         : `${API_BASE}/api/profile?name=${encodeURIComponent(queryName)}&viewerEmail=${encodeURIComponent(loggedInEmail)}`;
 
       const profData = await safeFetchJson(fetchUrl);
@@ -435,7 +435,27 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
         }
       }
     } catch (err) {
-      if (!profile) setError(err.message);
+      const errMsg = err?.message || "";
+      if (errMsg.includes("not registered") || errMsg.includes("404") || errMsg.includes("Tactician profile not found") || errMsg.includes("User not found")) {
+        const searchedName = queryName || (targetEmail ? targetEmail.split('@')[0] : "Campus Tactician");
+        const fallbackAvatar = getPlayerAvatarUrl(searchedName);
+        setProfile({
+          name: searchedName,
+          email: targetEmail || "",
+          role: "member",
+          isUnregistered: true,
+          profileImage: fallbackAvatar !== "/Icons/unknown.png" ? fallbackAvatar : "",
+          major: "Zewail City Tactician",
+          batch: "ZC",
+          bio: "Competitor in Zewail City Chess Club tournaments. Has not registered a web account yet.",
+          fideRating: 0,
+          chessComRating: 0,
+          cheers: 0
+        });
+        setError(null);
+      } else if (!profile) {
+        setError(err.message);
+      }
     } finally {
       setIsLoading(false);
     }

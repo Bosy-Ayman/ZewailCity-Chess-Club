@@ -462,7 +462,8 @@ const Community = () => {
             )}
           </div>
 
-          <div className="community-filter-tabs">
+          {/* Desktop Filter Tabs */}
+          <div className="community-filter-tabs community-filter-tabs-desktop">
             <button 
               className={`filter-tab-btn ${activeFilter === "all" ? "active" : ""}`}
               onClick={() => setActiveFilter("all")}
@@ -509,6 +510,30 @@ const Community = () => {
             >
               ⚡ Rated Contenders ({users.filter(u => (u.fideRating || 0) > 0 || (u.chessComRating || 0) > 0 || (u.lichessRating || 0) > 0).length})
             </button>
+          </div>
+
+          {/* Mobile Filter Select */}
+          <div className="community-filter-mobile-select">
+            <select
+              value={activeFilter}
+              onChange={(e) => setActiveFilter(e.target.value)}
+              aria-label="Filter community members"
+            >
+              <option value="all">All Members ({users.length})</option>
+              <option value="champions">🏆 Campus Champions ({users.filter(u => {
+                const top = Math.max(u.fideRating || 0, u.chessComRating || 0, u.lichessRating || 0);
+                const isHist = ["abdelrahman mohamed", "abdelwahab hamdi", "mohamed eslam", "omar tarek", "youssef ghanem", "ahmed hassan", "bosy ayman", "poussy ayman", "omar ezz"].some(c => (u.name || "").toLowerCase().includes(c));
+                return u.isChampion || (u.chessTitle && u.chessTitle.trim().length > 0) || (u.bio && (u.bio.toLowerCase().includes("champion") || u.bio.toLowerCase().includes("1st place") || u.bio.toLowerCase().includes("gold"))) || top >= 1500 || u.role === "president" || u.role === "vice_president" || isHist;
+              }).length})</option>
+              <option value="officers">👑 Club Leadership ({users.filter(u => ["president", "vice_president", "admin", "oc", "hr", "pr", "media", "trainer"].includes(u.role) || (Array.isArray(u.clubRoles) && u.clubRoles.length > 0)).length})</option>
+              {loggedInEmail && (
+                <>
+                  <option value="followers">🌟 Followed Me ({myProfile?.followers?.length || 0})</option>
+                  <option value="following">👥 Following ({Object.values(followingMap).filter(Boolean).length})</option>
+                </>
+              )}
+              <option value="active">⚡ Rated Contenders ({users.filter(u => (u.fideRating || 0) > 0 || (u.chessComRating || 0) > 0 || (u.lichessRating || 0) > 0).length})</option>
+            </select>
           </div>
         </section>
         {/* Spotlight Leaders & Cheered Banner (Podium Bar) */}
@@ -1054,7 +1079,7 @@ const Community = () => {
                 {/* Direct Profile Link Row */}
                 <div className="tactician-modal-links-bar">
                   <a 
-                    href={`/profile?email=${encodeURIComponent(m.email)}`}
+                    href={`/profile?email=${encodeURIComponent(m.email)}${m.name ? `&name=${encodeURIComponent(m.name)}` : ''}`}
                     className="btn-modal-full-profile"
                   >
                     <span>View Full Profile, Tournaments &amp; Accolades ➔</span>
@@ -1062,7 +1087,7 @@ const Community = () => {
 
                   {isAdmin && (
                     <a 
-                      href={`/profile?email=${encodeURIComponent(m.email)}`}
+                      href={`/profile?email=${encodeURIComponent(m.email)}${m.name ? `&name=${encodeURIComponent(m.name)}` : ''}`}
                       className="btn-modal-admin-ctrl"
                     >
                       <Crown size={14} />

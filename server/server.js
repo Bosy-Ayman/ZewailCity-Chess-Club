@@ -1764,7 +1764,8 @@ app.get('/api/profile', async (req, res) => {
       const cleanEmail = email.trim();
       const emailRegex = new RegExp(`^${cleanEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
       user = await User.findOne({ email: emailRegex });
-    } else if (name) {
+    }
+    if (!user && name) {
       const cleanName = name.trim();
       const escapedName = cleanName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
       

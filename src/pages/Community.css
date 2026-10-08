@@ -500,6 +500,57 @@
   }
 }
 
+/* Mobile Filter Select — hidden on desktop */
+.community-filter-mobile-select {
+  display: none !important;
+}
+
+@media screen and (max-width: 768px) {
+  /* Hide desktop button tabs, show select */
+  .community-filter-tabs-desktop {
+    display: none !important;
+  }
+
+  .community-filter-mobile-select {
+    display: block !important;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 4px 10px;
+    box-sizing: border-box;
+  }
+
+  .community-filter-mobile-select select {
+    width: 100%;
+    box-sizing: border-box;
+    height: 54px;
+    padding: 0 40px 0 18px;
+    background: rgba(26, 23, 17, 0.85);
+    color: #f0ead8;
+    border: 1.5px solid rgba(243, 193, 68, 0.4);
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23f3c144' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 18px center;
+    background-size: 14px;
+    cursor: pointer;
+  }
+
+  .community-filter-mobile-select select:focus {
+    outline: none;
+    border-color: rgba(243, 193, 68, 0.75);
+    box-shadow: 0 0 0 3px rgba(243, 193, 68, 0.15), 0 4px 18px rgba(0, 0, 0, 0.35);
+  }
+}
+
 /* =========================================================
    TOP SPOTLIGHT PODIUM (Top Rated & Most Cheered)
    ========================================================= */
@@ -1410,7 +1461,7 @@
     box-sizing: border-box;
   }
 
-  .community-filter-tabs {
+  .community-filter-tabs:not(.community-filter-tabs-desktop) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;

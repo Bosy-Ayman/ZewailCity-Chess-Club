@@ -3690,7 +3690,7 @@ const isBlackWinner = (result) => {
                 className="player-view-profile-btn"
                 onClick={() => {
                   const target = selectedPlayerModal.email
-                    ? `/profile?email=${encodeURIComponent(selectedPlayerModal.email)}`
+                    ? `/profile?email=${encodeURIComponent(selectedPlayerModal.email)}${selectedPlayerModal.name ? `&name=${encodeURIComponent(selectedPlayerModal.name)}` : ''}`
                     : `/profile?name=${encodeURIComponent(selectedPlayerModal.name)}`;
                   setSelectedPlayerModal(null);
                   navigate(target);
