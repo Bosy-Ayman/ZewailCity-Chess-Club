@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   { to: "/puzzlechallenge", label: "Puzzles", icon: "🧩" },
   { to: "/history", label: "History", icon: "📜" },
   { to: "/calendar", label: "Calendar", icon: "📅" },
-  { to: "/clubroles", label: "Club Roles", icon: "✨" },
+  { to: "/clubroles", label: "Club Roles", icon: "✨", badge: "Hiring" },
   { to: "/about", label: "About", icon: "ℹ️" },
   { to: "/contact", label: "Contact", icon: "📬" },
 ];
@@ -570,14 +570,15 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
             {!isMobile && (
               <>
                 <nav className="nav-links">
-                  {NAV_ITEMS.map(({ to, label, end }) => (
+                  {NAV_ITEMS.map(({ to, label, end, badge }) => (
                     <NavLink
                       key={to}
                       to={to}
                       end={end}
                       className={({ isActive }) => isActive ? "nav-active" : ""}
                     >
-                      {label}
+                      <span>{label}</span>
+                      {badge && <span className="nav-item-badge">{badge}</span>}
                     </NavLink>
                   ))}
                 </nav>
@@ -627,7 +628,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
 
             {/* Nav Links */}
             <nav className="mobile-sidebar-nav">
-              {NAV_ITEMS.map(({ to, label, icon, end }) => (
+              {NAV_ITEMS.map(({ to, label, icon, end, badge }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -638,7 +639,8 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                   }
                 >
                   <span className="mobile-sidebar-link-icon">{icon}</span>
-                  <span>{label}</span>
+                  <span style={{ flex: 1 }}>{label}</span>
+                  {badge && <span className="mobile-nav-badge">{badge}</span>}
                 </NavLink>
               ))}
             </nav>
@@ -764,7 +766,9 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="drawer-link-icon">📜</span> History & Archives
               </Link>
               <Link to="/clubroles" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/clubroles" ? "drawer-link--active" : ""}`}>
-                <span className="drawer-link-icon">✨</span> Club Roles
+                <span className="drawer-link-icon">✨</span>
+                <span style={{ flex: 1 }}>Club Roles</span>
+                <span className="drawer-recruitment-pill">🔥 Hiring</span>
               </Link>
               <Link to="/about" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/about" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">ℹ️</span> About Us

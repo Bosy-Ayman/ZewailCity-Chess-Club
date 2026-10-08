@@ -536,6 +536,24 @@ const Community = () => {
             </select>
           </div>
         </section>
+
+        {/* 👑 Club Leadership & Roles Recruitment Callout */}
+        <div className="community-recruitment-strip">
+          <div className="community-recruitment-pill glass-panel">
+            <div className="recruitment-pill-left">
+              <span className="pill-star-badge">✨</span>
+              <div className="pill-text-wrap">
+                <span className="pill-title">Aspiring to join Club Leadership or the Organizing Committee?</span>
+                <span className="pill-sub">Applications are open for OC Arbiters, PR, Media, HR, &amp; Trainers. Earn certified leadership credentials.</span>
+              </div>
+            </div>
+            <a href="/clubroles" className="btn-recruitment-pill">
+              <span>Explore Roles &amp; Apply</span>
+              <span className="btn-arrow">➔</span>
+            </a>
+          </div>
+        </div>
+
         {/* Spotlight Leaders & Cheered Banner (Podium Bar) */}
         <section className="community-spotlight-section">
           <div className="community-spotlight-container">

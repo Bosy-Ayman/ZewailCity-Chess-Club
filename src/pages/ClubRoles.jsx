@@ -18,6 +18,7 @@ export default function ClubRoles() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [authPromptRole, setAuthPromptRole] = useState(null);
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState("all");
 
   useEffect(() => {
     const email = localStorage.getItem("adminEmail");
@@ -230,18 +231,112 @@ export default function ClubRoles() {
           </div>
           <h1 className="site-page-title">Club Role Opportunities</h1>
           <p>
-            Explore available leadership, organizing, and development roles in ZC Chess Club. Apply today to build your skills and shape our community!
+            Build your campus legacy. Gain verified leadership credentials, organize flagship championships, and elevate the chess culture at Zewail City!
           </p>
         </section>
 
-        {/* 🧩 Available Roles */}
+        {/* 🏆 Why Join Club Leadership Grid */}
+        <section className="why-join-roles-section">
+          <div className="why-join-grid">
+            <div className="why-join-card glass-panel">
+              <span className="why-icon">📜</span>
+              <div className="why-content">
+                <h4>Official Leadership Credentials</h4>
+                <p>Receive an official club certificate and recommendation letters for your CV, master's degree, and tech/corporate internships.</p>
+              </div>
+            </div>
+            <div className="why-join-card glass-panel">
+              <span className="why-icon">👑</span>
+              <div className="why-content">
+                <h4>Verified Campus Profile Badges</h4>
+                <p>Get recognized across the platform with permanent leadership badges on your profile dossier, tournament pairings, and community cards.</p>
+              </div>
+            </div>
+            <div className="why-join-card glass-panel">
+              <span className="why-icon">💼</span>
+              <div className="why-content">
+                <h4>Real-World Portfolio &amp; Impact</h4>
+                <p>Direct live championships, secure corporate sponsors, lead public relations with external universities, or build multimedia branding.</p>
+              </div>
+            </div>
+            <div className="why-join-card glass-panel">
+              <span className="why-icon">♟️</span>
+              <div className="why-content">
+                <h4>Arbiter &amp; Tactical Mastery</h4>
+                <p>Learn FIDE-standard arbiter laws, tournament pairing clocks, and gain access to advanced Grandmaster training lectures.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 💡 Reassurance Notice: No High Rating Required */}
+          <div className="rating-reassurance-box glass-panel">
+            <div className="reassurance-icon">💡</div>
+            <div className="reassurance-text">
+              <strong>Do I need a high chess rating to apply?</strong>
+              <p>
+                <strong>No!</strong> Roles in Organizing (OC Arbiters), PR, Multimedia &amp; Design, and HR value organizational talent, passion, and creativity. Only Trainer roles focus on chess strength. Everyone is welcome to apply!
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 🧩 Available Roles Header & Filters */}
         <div className="roles-section-header">
-          <h2 className="section-title">Available Positions ({roles.length})</h2>
+          <div>
+            <h2 className="section-title">Open Positions ({roles.length})</h2>
+            <p className="roles-section-sub">Select a department to filter, then click Apply (takes ~3 minutes)</p>
+          </div>
           <span className="roles-season-tag">Spring / Fall 2026 Recruitment</span>
         </div>
 
+        {/* Filter Pills */}
+        <div className="roles-dept-filter-bar">
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "all" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("all")}
+          >
+            All Roles ({roles.length})
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "oc" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("oc")}
+          >
+            ♟️ Tournament OC
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "media" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("media")}
+          >
+            🎨 Media &amp; Design
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "pr" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("pr")}
+          >
+            📢 Public Relations
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "hr" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("hr")}
+          >
+            👥 Human Resources
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "trainer" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("trainer")}
+          >
+            🧠 Training
+          </button>
+          <button
+            className={`roles-dept-btn ${selectedDeptFilter === "trainee" ? "active" : ""}`}
+            onClick={() => setSelectedDeptFilter("trainee")}
+          >
+            🌱 Trainee
+          </button>
+        </div>
+
         <div className="role-card-container">
-          {roles.map((role) => {
+          {(selectedDeptFilter === "all" ? roles : roles.filter(r => r.id === selectedDeptFilter)).map((role) => {
             const existingApp = getExistingApplication(role);
             const isAccepted = existingApp && existingApp.status === "Accepted";
             const isRejected = existingApp && existingApp.status === "Rejected";
