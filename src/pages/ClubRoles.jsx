@@ -235,50 +235,6 @@ export default function ClubRoles() {
           </p>
         </section>
 
-        {/* 🏆 Why Join Club Leadership Grid */}
-        <section className="why-join-roles-section">
-          <div className="why-join-grid">
-            <div className="why-join-card glass-panel">
-              <span className="why-icon">📜</span>
-              <div className="why-content">
-                <h4>Official Leadership Credentials</h4>
-                <p>Receive an official club certificate and recommendation letters for your CV, master's degree, and tech/corporate internships.</p>
-              </div>
-            </div>
-            <div className="why-join-card glass-panel">
-              <span className="why-icon">👑</span>
-              <div className="why-content">
-                <h4>Verified Campus Profile Badges</h4>
-                <p>Get recognized across the platform with permanent leadership badges on your profile dossier, tournament pairings, and community cards.</p>
-              </div>
-            </div>
-            <div className="why-join-card glass-panel">
-              <span className="why-icon">💼</span>
-              <div className="why-content">
-                <h4>Real-World Portfolio &amp; Impact</h4>
-                <p>Direct live championships, secure corporate sponsors, lead public relations with external universities, or build multimedia branding.</p>
-              </div>
-            </div>
-            <div className="why-join-card glass-panel">
-              <span className="why-icon">♟️</span>
-              <div className="why-content">
-                <h4>Arbiter &amp; Tactical Mastery</h4>
-                <p>Learn FIDE-standard arbiter laws, tournament pairing clocks, and gain access to advanced Grandmaster training lectures.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* 💡 Reassurance Notice: No High Rating Required */}
-          <div className="rating-reassurance-box glass-panel">
-            <div className="reassurance-icon">💡</div>
-            <div className="reassurance-text">
-              <strong>Do I need a high chess rating to apply?</strong>
-              <p>
-                <strong>No!</strong> Roles in Organizing (OC Arbiters), PR, Multimedia &amp; Design, and HR value organizational talent, passion, and creativity. Only Trainer roles focus on chess strength. Everyone is welcome to apply!
-              </p>
-            </div>
-          </div>
-        </section>
 
         {/* 🧩 Available Roles Header & Filters */}
         <div className="roles-section-header">

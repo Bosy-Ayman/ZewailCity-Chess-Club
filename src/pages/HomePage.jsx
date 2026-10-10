@@ -1241,62 +1241,6 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
-      {/* 🚀 High-Impact Recruitment & Club Roles Spotlight */}
-      <section className="club-recruitment-banner-section">
-        <div className="club-recruitment-card glass-panel">
-          <div className="recruitment-card-glow" />
-          <div className="recruitment-card-content">
-            <div className="recruitment-badge-row">
-              <span className="recruitment-live-tag">
-                <span className="live-pulse-dot" /> OFFICIAL RECRUITMENT LIVE
-              </span>
-              <span className="recruitment-season-pill">Spring / Fall 2026 Season</span>
-            </div>
-            <h2 className="recruitment-heading">
-              Shape the Board. <span className="gold-gradient-text">Lead the Club.</span>
-            </h2>
-            <p className="recruitment-subtext">
-              We are actively scouting passionate tacticians and builders for <strong>Tournament Organizing Committee (OC Arbiters), Public Relations, Multimedia &amp; Design, HR, and Chess Training</strong>. You do <em>not</em> need an advanced chess rating to join event and creative committees—just passion to lead!
-            </p>
-            <div className="recruitment-perks-row">
-              <div className="recruitment-perk-item">
-                <span className="perk-icon">📜</span>
-                <div>
-                  <strong>Official Leadership Certificate</strong>
-                  <p>Certified board credentials for your CV &amp; LinkedIn</p>
-                </div>
-              </div>
-              <div className="recruitment-perk-item">
-                <span className="perk-icon">👑</span>
-                <div>
-                  <strong>Verified Digital Badges</strong>
-                  <p>Displayed on your campus profile, cards &amp; pairings</p>
-                </div>
-              </div>
-              <div className="recruitment-perk-item">
-                <span className="perk-icon">♟️</span>
-                <div>
-                  <strong>Arbiter &amp; Coaching Pathway</strong>
-                  <p>FIDE rules, Swiss bracket management &amp; GM lectures</p>
-                </div>
-              </div>
-            </div>
-            <div className="recruitment-cta-row">
-              <a href="/clubroles" className="btn-recruitment-primary">
-                <span>Explore Open Roles &amp; Apply Now</span>
-                <span className="btn-arrow">➔</span>
-              </a>
-              <a href="/community" className="btn-recruitment-secondary">
-                <span>Meet the Current Leadership</span>
-                <span className="btn-icon">👑</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
       {/* Winners Section — Balanced Podium Showcase */}
       <section className="winners-section" id="winners">
         <div className="winners-section-header">
