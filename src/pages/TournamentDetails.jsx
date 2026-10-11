@@ -7,7 +7,7 @@ import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPic
 import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { getPlayerAvatarUrl, compressImage } from "../utils/api";
 import { findCommonFreeSlots, findNearOverlapSlots, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
-import { generateWinnerCertificate } from "../utils/certificateGenerator";
+import { generateWinnerCertificate, canvasToPdfBlob } from "../utils/certificateGenerator";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -864,16 +864,16 @@ const isBlackWinner = (result) => {
   };
 
 
-  // Export Standings and Results as CSV
+  // Export Standings and Results as CSV (including FIDE BH-1 and SB tiebreaks)
   const handleExportCSV = () => {
     if (!tournament) return;
     const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
     let csvContent = "";
 
     if (isSwissFormat) {
-      csvContent = "Rank,Player Name,Points,Wins,Draws,Losses,Played,Byes,Rating,Major\n";
+      csvContent = "Rank,Player Name,Points,BH-1,SB,Wins,Draws,Losses,Played,Byes,Rating,Major\n";
       swissStandings.forEach((p, idx) => {
-        csvContent += `${idx + 1},"${p.name}",${p.points},${p.wins},${p.draws},${p.losses},${p.played},${p.byes},${p.rating},"${p.major}"\n`;
+        csvContent += `${idx + 1},"${p.name}",${p.points},${p.buchholzCut1 != null ? p.buchholzCut1 : ""},${p.sonnebornBerger != null ? p.sonnebornBerger : ""},${p.wins},${p.draws},${p.losses},${p.played},${p.byes},${p.rating},"${p.major}"\n`;
       });
     } else {
       csvContent = "Round,White,Black,Result\n";
@@ -891,6 +891,240 @@ const isBlackWinner = (result) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  // Export Official A4 Standings Sheet as PDF
+  const handleExportStandingsPDF = () => {
+    if (!tournament) return;
+    const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
+    const canvas = document.createElement("canvas");
+    // Standard A4 landscape proportions at high DPI
+    canvas.width = 1920;
+    canvas.height = 1357;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Background
+    ctx.fillStyle = "#0d0b08";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Header border line
+    ctx.strokeStyle = "#f3c144";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+    // Title & Header info
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 38px 'Inter', sans-serif";
+    ctx.fillText("ZEWAIL CITY CHESS CLUB", 70, 95);
+
+    ctx.fillStyle = "#f3c144";
+    ctx.font = "bold 26px 'Inter', sans-serif";
+    ctx.fillText(tournament.title || "Official Championship Standings", 70, 135);
+
+    ctx.fillStyle = "#a89f91";
+    ctx.font = "16px 'Inter', sans-serif";
+    const dateStr = tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : new Date().toLocaleDateString();
+    ctx.fillText(`Format: ${tournament.type || "Swiss System"}   |   Rounds: ${tournament.rounds || 5}   |   Status: ${tournament.status || "Completed"}   |   Date: ${dateStr}`, 70, 165);
+
+    // Draw Table Headers
+    const startY = 210;
+    const rowH = 34;
+    ctx.fillStyle = "rgba(243, 193, 68, 0.18)";
+    ctx.fillRect(60, startY - 24, canvas.width - 120, 32);
+
+    ctx.fillStyle = "#f3c144";
+    ctx.font = "bold 15px 'Inter', sans-serif";
+    ctx.fillText("Rank", 75, startY);
+    ctx.fillText("Player Name", 150, startY);
+    ctx.fillText("Points", 550, startY);
+    ctx.fillText("Record (W-D-L)", 660, startY);
+    ctx.fillText("Played", 840, startY);
+    ctx.fillText("BH-1", 930, startY);
+    ctx.fillText("SB", 1020, startY);
+    ctx.fillText("Rating", 1110, startY);
+    ctx.fillText("Major", 1230, startY);
+
+    // Rows
+    const maxRows = Math.min(swissStandings.length, 30);
+    swissStandings.slice(0, maxRows).forEach((p, idx) => {
+      const y = startY + 36 + (idx * rowH);
+      if (idx % 2 === 0) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+        ctx.fillRect(60, y - 22, canvas.width - 120, rowH);
+      }
+
+      ctx.fillStyle = idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#ffffff";
+      ctx.font = idx < 3 ? "bold 15px 'Inter', sans-serif" : "14px 'Inter', sans-serif";
+
+      ctx.fillText(`#${idx + 1}`, 75, y);
+      ctx.fillText(p.name, 150, y);
+      ctx.fillText(`${p.points} pts`, 550, y);
+
+      ctx.fillStyle = "#cccccc";
+      ctx.fillText(`${p.wins}W - ${p.draws}D - ${p.losses}L`, 660, y);
+      ctx.fillText(String(p.played), 840, y);
+      ctx.fillText(String(p.buchholzCut1 != null ? p.buchholzCut1 : "—"), 930, y);
+      ctx.fillText(String(p.sonnebornBerger != null ? p.sonnebornBerger : "—"), 1020, y);
+      ctx.fillText(String(p.rating || "Unrated"), 1110, y);
+      ctx.fillText(String(p.major || "-"), 1230, y);
+    });
+
+    // Footer notice
+    ctx.fillStyle = "#8e8677";
+    ctx.font = "14px 'Inter', sans-serif";
+    ctx.fillText("Official FIDE Swiss System Standings Sheet • Zewail City of Science and Technology Chess Club", 70, canvas.height - 60);
+
+    const pdfBlob = canvasToPdfBlob(canvas);
+    const url = URL.createObjectURL(pdfBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${cleanTitle.replace(/\s+/g, "_")}_Official_Standings.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Print or Save A4 Official Pairings Board Sheet for Campus Noticeboard
+  const handlePrintPairingsSheet = (roundNumber) => {
+    const targetRound = roundNumber || activePairingRound || 1;
+    const matchesForRound = (tournament?.matches || []).filter(m => (m.round || 1) === targetRound);
+    const cleanTitle = (tournament?.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to open the printable pairings sheet.");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${cleanTitle} - Round ${targetRound} Pairings Sheet</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #111;
+            margin: 0;
+            padding: 0;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+          }
+          .club-title {
+            font-size: 14pt;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: #444;
+          }
+          .tourney-title {
+            font-size: 18pt;
+            font-weight: 900;
+            margin: 4px 0;
+          }
+          .meta-info {
+            font-size: 10pt;
+            color: #555;
+            margin-top: 4px;
+          }
+          .round-badge {
+            display: inline-block;
+            background: #000;
+            color: #fff;
+            padding: 4px 14px;
+            font-weight: 900;
+            font-size: 12pt;
+            border-radius: 4px;
+            margin-top: 8px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5pt;
+            margin-top: 10px;
+          }
+          th, td {
+            border: 1px solid #333;
+            padding: 6px 10px;
+            text-align: left;
+          }
+          th {
+            background-color: #f0f0f0;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 9.5pt;
+          }
+          .board-col { width: 10%; text-align: center; font-weight: bold; }
+          .white-col { width: 35%; font-weight: 600; }
+          .result-col { width: 20%; text-align: center; font-weight: bold; }
+          .black-col { width: 35%; font-weight: 600; }
+          .footer {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 8px;
+            font-size: 8.5pt;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+          }
+          @media print {
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="background:#fff3cd; border:1px solid #ffeeba; padding:10px 14px; margin-bottom:15px; border-radius:5px; font-size:11pt; display:flex; justify-content:space-between; align-items:center;">
+          <span><strong>Notice:</strong> Ready to print on standard A4 paper for the arbiter desk or campus board.</span>
+          <button onclick="window.print()" style="background:#28a745; color:#fff; border:none; padding:8px 18px; font-weight:bold; font-size:11pt; border-radius:4px; cursor:pointer;">🖨️ Print Now</button>
+        </div>
+        <div class="header">
+          <div class="club-title">Zewail City Chess Club • Official Pairing Sheet</div>
+          <div class="tourney-title">${tournament?.title || "Championship Tournament"}</div>
+          <div class="meta-info">Location: ${tournament?.location || "Zewail City Campus"} • Date: ${new Date().toLocaleDateString()}</div>
+          <div class="round-badge">ROUND ${targetRound} PAIRINGS</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th class="board-col">Board</th>
+              <th class="white-col">White (⚪)</th>
+              <th class="result-col">Result</th>
+              <th class="black-col">Black (⚫)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${matchesForRound.map((m, idx) => `
+              <tr>
+                <td class="board-col">${idx + 1}</td>
+                <td class="white-col">${m.white}</td>
+                <td class="result-col">${m.black === "BYE" ? "BYE (+1 pt)" : (m.result || "[   :   ]")}</td>
+                <td class="black-col">${m.black === "BYE" ? "— BYE —" : m.black}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        <div class="footer">
+          <span>Arbiter Signature: _______________________</span>
+          <span>Printed from ZC Chess Club System</span>
+        </div>
+        <script>
+          // Automatically prompt print dialog
+          window.onload = function() { window.focus(); };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // ── Certificate helpers ──────────────────────────────────────────────────
@@ -1085,10 +1319,97 @@ const isBlackWinner = (result) => {
       }
     });
 
+    // ── Second pass: Calculate FIDE Tiebreak Scores ──────────────────────────
+    // 1. Direct Encounter (Head-to-head) lookup map: directScores[p1][p2] = score p1 got against p2
+    const directScores = {};
+    matches.forEach((m) => {
+      const white = m.white;
+      const black = m.black;
+      if (!white || !black || black === "BYE" || !m.result) return;
+      if (!directScores[white]) directScores[white] = {};
+      if (!directScores[black]) directScores[black] = {};
+
+      if (m.result === "1-0" || m.result === "1 - 0") {
+        directScores[white][black] = (directScores[white][black] || 0) + 1;
+        directScores[black][white] = (directScores[black][white] || 0) + 0;
+      } else if (m.result === "0-1" || m.result === "0 - 1") {
+        directScores[white][black] = (directScores[white][black] || 0) + 0;
+        directScores[black][white] = (directScores[black][white] || 0) + 1;
+      } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+        directScores[white][black] = (directScores[white][black] || 0) + 0.5;
+        directScores[black][white] = (directScores[black][white] || 0) + 0.5;
+      }
+    });
+
+    // 2. Compute Buchholz (sum of opponents' points) & Sonneborn-Berger (SB)
+    Object.keys(statsMap).forEach((name) => {
+      const player = statsMap[name];
+      const opponentScores = [];
+      let sbScore = 0;
+
+      matches.forEach((m) => {
+        if (!m.result || m.result === "Pending") return;
+        let opponentName = null;
+        let myScore = null;
+
+        if (m.white === name && m.black && m.black !== "BYE") {
+          opponentName = m.black;
+          if (m.result === "1-0" || m.result === "1 - 0") myScore = 1;
+          else if (m.result === "0-1" || m.result === "0 - 1") myScore = 0;
+          else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") myScore = 0.5;
+        } else if (m.black === name && m.white) {
+          opponentName = m.white;
+          if (m.result === "0-1" || m.result === "0 - 1") myScore = 1;
+          else if (m.result === "1-0" || m.result === "1 - 0") myScore = 0;
+          else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") myScore = 0.5;
+        }
+
+        if (opponentName && statsMap[opponentName]) {
+          const oppPts = statsMap[opponentName].points || 0;
+          opponentScores.push(oppPts);
+          if (myScore === 1) sbScore += oppPts;
+          else if (myScore === 0.5) sbScore += oppPts * 0.5;
+        }
+      });
+
+      const totalBuchholz = opponentScores.reduce((sum, val) => sum + val, 0);
+      const minOpponentScore = opponentScores.length > 0 ? Math.min(...opponentScores) : 0;
+      const buchholzCut1 = opponentScores.length > 1 ? totalBuchholz - minOpponentScore : totalBuchholz;
+
+      player.buchholz = Math.round(totalBuchholz * 10) / 10;
+      player.buchholzCut1 = Math.round(buchholzCut1 * 10) / 10;
+      player.sonnebornBerger = Math.round(sbScore * 100) / 100;
+    });
+
+    // ── FIDE Swiss Standings Hierarchy ───────────────────────────────────────
+    // Priority: Points → Direct Encounter → Buchholz Cut-1 → Sonneborn-Berger → Most Wins → Rating
     return Object.values(statsMap).sort((a, b) => {
+      // 1. Points
       if (b.points !== a.points) return b.points - a.points;
+
+      // 2. Direct Encounter (Head-to-Head)
+      const aVsB = directScores[a.name]?.[b.name];
+      const bVsA = directScores[b.name]?.[a.name];
+      if (aVsB != null && bVsA != null && aVsB !== bVsA) {
+        return bVsA - aVsB;
+      }
+
+      // 3. Buchholz Cut-1 (Strength of schedule minus lowest opponent)
+      if (b.buchholzCut1 !== a.buchholzCut1) return b.buchholzCut1 - a.buchholzCut1;
+
+      // 4. Full Buchholz
+      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
+
+      // 5. Sonneborn-Berger Score
+      if (b.sonnebornBerger !== a.sonnebornBerger) return b.sonnebornBerger - a.sonnebornBerger;
+
+      // 6. Total Wins
       if (b.wins !== a.wins) return b.wins - a.wins;
-      return b.rating - a.rating;
+
+      // 7. Rating fallback
+      const rA = Number(a.rating) || 0;
+      const rB = Number(b.rating) || 0;
+      return rB - rA;
     });
   };
 
@@ -1631,6 +1952,22 @@ const isBlackWinner = (result) => {
                       <span>Download PNG (Image)</span>
                     </button>
                   )}
+                  {isSwissFormat && (
+                    <button 
+                      type="button"
+                      onClick={handleExportStandingsPDF}
+                      className="export-tournament-btn pdf-btn"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(243, 193, 68, 0.15) 0%, rgba(212, 163, 42, 0.08) 100%)",
+                        border: "1px solid rgba(243, 193, 68, 0.4)",
+                        color: "#f3c144"
+                      }}
+                      title="Download Official A4 Standings Sheet as PDF"
+                    >
+                      <span>📜</span>
+                      <span>Export Standings PDF</span>
+                    </button>
+                  )}
                   <button 
                     type="button"
                     onClick={handleExportCSV}
@@ -2153,6 +2490,8 @@ const isBlackWinner = (result) => {
                             <th>Record (W-D-L)</th>
                             <th>Played</th>
                             <th>Byes</th>
+                            <th title="Buchholz Cut-1: Sum of opponents' scores excluding lowest (FIDE official tiebreak)">BH-1</th>
+                            <th title="Sonneborn-Berger: Sum of defeated opponents' scores + half drawn opponents' scores (FIDE official tiebreak)">SB</th>
                             <th>Rating</th>
                             {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
                             {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
@@ -2203,6 +2542,8 @@ const isBlackWinner = (result) => {
                                 <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
                                 <td>{p.played}</td>
                                 <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                                <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
+                                <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
                                 <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
                                 {certificatesAvailable && (
                                   <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
@@ -2267,6 +2608,8 @@ const isBlackWinner = (result) => {
                             <div className="mobile-card-details">
                               <div className="detail-item"><span className="detail-label">Record</span><span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span></div>
                               <div className="detail-item"><span className="detail-label">Played</span><span className="detail-val">{p.played}</span></div>
+                              <div className="detail-item" title="Buchholz Cut-1"><span className="detail-label">BH-1</span><span className="detail-val">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</span></div>
+                              <div className="detail-item" title="Sonneborn-Berger"><span className="detail-label">SB</span><span className="detail-val gold">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</span></div>
                               <div className="detail-item"><span className="detail-label">Rating</span><span className="detail-val">{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? "Unrated" : p.rating}</span></div>
                               {p.byes > 0 && <div className="detail-item"><span className="detail-label">Byes</span><span className="detail-val gold">{p.byes} BYE</span></div>}
                             </div>
@@ -2404,9 +2747,32 @@ const isBlackWinner = (result) => {
                     </div>
                   ) : (
                     <div key={activePairingRound} id={`tournament-round-${activePairingRound}`} className="tournament-section-anchor round-pairing-section" style={{ marginBottom: "28px" }}>
-                        <h3 style={{ color: "#f3c144", fontSize: "1.1rem", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                          Round {activePairingRound} Pairings & Results
-                        </h3>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+                          <h3 style={{ color: "#f3c144", fontSize: "1.1rem", margin: 0, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Round {activePairingRound} Pairings & Results
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintPairingsSheet(activePairingRound)}
+                            style={{
+                              background: "rgba(243, 193, 68, 0.12)",
+                              border: "1px solid rgba(243, 193, 68, 0.35)",
+                              color: "#f3c144",
+                              padding: "6px 14px",
+                              borderRadius: "6px",
+                              fontSize: "0.8rem",
+                              fontWeight: "800",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px"
+                            }}
+                            title={`Print or Save Round ${activePairingRound} Official Pairing Sheet (A4 PDF) for Campus Board`}
+                          >
+                            <span>🖨️</span>
+                            <span>Print Round {activePairingRound} Board Sheet</span>
+                          </button>
+                        </div>
                         {/* Desktop Table View */}
                         <div className="application-table-wrapper tournaments-desktop-table tournament-standings-wrapper">
                           <table className="application-table tournament-standings-table">
