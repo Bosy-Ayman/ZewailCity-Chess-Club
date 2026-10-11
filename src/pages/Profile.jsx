@@ -1031,6 +1031,28 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
 
   const dynamicStanding = getDynamicCampusStanding();
 
+  const chessSummary = tournaments.reduce((summary, tournament) => {
+    const result = tournament.userResult || {};
+    summary.tournaments += 1;
+    if (result.isChampion || result.place === 1) summary.titles += 1;
+    if (result.place && Number(result.place) <= 3) summary.podiums += 1;
+    (tournament.matches || []).forEach((match) => {
+      const isWhite = match.white?.trim().toLowerCase() === profile?.name?.trim().toLowerCase();
+      const isBlack = match.black?.trim().toLowerCase() === profile?.name?.trim().toLowerCase();
+      if (!isWhite && !isBlack) return;
+      if (match.result === "1/2-1/2" || match.result === "½ - ½" || match.result === "Draw") {
+        summary.draws += 1;
+      } else if ((isWhite && (match.result === "1-0" || match.result === "1 - 0")) || (isBlack && (match.result === "0-1" || match.result === "0 - 1"))) {
+        summary.wins += 1;
+      } else if (match.result && match.result !== "Pending") {
+        summary.losses += 1;
+      }
+    });
+    return summary;
+  }, { tournaments: 0, titles: 0, podiums: 0, wins: 0, draws: 0, losses: 0 });
+  const completedMatches = chessSummary.wins + chessSummary.draws + chessSummary.losses;
+  const winRate = completedMatches > 0 ? Math.round((chessSummary.wins / completedMatches) * 100) : 0;
+
   const renderMatches = (tournament) => {
     if (!profile) return null;
     const myMatches = tournament.matches?.filter(
@@ -1769,6 +1791,19 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
            ========================================================================= */}
         {activeTab === 'overview' && (
           <div className="profile-tab-pane profile-fade-in">
+            <div className="my-chess-summary-card glass-panel">
+              <div>
+                <span className="my-chess-eyebrow">MY CHESS</span>
+                <h2>Performance snapshot</h2>
+                <p>Keep track of your tournament journey at ZC Chess Club.</p>
+              </div>
+              <div className="my-chess-summary-grid">
+                <div><strong>{chessSummary.tournaments}</strong><span>Tournaments</span></div>
+                <div><strong>{chessSummary.wins}</strong><span>Wins</span></div>
+                <div><strong>{winRate}%</strong><span>Win rate</span></div>
+                <div><strong>{chessSummary.podiums}</strong><span>Podiums</span></div>
+              </div>
+            </div>
             <div className="overview-bento-grid">
               
               {/* Card 1: Academic & Personal Dossier */}

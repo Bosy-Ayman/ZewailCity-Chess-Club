@@ -1,5 +1,24 @@
-export const safeFetchJson = async (url, options = {}) => {
-  const res = await fetch(url, options);
+export const safeFetchJson = async (url, options = {}, config = {}) => {
+  const { retries = 0, retryDelayMs = 500 } = config;
+  let res;
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      res = await fetch(url, options);
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+      }
+    }
+  }
+
+  if (!res) {
+    throw new Error(`Unable to reach the server. Please check that the API is running and try again.${lastError?.message ? ` (${lastError.message})` : ""}`);
+  }
+
   const text = await res.text();
   let data = null;
 
@@ -178,5 +197,4 @@ export const getPlayerAvatarUrl = (name, customAvatars = {}) => {
   // 3. Fallback
   return "/Icons/unknown.png";
 };
-
 

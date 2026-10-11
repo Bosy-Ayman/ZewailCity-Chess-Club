@@ -118,17 +118,18 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
     if (!targetEmail) return;
     try {
       setNotifLoading(true);
-      const res = await fetch(`${API_BASE}/api/notifications?email=${encodeURIComponent(targetEmail)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const count = data.filter(n => !n.read).length;
-          if (prevUnreadRef.current !== -1 && count > prevUnreadRef.current) {
-            chessAudio.playNotification();
-          }
-          prevUnreadRef.current = count;
-          setNotifications(data);
+      const data = await safeFetchJson(
+        `${API_BASE}/api/notifications?email=${encodeURIComponent(targetEmail)}`,
+        {},
+        { retries: 1, retryDelayMs: 350 }
+      );
+      if (Array.isArray(data)) {
+        const count = data.filter(n => !n.read).length;
+        if (prevUnreadRef.current !== -1 && count > prevUnreadRef.current) {
+          chessAudio.playNotification();
         }
+        prevUnreadRef.current = count;
+        setNotifications(data);
       }
     } catch (e) {
       // silently ignore
@@ -350,7 +351,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
     }
 
     // Fetch notifications on mount and set up 60s polling
-    const email = localStorage.getItem('adminEmail');
+    const email = localStorage.getItem('adminEmail') || localStorage.getItem('userEmail');
     if (email) {
       fetchNotifications(email);
       const pollInterval = setInterval(() => fetchNotifications(email), 30000);

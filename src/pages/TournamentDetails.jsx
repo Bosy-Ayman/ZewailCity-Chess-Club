@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import Header from "../components/Header";
@@ -20,11 +20,20 @@ export default function TournamentDetails() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
   const [activeSection, setActiveSectionState] = useState("");
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const updateActiveSection = (sectionId) => setActiveSectionState(sectionId);
+  const [activeTournamentTab, setActiveTournamentTab] = useState("tournament-rules");
+  const [activePairingRound, setActivePairingRound] = useState(null);
+  const [tournamentMenuOpen, setTournamentMenuOpen] = useState(false);
+  const updateActiveSection = (sectionId) => {
+    setActiveSectionState(sectionId);
+    if (isSwissFormat) {
+      setActiveTournamentTab(sectionId === "tournament-pairings" ? "tournament-pairings" : sectionId === "tournament-rules" ? "tournament-rules" : sectionId === "tournament-participants" ? "tournament-participants" : "tournament-standings");
+    }
+  };
   const [certActionLoading, setCertActionLoading] = useState(false);
   const [certStatusMsg, setCertStatusMsg] = useState("");
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
+  const [feedbackNotice, setFeedbackNotice] = useState(null);
+  const feedbackTimerRef = useRef(null);
 
   // Interactive Player Preview Modal State
   const [selectedPlayerModal, setSelectedPlayerModal] = useState(null);
@@ -32,6 +41,16 @@ export default function TournamentDetails() {
   const [cheered, setCheered] = useState(false);
   const [challengeSent, setChallengeSent] = useState(false);
   const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
+
+  const notify = (message, tone = "info") => {
+    setFeedbackNotice({ message, tone });
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => setFeedbackNotice(null), 5000);
+  };
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+  }, []);
 
   // Check role & auth
   const userRole = (localStorage.getItem("userRole") || "member").toLowerCase();
@@ -144,7 +163,7 @@ const isBlackWinner = (result) => {
   const handleDispatchScheduleNotice = async (isArbiterOverride = false) => {
     const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
     if (!formatted) {
-      alert("Please select a date and time first!");
+      notify("Please select a date and time first.", "warning");
       return;
     }
     setIsSubmittingSchedule(true);
@@ -170,7 +189,7 @@ const isBlackWinner = (result) => {
         setScheduleSuccessMessage("");
       }, 1200);
     } catch (err) {
-      alert("Schedule error: " + err.message);
+      notify("Schedule error: " + err.message, "error");
     } finally {
       setIsSubmittingSchedule(false);
     }
@@ -193,7 +212,7 @@ const isBlackWinner = (result) => {
         setScheduleSuccessMessage("");
       }, 1500);
     } catch (err) {
-      alert("Reminder error: " + err.message);
+      notify("Reminder error: " + err.message, "error");
     } finally {
       setIsSubmittingSchedule(false);
     }
@@ -201,6 +220,7 @@ const isBlackWinner = (result) => {
 
   // Edit Tournament Modal State
   const [editModalOpen, setEditModalOpen] = useState(false);
+
   const [editForm, setEditForm] = useState({
     title: "",
     type: "Swiss",
@@ -213,6 +233,23 @@ const isBlackWinner = (result) => {
     description: "",
     image: ""
   });
+
+  useEffect(() => {
+    const modalOpen = playerModalOpen || matchModalOpen || editModalOpen || scheduleModalOpen || Boolean(selectedPlayerModal);
+    if (!modalOpen) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+      setPlayerModalOpen(false);
+      setMatchModalOpen(false);
+      setEditModalOpen(false);
+      setScheduleModalOpen(false);
+      setSelectedPlayerModal(null);
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [playerModalOpen, matchModalOpen, editModalOpen, scheduleModalOpen, selectedPlayerModal]);
 
   const handleOpenEditModal = () => {
     if (!tournament) return;
@@ -243,11 +280,11 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (err) { throw new Error("Invalid server response"); }
       if (!res.ok) throw new Error(data.error || "Failed to update tournament");
-      alert("Tournament information updated successfully!");
+      notify("Tournament information updated successfully.", "success");
       setEditModalOpen(false);
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error updating tournament: " + err.message);
+      notify("Error updating tournament: " + err.message, "error");
     }
   };
 
@@ -300,10 +337,10 @@ const isBlackWinner = (result) => {
         throw new Error(data.error || "Failed to register for tournament");
       }
 
-      alert("🎉 Successfully registered for " + (tournament.title || "the tournament") + "!");
+      notify("🎉 Successfully registered for " + (tournament.title || "the tournament") + "!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert(err.message);
+      notify(err.message, "error");
     }
   };
 
@@ -331,10 +368,10 @@ const isBlackWinner = (result) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to leave tournament");
 
-      alert("You have left the tournament.");
+      notify("You have left the tournament.", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert(err.message);
+      notify(err.message, "error");
     }
   };
 
@@ -368,7 +405,7 @@ const isBlackWinner = (result) => {
   const handleAddPlayerSubmit = async (e) => {
     e.preventDefault();
     if (!playerForm.name || !playerForm.rating || !playerForm.major) {
-      alert("All fields are required.");
+      notify("All fields are required.", "warning");
       return;
     }
     try {
@@ -387,14 +424,14 @@ const isBlackWinner = (result) => {
       setPlayerModalOpen(false);
       fetchTournamentDetails();
     } catch (err) {
-      alert(err.message);
+      notify(err.message, "error");
     }
   };
 
   const handleAddMatchSubmit = async (e) => {
     e.preventDefault();
     if (!matchForm.white || !matchForm.black) {
-      alert("Please fill in both player names.");
+      notify("Please fill in both player names.", "warning");
       return;
     }
     try {
@@ -413,7 +450,7 @@ const isBlackWinner = (result) => {
       setMatchModalOpen(false);
       fetchTournamentDetails();
     } catch (err) {
-      alert(err.message);
+      notify(err.message, "error");
     }
   };
 
@@ -430,7 +467,7 @@ const isBlackWinner = (result) => {
       if (!res.ok) throw new Error(data.error || "Failed to update match");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error updating match: " + err.message);
+      notify("Error updating match: " + err.message, "error");
     }
   };
 
@@ -438,7 +475,7 @@ const isBlackWinner = (result) => {
     // Check for pending matches in frontend first
     const pendingMatches = (tournament?.matches || []).filter(m => !m.result || m.result === "Pending");
     if (pendingMatches.length > 0) {
-      alert(`⚠️ Cannot generate next round! There are still ${pendingMatches.length} pending match(es) in the current round. Please select all match results first.`);
+      notify(`⚠️ Cannot generate next round! There are still ${pendingMatches.length} pending match(es) in the current round. Please select all match results first.`, "warning");
       return;
     }
 
@@ -446,7 +483,7 @@ const isBlackWinner = (result) => {
     const isFirstRound = !tournament?.matches || tournament.matches.length === 0;
     const minPlayersRequired = tournament?.rounds ? tournament.rounds + 1 : 2;
     if (isFirstRound && (tournament?.playersList?.length || 0) < minPlayersRequired) {
-      alert(`⚠️ Not enough players! A ${tournament.rounds}-round Swiss tournament requires at least ${minPlayersRequired} players to begin. Currently registered: ${tournament?.playersList?.length || 0}`);
+      notify(`⚠️ Not enough players! A ${tournament.rounds}-round Swiss tournament requires at least ${minPlayersRequired} players to begin. Currently registered: ${tournament?.playersList?.length || 0}`, "warning");
       return;
     }
 
@@ -459,10 +496,10 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (e) { throw new Error("Invalid response from server. Check backend terminal on port 5000."); }
       if (!res.ok) throw new Error(data.error || "Failed to generate Swiss pairings");
-      alert(data.message || "Next round pairings generated!");
+      notify(data.message || "Next round pairings generated!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error generating pairings: " + err.message);
+      notify("Error generating pairings: " + err.message, "error");
     }
   };
 
@@ -477,17 +514,17 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (e) { throw new Error("Invalid response from server."); }
       if (!res.ok) throw new Error(data.error || "Failed to generate bracket");
-      alert(data.message || "Knockout bracket generated successfully!");
+      notify(data.message || "Knockout bracket generated successfully!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error generating bracket: " + err.message);
+      notify("Error generating bracket: " + err.message, "error");
     }
   };
 
   const handleGenerateNextKnockoutRound = async () => {
     const pendingMatches = (tournament?.matches || []).filter(m => !m.result || m.result === "Pending");
     if (pendingMatches.length > 0) {
-      alert(`⚠️ Cannot generate next round! There are still ${pendingMatches.length} pending match(es) in the current round. Please score all matches first.`);
+      notify(`⚠️ Cannot generate next round! There are still ${pendingMatches.length} pending match(es) in the current round. Please score all matches first.`, "warning");
       return;
     }
 
@@ -500,10 +537,10 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (e) { throw new Error("Invalid response from server."); }
       if (!res.ok) throw new Error(data.error || "Failed to generate next round");
-      alert(data.message || "Next round matchups generated successfully!");
+      notify(data.message || "Next round matchups generated successfully!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error generating next round: " + err.message);
+      notify("Error generating next round: " + err.message, "error");
     }
   };
 
@@ -517,10 +554,10 @@ const isBlackWinner = (result) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to reset bracket");
-      alert("Bracket reset successfully! You can now generate a fresh bracket.");
+      notify("Bracket reset successfully. You can now generate a fresh bracket.", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error resetting bracket: " + err.message);
+      notify("Error resetting bracket: " + err.message, "error");
     }
   };
 
@@ -537,10 +574,10 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (e) { throw new Error("Invalid response from server."); }
       if (!res.ok) throw new Error(data.error || "Failed to rollback round");
-      alert(data.message || "Last round rolled back successfully!");
+      notify(data.message || "Last round rolled back successfully!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error rolling back round: " + err.message);
+      notify("Error rolling back round: " + err.message, "error");
     }
   };
 
@@ -557,10 +594,10 @@ const isBlackWinner = (result) => {
       let data;
       try { data = JSON.parse(text); } catch (e) { throw new Error("Invalid response from server."); }
       if (!res.ok) throw new Error(data.error || "Failed to remove player");
-      alert(data.message || "Player removed successfully!");
+      notify(data.message || "Player removed successfully!", "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error removing player: " + err.message);
+      notify("Error removing player: " + err.message, "error");
     }
   };
 
@@ -594,10 +631,10 @@ const isBlackWinner = (result) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update tournament status");
-      alert(`Tournament status updated to "${newStatus}"!`);
+      notify(`Tournament status updated to "${newStatus}".`, "success");
       fetchTournamentDetails();
     } catch (err) {
-      alert("Error updating status: " + err.message);
+      notify("Error updating status: " + err.message, "error");
     }
   };
 
@@ -904,7 +941,7 @@ const isBlackWinner = (result) => {
     if (!tournamentId) return;
     const targetPlayers = (playersList && playersList.length > 0) ? playersList : (tournament?.players || []);
     if (!targetPlayers || targetPlayers.length === 0) {
-      alert("No players found in this tournament.");
+      notify("No players found in this tournament.", "warning");
       return;
     }
     if (!window.confirm(`Email official certificates with PDF to ALL ${targetPlayers.length} participants in "${tournament?.title}"?`)) return;
@@ -990,7 +1027,8 @@ const isBlackWinner = (result) => {
         draws: 0,
         losses: 0,
         byes: 0,
-        points: 0
+        points: 0,
+        roundResults: {}
       };
     });
 
@@ -1002,20 +1040,21 @@ const isBlackWinner = (result) => {
       if (!statsMap[white]) {
         const profile = tournament?.playerProfiles?.[white] || tournament?.playerProfiles?.[white?.trim()] || tournament?.playerProfiles?.[white?.trim()?.toLowerCase()];
         const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
-        statsMap[white] = { name: white, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+        statsMap[white] = { name: white, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0, roundResults: {} };
       }
 
       if (isWhiteBye) {
         // BYE: full point, doesn't count as a played game in W-D-L
         statsMap[white].byes += 1;
         statsMap[white].points += 1;
+        statsMap[white].roundResults[m.round || 1] = { value: "1", label: "BYE", tone: "win" };
         return;
       }
 
       if (!statsMap[black]) {
         const profile = tournament?.playerProfiles?.[black] || tournament?.playerProfiles?.[black?.trim()] || tournament?.playerProfiles?.[black?.trim()?.toLowerCase()];
         const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
-        statsMap[black] = { name: black, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0 };
+        statsMap[black] = { name: black, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0, roundResults: {} };
       }
 
       statsMap[white].played += 1;
@@ -1025,20 +1064,30 @@ const isBlackWinner = (result) => {
         statsMap[white].wins += 1;
         statsMap[white].points += 1;
         statsMap[black].losses += 1;
+        statsMap[white].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
+        statsMap[black].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
       } else if (m.result === "0-1" || m.result === "0 - 1") {
         statsMap[black].wins += 1;
         statsMap[black].points += 1;
         statsMap[white].losses += 1;
+        statsMap[white].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
+        statsMap[black].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
       } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
         statsMap[white].draws += 1;
         statsMap[white].points += 0.5;
         statsMap[black].draws += 1;
         statsMap[black].points += 0.5;
+        statsMap[white].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+        statsMap[black].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+      } else {
+        statsMap[white].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
+        statsMap[black].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
       }
     });
 
     return Object.values(statsMap).sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
+      if (b.wins !== a.wins) return b.wins - a.wins;
       return b.rating - a.rating;
     });
   };
@@ -1059,11 +1108,54 @@ const isBlackWinner = (result) => {
       (player) => player.name?.trim().toLowerCase() === loggedInUserName.toLowerCase()
     ))
   );
+  const currentPlayerName = loggedInUserName || tournament?.registrations?.find(
+    (registration) => registration.email?.trim().toLowerCase() === loggedInUserEmail
+  )?.name || "";
   const swissStandings = isSwissFormat ? calculateSwissStandings(tournament?.playersList, tournament?.matches) : [];
+  const standingsRoundCount = Math.max(1, Number(tournament?.rounds) || 5);
+  const currentPlayerStanding = swissStandings.find((player) => (
+    currentPlayerName && player.name?.trim().toLowerCase() === currentPlayerName.toLowerCase()
+  ));
+  const currentPlayerMatches = (tournament?.matches || []).filter((match) => (
+    (currentPlayerName && (match.white || "").trim().toLowerCase() === currentPlayerName.toLowerCase()) ||
+    (currentPlayerName && (match.black || "").trim().toLowerCase() === currentPlayerName.toLowerCase()) ||
+    (loggedInUserEmail && (
+      match.whiteEmail?.trim().toLowerCase() === loggedInUserEmail ||
+      match.blackEmail?.trim().toLowerCase() === loggedInUserEmail
+    ))
+  ));
+  const currentPlayerNextMatch = currentPlayerMatches.find((match) => !match.result || match.result === "Pending");
+
+  const navigateToSection = (sectionId) => {
+    setActiveTournamentTab(sectionId === "tournament-pairings" || sectionId.startsWith("tournament-round-")
+      ? "tournament-pairings"
+      : sectionId === "tournament-rules"
+        ? "tournament-rules"
+      : sectionId === "tournament-participants"
+        ? "tournament-participants"
+        : "tournament-standings");
+    setTournamentMenuOpen(false);
+    window.history.replaceState(null, "", `#${sectionId}`);
+    if (isSwissFormat && !sectionId.startsWith("tournament-round-")) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    const scrollToCurrentSection = () => {
+      const section = document.getElementById(sectionId);
+      if (!section) return;
+      const navHeight = document.querySelector(".tournament-quick-nav")?.getBoundingClientRect().height || 0;
+      const top = section.getBoundingClientRect().top + window.scrollY - navHeight - 20;
+      window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    };
+
+    window.requestAnimationFrame(scrollToCurrentSection);
+    window.setTimeout(scrollToCurrentSection, 250);
+  };
 
   useEffect(() => {
+    if (isSwissFormat) return undefined;
     const sectionIds = isSwissFormat
-      ? ["tournament-standings", "tournament-pairings"]
+      ? ["tournament-rules", "tournament-participants", "tournament-standings", "tournament-pairings"]
       : ["tournament-bracket", "tournament-participants"];
     const sections = sectionIds
       .map((id) => document.getElementById(id))
@@ -1083,7 +1175,27 @@ const isBlackWinner = (result) => {
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
+  // The observer intentionally tracks rendered section IDs rather than the callback identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSwissFormat, tournament]);
+
+  useEffect(() => {
+    if (!isSwissFormat) return;
+    if (isTournamentUpcoming) {
+      setActiveTournamentTab("tournament-rules");
+      return;
+    }
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "tournament-pairings" || hash.startsWith("tournament-round-")) {
+      setActiveTournamentTab("tournament-pairings");
+    } else if (hash === "tournament-participants") {
+      setActiveTournamentTab("tournament-participants");
+    } else if (hash === "tournament-standings") {
+      setActiveTournamentTab("tournament-standings");
+    } else if (hash === "tournament-rules") {
+      setActiveTournamentTab("tournament-rules");
+    }
+  }, [isSwissFormat, isTournamentUpcoming, tournamentId]);
 
   // Group matches by Round for Swiss Round-by-Round display
   const matchesByRound = {};
@@ -1097,6 +1209,15 @@ const isBlackWinner = (result) => {
   const sortedRounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
   const maxCurrentRound = sortedRounds.length > 0 ? Math.max(...sortedRounds) : 0;
   const nextRoundNum = maxCurrentRound + 1;
+  const activeRoundMatches = matchesByRound[activePairingRound] || [];
+
+  useEffect(() => {
+    if (sortedRounds.length > 0 && !sortedRounds.includes(activePairingRound)) {
+      setActivePairingRound(maxCurrentRound);
+    }
+    // sortedRounds is derived from the tournament matches and is intentionally represented by its length here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxCurrentRound, sortedRounds.length, activePairingRound]);
 
   const openPlayerPreview = (playerName, extra = {}) => {
     if (!playerName || playerName === "BYE" || playerName === "— BYE —" || playerName === "TBD") return;
@@ -1257,14 +1378,36 @@ const isBlackWinner = (result) => {
 
       <div className="layout-container">
         <div className="main-content">
+          {feedbackNotice && (
+            <div
+              className={`tournament-feedback-notice tournament-feedback-${feedbackNotice.tone}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span>{feedbackNotice.message}</span>
+              <button type="button" onClick={() => setFeedbackNotice(null)} aria-label="Dismiss notification">×</button>
+            </div>
+          )}
           {isLoading ? (
             <div className="details-loading-container site-loading-state">
               <div className="spinner-ring site-loading-spinner"></div>
               <span>Loading tournament details...</span>
             </div>
           ) : error || !tournament ? (
-            <div style={{ color: "#e74c3c", textAlign: "center", padding: "50px", fontSize: "1.2rem" }}>
-              {error || "Could not retrieve tournament details. Please verify the URL."}
+            <div className="details-error-state">
+              <span className="details-error-icon">⚠️</span>
+              <p>{error || "Could not retrieve tournament details. Please verify the URL."}</p>
+              <button
+                type="button"
+                className="details-retry-btn"
+                onClick={() => {
+                  setError(null);
+                  setIsLoading(true);
+                  fetchTournamentDetails();
+                }}
+              >
+                Retry loading tournament
+              </button>
             </div>
           ) : (
             <>
@@ -1322,6 +1465,49 @@ const isBlackWinner = (result) => {
                   <p className="tournament-hero-desc">
                     {tournament.description}
                   </p>
+                )}
+
+                {currentUserIsRegistered && (
+                  <div className="player-tournament-focus-card">
+                    <div className="player-focus-heading">
+                      <div>
+                        <span className="player-focus-eyebrow">YOUR TOURNAMENT STATUS</span>
+                        <h2>{isTournamentUpcoming ? "You are registered" : "Your tournament dashboard"}</h2>
+                      </div>
+                      <span className={`player-focus-status status-${(tournament.status || "upcoming").toLowerCase()}`}>
+                        {tournament.status || "Upcoming"}
+                      </span>
+                    </div>
+                    <div className="player-focus-grid">
+                      <div>
+                        <span className="player-focus-label">Standing</span>
+                        <strong>{currentPlayerStanding ? `#${swissStandings.indexOf(currentPlayerStanding) + 1}` : "Not started"}</strong>
+                      </div>
+                      <div>
+                        <span className="player-focus-label">Score</span>
+                        <strong>{currentPlayerStanding ? `${currentPlayerStanding.points} pts` : "—"}</strong>
+                      </div>
+                      <div>
+                        <span className="player-focus-label">Record</span>
+                        <strong>{currentPlayerStanding ? `${currentPlayerStanding.wins}W · ${currentPlayerStanding.draws}D · ${currentPlayerStanding.losses}L` : "—"}</strong>
+                      </div>
+                      <div className="player-focus-next-match">
+                        <span className="player-focus-label">Next pairing</span>
+                        <strong>
+                          {currentPlayerNextMatch
+                            ? `${currentPlayerNextMatch.white} vs ${currentPlayerNextMatch.black}`
+                            : isTournamentUpcoming
+                              ? "Pairings will appear when play begins"
+                              : "No pending pairing"}
+                        </strong>
+                      </div>
+                    </div>
+                    {isTournamentOngoing && currentPlayerNextMatch && (
+                      <p className="player-focus-note">
+                        Round {currentPlayerNextMatch.round || tournament.currentRound || 1} is waiting for a result. Check the pairings section below for match details.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Sleek Integrated Tournament Progress Tracker */}
@@ -1457,42 +1643,158 @@ const isBlackWinner = (result) => {
                 </div>
               </div>
 
-              <nav className="tournament-quick-nav" aria-label="Tournament sections">
+              <nav className="dashboard-tabs tournament-desktop-tabs tournament-quick-nav" aria-label="Tournament sections">
                 <span className="quick-nav-label">Tournament sections</span>
                 <div className="quick-nav-links">
+                  {isSwissFormat && (
+                    <a
+                      className={activeTournamentTab === "tournament-rules" ? "active" : ""}
+                      href="#tournament-rules"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        navigateToSection("tournament-rules");
+                      }}
+                    >
+                      Rules
+                    </a>
+                  )}
+                  {isSwissFormat && (
+                    <a
+                      className={activeTournamentTab === "tournament-participants" ? "active" : ""}
+                      href="#tournament-participants"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        navigateToSection("tournament-participants");
+                      }}
+                    >
+                      Registered
+                    </a>
+                  )}
+                  {isSwissFormat && (
                   <a
-                    className={activeSection === (isSwissFormat ? "tournament-standings" : "tournament-bracket") ? "active" : ""}
-                    href={isSwissFormat ? "#tournament-standings" : "#tournament-bracket"}
+                    className={activeTournamentTab === "tournament-standings" ? "active" : ""}
+                    href="#tournament-standings"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      navigateToSection("tournament-standings");
+                    }}
                   >
-                    {isSwissFormat ? "Standings" : "Bracket"}
+                    Standings
                   </a>
-                  <a
-                    className={activeSection === (isSwissFormat ? "tournament-pairings" : "tournament-participants") ? "active" : ""}
+                  )}
+                  {(!isSwissFormat || !isTournamentUpcoming) && <a
+                    className={isSwissFormat
+                      ? (activeTournamentTab === "tournament-pairings" ? "active" : "")
+                      : (activeSection === "tournament-participants" ? "active" : "")}
                     href={isSwissFormat ? "#tournament-pairings" : "#tournament-participants"}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      navigateToSection(isSwissFormat ? "tournament-pairings" : "tournament-participants");
+                    }}
                   >
                     {isSwissFormat ? "Pairings" : "Players"}
-                  </a>
+                  </a>}
+                  {isSwissFormat && isTournamentUpcoming && (
+                    <a
+                      className={activeTournamentTab === "tournament-pairings" ? "active" : ""}
+                      href="#tournament-pairings"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        navigateToSection("tournament-pairings");
+                      }}
+                    >
+                      Pairings
+                    </a>
+                  )}
                   {!isSwissFormat && (
-                    <a className={activeSection === "tournament-bracket" ? "active" : ""} href="#tournament-bracket">
+                    <a
+                      className={activeSection === "tournament-bracket" ? "active" : ""}
+                      href="#tournament-bracket"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        navigateToSection("tournament-bracket");
+                      }}
+                    >
+                      Bracket
+                    </a>
+                  )}
+                  {!isSwissFormat && (
+                    <a
+                      className={activeSection === "tournament-bracket" ? "active" : ""}
+                      href="#tournament-bracket"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        navigateToSection("tournament-bracket");
+                      }}
+                    >
                       Matches
                     </a>
                   )}
                 </div>
               </nav>
 
+              {isSwissFormat && (
+                <div className="tournament-mobile-nav-wrapper">
+                  <button
+                    type="button"
+                    className="tournament-mobile-nav-trigger"
+                    onClick={() => setTournamentMenuOpen(true)}
+                    aria-label="Open tournament sections menu"
+                    aria-expanded={tournamentMenuOpen}
+                  >
+                    <div className="tournament-mobile-nav-left">
+                      <span className="tournament-mobile-nav-menu-icon">☰</span>
+                      <span className="tournament-mobile-nav-active-icon">
+                        {activeTournamentTab === "tournament-pairings" ? "🗓️" : activeTournamentTab === "tournament-participants" ? "👥" : "🏆"}
+                      </span>
+                      <div className="tournament-mobile-nav-text">
+                        <span className="tournament-mobile-nav-section-label">Active Section</span>
+                        <span className="tournament-mobile-nav-active-title">
+                          {activeTournamentTab === "tournament-rules" ? "Rules" : activeTournamentTab === "tournament-pairings" ? "Round Pairings" : activeTournamentTab === "tournament-participants" ? "Registered Players" : "Standings"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="tournament-mobile-nav-right">
+                      <span className="tournament-mobile-nav-switch-hint">Switch</span>
+                      <span className="tournament-mobile-nav-arrow">›</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {isSwissFormat && tournamentMenuOpen && (
+                <div className="tournament-mobile-menu-overlay" onClick={() => setTournamentMenuOpen(false)}>
+                  <div className="tournament-mobile-menu-drawer" role="dialog" aria-modal="true" aria-label="Tournament sections menu" onClick={(event) => event.stopPropagation()}>
+                    <div className="tournament-mobile-menu-header">
+                      <h3>☰ Tournament Sections</h3>
+                      <button type="button" onClick={() => setTournamentMenuOpen(false)} aria-label="Close tournament sections menu">✕</button>
+                    </div>
+                    {[
+                      ["tournament-rules", "📖", "Rules"],
+                      ["tournament-participants", "👥", "Registered Players"],
+                      ["tournament-standings", "🏆", "Standings"],
+                      ["tournament-pairings", "🗓️", "Round Pairings"]
+                    ].map(([id, icon, label]) => (
+                      <button
+                        type="button"
+                        key={id}
+                        className={`tournament-mobile-menu-item${activeTournamentTab === id ? " active" : ""}`}
+                        onClick={() => navigateToSection(id)}
+                      >
+                        <span>{icon}</span>
+                        <span>{label}</span>
+                        {activeTournamentTab === id && <span className="tournament-mobile-menu-check">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Staff controls for OC and Admins */}
               {isStaff && (
                 <div style={{ marginTop: "30px" }}>
                   <h2 className="section-title">Staff Actions (Organizing Committee)</h2>
                   <div className="staff-actions" style={{ gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-                    <button 
-                      type="button"
-                      className="add-btn" 
-                      onClick={handleOpenEditModal}
-                      style={{ background: "linear-gradient(135deg, #3498db, #2980b9)", color: "#fff", fontWeight: "800" }}
-                    >
-                      ⚙️ Edit Tournament Details
-                    </button>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "#15120c", padding: "8px 14px", borderRadius: "8px", border: "1px solid #f3c144" }}>
                       <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>Update Status:</span>
                       <select
@@ -1506,12 +1808,6 @@ const isBlackWinner = (result) => {
                       </select>
                     </div>
 
-                    {/* Add Participant hidden when tournament is completed or all rounds played */}
-                    {tournament.status !== "Completed" && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
-                      <button className="add-btn" onClick={() => setPlayerModalOpen(true)}>
-                        + Add Participant
-                      </button>
-                    )}
 
                     {/* Email Certificates removed as requested */}
 
@@ -1594,7 +1890,7 @@ const isBlackWinner = (result) => {
               {isSwissFormat ? (
                 <>
                   {/* Official FIDE Swiss System Match Format & Rules Card */}
-                  <div className={`format-rules-guide-card ${rulesOpen ? "rules-open" : "rules-collapsed"}`}>
+                  <div id="tournament-rules" style={{ display: activeTournamentTab === "tournament-rules" ? undefined : "none" }} className="format-rules-guide-card tournament-section-anchor rules-open">
                     <div className="format-rules-header">
                       <div className="format-rules-title-group">
                         <span className="format-rules-icon">🏛️</span>
@@ -1612,15 +1908,6 @@ const isBlackWinner = (result) => {
                         <span>♟️</span>
                         <span>{tournament.rounds || 5} Scheduled Rounds</span>
                       </div>
-                      <button
-                        type="button"
-                        className={`rules-toggle-btn ${rulesOpen ? "is-open" : ""}`}
-                        onClick={() => setRulesOpen((open) => !open)}
-                        aria-expanded={rulesOpen}
-                      >
-                        <span>{rulesOpen ? "Hide rules" : "View full rules"}</span>
-                        <span className="rules-toggle-icon" aria-hidden="true">⌄</span>
-                      </button>
                     </div>
 
                     <div className="format-rules-grid">
@@ -1674,339 +1961,333 @@ const isBlackWinner = (result) => {
                     </div>
                   </div>
 
-                  {/* Swiss standings or pre-tournament participant roster */}
-                  <div id="tournament-standings" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-                    <div>
-                      <h2 className="section-title" style={{ margin: 0 }}>
-                        {isTournamentUpcoming ? "👥 Registered Players" : "🏆 Swiss System Standings & Honors"}
-                      </h2>
-                      <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
-                        {isTournamentUpcoming
-                          ? "Rankings and results will appear when the tournament starts."
-                          : isStaff
-                          ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
-                          : "Players can view and download their personalized certificate."}
-                      </p>
+                  {/* ── REGISTERED PLAYERS TAB ── Clean roster, no game stats */}
+                  <div style={{ display: activeTournamentTab === "tournament-participants" ? undefined : "none" }}>
+                    <div id="tournament-participants" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                      <div>
+                        <h2 className="section-title" style={{ margin: 0 }}>👥 Registered Players</h2>
+                        <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
+                          {isTournamentUpcoming
+                            ? `${tournament?.playersList?.length || 0} players registered — rankings appear when the tournament starts.`
+                            : `${tournament?.playersList?.length || 0} participants — click a name to view their profile card.`}
+                        </p>
+                      </div>
+                      {isStaff && tournament?.status !== "Completed" && (!tournament?.rounds || sortedRounds.length < tournament?.rounds) && (
+                        <button className="add-btn" onClick={() => setPlayerModalOpen(true)}>+ Add Participant</button>
+                      )}
                     </div>
-                    {isStaff && certificatesAvailable && (
-                      <button
-                        type="button"
-                        disabled={certActionLoading}
-                        onClick={() => {
-                          const sMap = {};
-                          swissStandings.forEach((p, i) => { sMap[p.name] = { rank: i, points: p.points }; });
-                          handleMassEmailCertificates(tournament?.playersList || [], sMap);
-                        }}
-                        style={{
-                          background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
-                          color: "#12100d",
-                          fontWeight: "900",
-                          border: "none",
-                          padding: "8px 18px",
-                          borderRadius: "8px",
-                          fontSize: "0.82rem",
-                          cursor: certActionLoading ? "wait" : "pointer",
-                          boxShadow: "0 4px 14px rgba(243,193,68,0.35)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px"
-                        }}
-                        title="Dispatch official certificates with PDF to ALL participants"
-                      >
-                        <span>✉️</span>
-                        <span>Email Certificates to All (PDF Attached)</span>
-                      </button>
-                    )}
+
+                    {/* Desktop roster table */}
+                    <div className="application-table-wrapper tournaments-desktop-table" style={{ marginBottom: "40px" }}>
+                      <table className="application-table registered-players-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: "48px" }}>#</th>
+                            <th>Player Name</th>
+                            <th>Rating</th>
+                            <th>Major</th>
+                            {isStaff && <th>Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(tournament?.playersList || []).map((p, idx) => {
+                            const isMe = Boolean(
+                              (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase())
+                            );
+                            const profile = tournament?.playerProfiles?.[p.name] || {};
+                            const displayRating = profile?.effectiveRating || profile?.chessComRating || profile?.fideRating || profile?.lichessRating || p.rating || null;
+                            return (
+                              <tr key={idx} style={{ background: isMe ? "rgba(243,193,68,0.06)" : "transparent" }}>
+                                <td style={{ color: "#8e8677", fontWeight: "700", fontSize: "0.9rem" }}>{idx + 1}</td>
+                                <td style={{ fontWeight: "600", color: "#fff" }}>
+                                  <div
+                                    className="tournament-player-cell"
+                                    onClick={() => openPlayerPreview(p.name, p)}
+                                    title={`Click to view ${p.name}'s profile`}
+                                    style={{ cursor: "pointer" }}
+                                  >
+                                    <div className="player-avatar-ring">
+                                      <img
+                                        src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                        alt={p.name}
+                                        className="player-avatar-mini"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                                      />
+                                    </div>
+                                    <span className="player-name-text">{p.name}</span>
+                                    {isMe && (
+                                      <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>{(!displayRating || displayRating === 0 || displayRating === 1500) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : displayRating}</td>
+                                <td style={{ color: "#bab19c" }}>{p.major || profile?.major || "—"}</td>
+                                {isStaff && (
+                                  <td>
+                                    <button
+                                      onClick={() => handleRemovePlayer(p.name)}
+                                      style={{ background: "rgba(217,83,79,0.15)", color: "#d9534f", border: "1px solid #d9534f", padding: "3px 8px", borderRadius: "4px", fontSize: "0.75rem", fontWeight: "bold", cursor: "pointer" }}
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile roster cards */}
+                    <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
+                      {(tournament?.playersList || []).map((p, idx) => {
+                        const isMe = Boolean(p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase());
+                        const profile = tournament?.playerProfiles?.[p.name] || {};
+                        const displayRating = profile?.effectiveRating || profile?.chessComRating || profile?.fideRating || profile?.lichessRating || p.rating || null;
+                        return (
+                          <div key={idx} className="mobile-tournament-card" style={{ borderColor: isMe ? "rgba(243,193,68,0.5)" : "rgba(57,52,40,0.6)" }}>
+                            <div className="mobile-card-header">
+                              <span style={{ color: "#8e8677", fontWeight: "700", fontSize: "0.85rem" }}>#{idx + 1}</span>
+                            </div>
+                            <div
+                              className="mobile-player-cell"
+                              onClick={() => openPlayerPreview(p.name, p)}
+                              title={`Click to view ${p.name}'s profile`}
+                            >
+                              <img
+                                src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
+                                alt={p.name}
+                                className="player-avatar-mini"
+                                onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
+                              />
+                              <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
+                              {isMe && <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg,#f7ce68,#f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>}
+                            </div>
+                            <div className="mobile-card-details">
+                              <div className="detail-item">
+                                <span className="detail-label">Rating</span>
+                                <span className="detail-val">{(!displayRating || displayRating === 0 || displayRating === 1500) ? "Unrated" : displayRating}</span>
+                              </div>
+                              <div className="detail-item">
+                                <span className="detail-label">Major</span>
+                                <span className="detail-val">{p.major || profile?.major || "—"}</span>
+                              </div>
+                            </div>
+                            {isStaff && (
+                              <button
+                                onClick={() => handleRemovePlayer(p.name)}
+                                className="mobile-full-btn"
+                                style={{ marginTop: "10px", background: "rgba(217,83,79,0.15)", color: "#d9534f", border: "1px solid #d9534f", borderRadius: "8px", fontWeight: "bold" }}
+                              >
+                                Remove Participant
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {certStatusMsg && (
-                    <div style={{
-                      padding: "10px 16px",
-                      marginBottom: "14px",
-                      borderRadius: "8px",
-                      background: certStatusMsg.startsWith("❌") ? "rgba(231,76,60,0.15)" : "rgba(72,187,120,0.15)",
-                      border: certStatusMsg.startsWith("❌") ? "1px solid #e74c3c" : "1px solid #48bb78",
-                      color: certStatusMsg.startsWith("❌") ? "#ff7675" : "#68d391",
-                      fontSize: "0.85rem",
-                      fontWeight: "700"
-                    }}>
-                      {certStatusMsg}
+                  {/* ── STANDINGS TAB ── Always visible; empty state shown before tournament starts */}
+                  <div style={{ display: activeTournamentTab === "tournament-standings" ? undefined : "none" }}>
+                    <div id="tournament-standings" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                      <div>
+                        <h2 className="section-title" style={{ margin: 0 }}>🏆 Swiss System Standings &amp; Honors</h2>
+                        <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
+                          {isTournamentUpcoming
+                            ? "Standings will populate here once the first round begins."
+                            : isStaff
+                            ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
+                            : "Sorted by points → wins → rating. Click a name to view the player's profile."}
+                        </p>
+                      </div>
+                      {isStaff && certificatesAvailable && (
+                        <button
+                          type="button"
+                          disabled={certActionLoading}
+                          onClick={() => {
+                            const sMap = {};
+                            swissStandings.forEach((p, i) => { sMap[p.name] = { rank: i, points: p.points }; });
+                            handleMassEmailCertificates(tournament?.playersList || [], sMap);
+                          }}
+                          style={{
+                            background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
+                            color: "#12100d", fontWeight: "900", border: "none",
+                            padding: "8px 18px", borderRadius: "8px", fontSize: "0.82rem",
+                            cursor: certActionLoading ? "wait" : "pointer",
+                            boxShadow: "0 4px 14px rgba(243,193,68,0.35)",
+                            display: "inline-flex", alignItems: "center", gap: "6px"
+                          }}
+                          title="Dispatch official certificates with PDF to ALL participants"
+                        >
+                          <span>✉️</span>
+                          <span>Email Certificates to All (PDF Attached)</span>
+                        </button>
+                      )}
                     </div>
-                  )}
-                  
-                  {/* Desktop Table View */}
-                  <div className="application-table-wrapper tournaments-desktop-table" style={{ marginBottom: "40px" }}>
-                    <table className={`application-table${isTournamentUpcoming ? " registered-players-table" : ""}`}>
-                      <thead>
-                        <tr>
-                          {!isTournamentUpcoming && <th>Rank</th>}
-                          <th>Player Name</th>
-                          {!isTournamentUpcoming && <th>Points</th>}
-                          {!isTournamentUpcoming && <th>Record (W-D-L)</th>}
-                          {!isTournamentUpcoming && <th>Played</th>}
-                          {!isTournamentUpcoming && <th>Byes</th>}
-                          <th>Rating</th>
-                          <th>Major</th>
-                          {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
-                          {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
-                          {isStaff && <th>Actions</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {swissStandings.map((p, idx) => {
-                          const isMe = Boolean(
-                            (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
-                            (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
-                          );
-                          const canViewCert = certificatesAvailable && (isStaff || isMe);
-                          const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
 
-                          return (
-                            <tr key={idx} style={{ background: !isTournamentUpcoming && idx === 0 ? "rgba(243, 193, 68, 0.08)" : "transparent" }}>
-                              {!isTournamentUpcoming && (
+                    {certStatusMsg && (
+                      <div style={{
+                        padding: "10px 16px", marginBottom: "14px", borderRadius: "8px",
+                        background: certStatusMsg.startsWith("❌") ? "rgba(231,76,60,0.15)" : "rgba(72,187,120,0.15)",
+                        border: certStatusMsg.startsWith("❌") ? "1px solid #e74c3c" : "1px solid #48bb78",
+                        color: certStatusMsg.startsWith("❌") ? "#ff7675" : "#68d391",
+                        fontSize: "0.85rem", fontWeight: "700"
+                      }}>
+                        {certStatusMsg}
+                      </div>
+                    )}
+
+                    {/* Desktop standings table */}
+                    <div className="application-table-wrapper tournaments-desktop-table" style={{ marginBottom: "40px" }}>
+                      <table className="application-table">
+                        <thead>
+                          <tr>
+                            <th>Rank</th>
+                            <th>Player Name</th>
+                            <th>Points</th>
+                            {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
+                              <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
+                            ))}
+                            <th>Record (W-D-L)</th>
+                            <th>Played</th>
+                            <th>Byes</th>
+                            <th>Rating</th>
+                            {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
+                            {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {isTournamentUpcoming ? (
+                            <tr>
+                              <td colSpan={99} style={{ textAlign: "center", padding: "52px 20px", color: "#6b6358" }}>
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                                  <span style={{ fontSize: "2rem" }}>⏳</span>
+                                  <span style={{ fontWeight: "700", fontSize: "0.95rem", color: "#8e8677" }}>Standings not yet available</span>
+                                  <span style={{ fontSize: "0.8rem" }}>Rankings will appear here once Round 1 pairings are generated and results recorded.</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : swissStandings.map((p, idx) => {
+                            const isMe = Boolean(
+                              (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                              (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                            );
+                            const canViewCert = certificatesAvailable && (isStaff || isMe);
+                            const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
+                            return (
+                              <tr key={idx} style={{ background: idx === 0 ? "rgba(243,193,68,0.08)" : "transparent" }}>
                                 <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
                                   {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
                                 </td>
-                              )}
-                              <td style={{ fontWeight: "600", color: "#fff" }}>
-                                <div 
-                                  className="tournament-player-cell"
-                                  onClick={() => openPlayerPreview(p.name, p)}
-                                  title={`Click to view ${p.name}'s Profile Card`}
-                                >
-                                  <div className="player-avatar-ring">
-                                    <img
-                                      src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
-                                      alt={p.name}
-                                      className="player-avatar-mini"
-                                      onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                                    />
+                                <td style={{ fontWeight: "600", color: "#fff" }}>
+                                  <div className="tournament-player-cell" onClick={() => openPlayerPreview(p.name, p)} title={`Click to view ${p.name}'s Profile Card`}>
+                                    <div className="player-avatar-ring">
+                                      <img src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)} alt={p.name} className="player-avatar-mini" onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }} />
+                                    </div>
+                                    <span className="player-name-text">{p.name}</span>
+                                    {isMe && <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg,#f7ce68,#f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>}
                                   </div>
-                                  <span className="player-name-text">{p.name}</span>
-                                  {isMe && (
-                                    <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
-                                  )}
-                                </div>
-                              </td>
-                              {!isTournamentUpcoming && <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>}
-                              {!isTournamentUpcoming && <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>}
-                              {!isTournamentUpcoming && <td>{p.played}</td>}
-                              {!isTournamentUpcoming && <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>}
-                              <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
-                              <td>{p.major}</td>
-                              {certificatesAvailable && <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                                {canViewCert ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      generateWinnerCertificate({
-                                        playerName: p.name,
-                                        rank: rankStr,
-                                        tournamentTitle: tournament?.title || "ZC Chess Tournament",
-                                        tournamentType: tournament?.type || "Swiss Championship",
-                                        pointsOrScore: p.points != null ? `${p.points} pts` : "",
-                                        format: "pdf"
-                                      });
-                                    }}
-                                    style={{
-                                      background: isMe
-                                        ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
-                                        : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
-                                      border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
-                                      color: isMe ? "#12100d" : "#f3c144",
-                                      padding: "5px 12px",
-                                      borderRadius: "6px",
-                                      fontSize: "0.78rem",
-                                      fontWeight: "800",
-                                      cursor: "pointer",
-                                      boxShadow: isMe ? "0 2px 8px rgba(243,193,68,0.4)" : "none",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "5px"
-                                    }}
-                                    title={isMe ? "Download your official diploma certificate (PDF)" : `Download official diploma certificate for ${p.name}`}
-                                  >
-                                    <span>📜</span>
-                                    <span>{isMe ? "My Certificate" : "Certificate (PDF)"}</span>
-                                  </button>
-                                ) : (
-                                  <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }} title="Certificates are private to the player and organizing heads">
-                                    🔒 Private
-                                  </span>
+                                </td>
+                                <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
+                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
+                                  const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
+                                  return (
+                                    <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
+                                      <strong>{result.value}</strong>
+                                      <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
+                                    </td>
+                                  );
+                                })}
+                                <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
+                                <td>{p.played}</td>
+                                <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                                <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
+                                {certificatesAvailable && (
+                                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                    {canViewCert ? (
+                                      <button type="button" onClick={() => generateWinnerCertificate({ playerName: p.name, rank: rankStr, tournamentTitle: tournament?.title || "ZC Chess Tournament", tournamentType: tournament?.type || "Swiss Championship", pointsOrScore: p.points != null ? `${p.points} pts` : "", format: "pdf" })}
+                                        style={{ background: isMe ? "linear-gradient(135deg,#f7ce68 0%,#f3c144 60%,#c99522 100%)" : "linear-gradient(135deg,rgba(243,193,68,0.2) 0%,rgba(212,163,42,0.1) 100%)", border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)", color: isMe ? "#12100d" : "#f3c144", padding: "5px 12px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "800", cursor: "pointer", boxShadow: isMe ? "0 2px 8px rgba(243,193,68,0.4)" : "none", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                                        title={isMe ? "Download your official diploma certificate (PDF)" : `Download certificate for ${p.name}`}
+                                      >
+                                        <span>📜</span><span>{isMe ? "My Certificate" : "Certificate (PDF)"}</span>
+                                      </button>
+                                    ) : (
+                                      <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }}>🔒 Private</span>
+                                    )}
+                                  </td>
                                 )}
-                              </td>}
-                              {isStaff && certificatesAvailable && (
-                                <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                                  <button
-                                    type="button"
-                                    disabled={certActionLoading}
-                                    onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rankStr, p.points != null ? `${p.points} pts` : "")}
-                                    style={{
-                                      background: "rgba(255,255,255,0.07)",
-                                      border: "1px solid rgba(255,255,255,0.2)",
-                                      color: "#e2d9cc",
-                                      padding: "5px 9px",
-                                      borderRadius: "6px",
-                                      fontSize: "0.75rem",
-                                      fontWeight: "700",
-                                      cursor: certActionLoading ? "wait" : "pointer"
-                                    }}
-                                    title={`Email official PDF certificate to ${p.email || p.name}`}
-                                  >
-                                    ✉️ Email PDF
-                                  </button>
-                                </td>
-                              )}
-                              {isStaff && (
-                                <td>
-                                  <button
-                                    onClick={() => handleRemovePlayer(p.name)}
-                                    style={{
-                                      background: "rgba(217, 83, 79, 0.15)",
-                                      color: "#d9534f",
-                                      border: "1px solid #d9534f",
-                                      padding: "3px 8px",
-                                      borderRadius: "4px",
-                                      fontSize: "0.75rem",
-                                      fontWeight: "bold",
-                                      cursor: "pointer",
-                                      transition: "all 0.2s"
-                                    }}
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                {isStaff && certificatesAvailable && (
+                                  <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                    <button type="button" disabled={certActionLoading} onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rankStr, p.points != null ? `${p.points} pts` : "")}
+                                      style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.2)", color: "#e2d9cc", padding: "5px 9px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: "700", cursor: certActionLoading ? "wait" : "pointer" }}
+                                      title={`Email official PDF certificate to ${p.email || p.name}`}
+                                    >
+                                      ✉️ Email PDF
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* Mobile Standings Cards View */}
-                  <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
-                    {swissStandings.map((p, idx) => {
-                      const isMe = Boolean(
-                        (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
-                        (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
-                      );
-                      const canViewCert = certificatesAvailable && (isStaff || isMe);
-                      const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
-
-                      return (
-                        <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243, 193, 68, 0.5)" : "rgba(57, 52, 40, 0.6)" }}>
-                          <div className="mobile-card-header">
-                            <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: !isTournamentUpcoming && idx === 0 ? "#f3c144" : "#e8e8e8" }}>
-                              {isTournamentUpcoming
-                                ? "Registered Player"
-                                : idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
-                            </span>
-                            {!isTournamentUpcoming && <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>}
-                          </div>
-
-                          <div 
-                            className="mobile-player-cell"
-                            onClick={() => openPlayerPreview(p.name, p)}
-                            title={`Click to view ${p.name}'s Profile Card`}
-                          >
-                            <img
-                              src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)}
-                              alt={p.name}
-                              className="player-avatar-mini"
-                              onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
-                            />
-                            <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
-                            {isMe && (
-                              <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg, #f7ce68, #f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>
-                            )}
-                          </div>
-
-                          <div className="mobile-card-details">
-                            {!isTournamentUpcoming && <div className="detail-item">
-                              <span className="detail-label">Record</span>
-                              <span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span>
-                            </div>}
-                            {!isTournamentUpcoming && <div className="detail-item">
-                              <span className="detail-label">Played</span>
-                              <span className="detail-val">{p.played}</span>
-                            </div>}
-                            <div className="detail-item">
-                              <span className="detail-label">Rating</span>
-                              <span className="detail-val">{p.rating}</span>
+                    {/* Mobile standings cards — empty state when upcoming */}
+                    {isTournamentUpcoming ? (
+                      <div className="tournaments-mobile-cards" style={{ textAlign: "center", padding: "40px 20px", color: "#6b6358", alignItems: "center", gap: "10px", marginBottom: "40px" }}>
+                        <span style={{ fontSize: "2rem" }}>⏳</span>
+                        <span style={{ fontWeight: "700", fontSize: "0.95rem", color: "#8e8677" }}>Standings not yet available</span>
+                        <span style={{ fontSize: "0.8rem" }}>Rankings will appear here once Round 1 pairings are generated.</span>
+                      </div>
+                    ) : (
+                    <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
+                      {swissStandings.map((p, idx) => {
+                        const isMe = Boolean(
+                          (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
+                          (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
+                        );
+                        const canViewCert = certificatesAvailable && (isStaff || isMe);
+                        const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
+                        return (
+                          <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243,193,68,0.5)" : "rgba(57,52,40,0.6)" }}>
+                            <div className="mobile-card-header">
+                              <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: idx === 0 ? "#f3c144" : "#e8e8e8" }}>
+                                {idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
+                              </span>
+                              <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
                             </div>
-                            <div className="detail-item">
-                              <span className="detail-label">Major</span>
-                              <span className="detail-val">{p.major}</span>
+                            <div className="mobile-player-cell" onClick={() => openPlayerPreview(p.name, p)} title={`Click to view ${p.name}'s Profile Card`}>
+                              <img src={getPlayerAvatarUrl(p.name, tournament?.playerAvatars)} alt={p.name} className="player-avatar-mini" onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }} />
+                              <h3 className="mobile-card-title" style={{ margin: 0 }}>{p.name}</h3>
+                              {isMe && <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg,#f7ce68,#f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>}
                             </div>
-                            {!isTournamentUpcoming && p.byes > 0 && (
-                              <div className="detail-item">
-                                <span className="detail-label">Byes</span>
-                                <span className="detail-val gold">{p.byes} BYE</span>
+                            <div className="mobile-card-details">
+                              <div className="detail-item"><span className="detail-label">Record</span><span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span></div>
+                              <div className="detail-item"><span className="detail-label">Played</span><span className="detail-val">{p.played}</span></div>
+                              <div className="detail-item"><span className="detail-label">Rating</span><span className="detail-val">{p.rating}</span></div>
+                              {p.byes > 0 && <div className="detail-item"><span className="detail-label">Byes</span><span className="detail-val gold">{p.byes} BYE</span></div>}
+                            </div>
+                            {canViewCert && (
+                              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "10px", textAlign: "right" }}>
+                                <button type="button" onClick={() => generateWinnerCertificate({ playerName: p.name, rank: rankStr, tournamentTitle: tournament?.title || "ZC Chess Tournament", tournamentType: tournament?.type || "Swiss Championship", pointsOrScore: p.points != null ? `${p.points} pts` : "", format: "pdf" })}
+                                  style={{ background: isMe ? "linear-gradient(135deg,#f7ce68 0%,#f3c144 60%,#c99522 100%)" : "linear-gradient(135deg,rgba(243,193,68,0.2) 0%,rgba(212,163,42,0.1) 100%)", border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)", color: isMe ? "#12100d" : "#f3c144", padding: "6px 14px", borderRadius: "6px", fontSize: "0.8rem", fontWeight: "800", cursor: "pointer", width: "100%", justifyContent: "center", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                >
+                                  <span>📜</span><span>{isMe ? "Download My Certificate (PDF)" : `Certificate (${p.name})`}</span>
+                                </button>
                               </div>
                             )}
                           </div>
-
-                          {canViewCert && (
-                            <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "10px", textAlign: "right" }}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  generateWinnerCertificate({
-                                    playerName: p.name,
-                                    rank: rankStr,
-                                    tournamentTitle: tournament?.title || "ZC Chess Tournament",
-                                    tournamentType: tournament?.type || "Swiss Championship",
-                                    pointsOrScore: p.points != null ? `${p.points} pts` : "",
-                                    format: "pdf"
-                                  });
-                                }}
-                                style={{
-                                  background: isMe
-                                    ? "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)"
-                                    : "linear-gradient(135deg, rgba(243,193,68,0.2) 0%, rgba(212,163,42,0.1) 100%)",
-                                  border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)",
-                                  color: isMe ? "#12100d" : "#f3c144",
-                                  padding: "6px 14px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.8rem",
-                                  fontWeight: "800",
-                                  cursor: "pointer",
-                                  width: "100%",
-                                  justifyContent: "center",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px"
-                                }}
-                              >
-                                <span>📜</span>
-                                <span>{isMe ? "Download My Certificate (PDF)" : `Certificate (${p.name})`}</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {isStaff && (
-                            <button
-                              onClick={() => handleRemovePlayer(p.name)}
-                              className="mobile-full-btn"
-                              style={{
-                                marginTop: "10px",
-                                background: "rgba(217, 83, 79, 0.15)",
-                                color: "#d9534f",
-                                border: "1px solid #d9534f",
-                                borderRadius: "8px",
-                                fontWeight: "bold"
-                              }}
-                            >
-                              Remove Participant
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                    )}
                   </div>
 
                   {/* Swiss Round-by-Round Results */}
+                  <div style={{ display: activeTournamentTab === "tournament-pairings" ? undefined : "none" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", marginBottom: "15px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
                       <h2 id="tournament-pairings" className="section-title tournament-section-anchor" style={{ margin: 0 }}>🗓️ Round-by-Round Pairings & Results</h2>
@@ -2045,13 +2326,37 @@ const isBlackWinner = (result) => {
                     )}
                   </div>
 
+                  {sortedRounds.length > 0 && (
+                    <nav className="round-quick-nav" aria-label="Round navigation">
+                      <span className="round-quick-nav-label">Rounds</span>
+                      <div className="round-quick-nav-links">
+                        {sortedRounds.map((rNum) => (
+                          <button
+                            key={rNum}
+                            type="button"
+                            className={activePairingRound === rNum ? "active" : ""}
+                            aria-pressed={activePairingRound === rNum}
+                            onClick={(event) => {
+                              setActivePairingRound(rNum);
+                            }}
+                          >
+                            R{rNum}
+                          </button>
+                        ))}
+                      </div>
+                    </nav>
+                  )}
+
                   {sortedRounds.length === 0 ? (
-                    <p style={{ color: "#888", fontStyle: "italic", margin: "10px 0 30px" }}>No round results recorded yet.</p>
+                    <div className="rounds-empty-state">
+                      <span className="rounds-empty-icon">🗓️</span>
+                      <strong>No pairings yet</strong>
+                      <span>Round 1 pairings will appear here when the tournament starts.</span>
+                    </div>
                   ) : (
-                    sortedRounds.map((rNum) => (
-                      <div key={rNum} style={{ marginBottom: "28px" }}>
+                    <div key={activePairingRound} id={`tournament-round-${activePairingRound}`} className="tournament-section-anchor round-pairing-section" style={{ marginBottom: "28px" }}>
                         <h3 style={{ color: "#f3c144", fontSize: "1.1rem", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                          Round {rNum} Pairings & Results
+                          Round {activePairingRound} Pairings & Results
                         </h3>
                         {/* Desktop Table View */}
                         <div className="application-table-wrapper tournaments-desktop-table tournament-standings-wrapper">
@@ -2065,7 +2370,7 @@ const isBlackWinner = (result) => {
                               </tr>
                             </thead>
                             <tbody>
-                              {matchesByRound[rNum].map((m, idx) => {
+                              {activeRoundMatches.map((m, idx) => {
                                 const isByeRow = m.black === "BYE";
                                 return (
                                   <tr key={m._id || idx} style={{ background: isByeRow ? "rgba(243,193,68,0.05)" : "transparent", opacity: isByeRow ? 0.8 : 1 }}>
@@ -2131,7 +2436,7 @@ const isBlackWinner = (result) => {
 
                         {/* Mobile Match Cards View */}
                         <div className="tournaments-mobile-cards">
-                          {matchesByRound[rNum].map((m, idx) => {
+                          {activeRoundMatches.map((m, idx) => {
                             const isByeRow = m.black === "BYE";
                             return (
                               <div key={m._id || idx} className="mobile-tournament-card" style={{ padding: "14px" }}>
@@ -2200,15 +2505,15 @@ const isBlackWinner = (result) => {
                             );
                           })}
                         </div>
-                      </div>
-                    ))
+                    </div>
                   )}
+                  </div>
                 </>
               ) : (
                 /* KNOCKOUT FORMAT SPECIFIC DISPLAY (Challonge Tree + Table View) */
                 <>
                   {/* Knockout & Double Knockout 2-Game & Armageddon Guide Card */}
-                  <div className={`format-rules-guide-card ${rulesOpen ? "rules-open" : "rules-collapsed"}`}>
+                  <div className="format-rules-guide-card rules-open">
                     <div className="format-rules-header">
                       <div className="format-rules-title-group">
                         <span className="format-rules-icon">{isDoubleElimination ? "⚡" : "⚔️"}</span>
@@ -2250,15 +2555,6 @@ const isBlackWinner = (result) => {
                         <span>▶</span>
                         <span>Watch Armageddon Video Guide</span>
                       </a>
-                      <button
-                        type="button"
-                        className={`rules-toggle-btn ${rulesOpen ? "is-open" : ""}`}
-                        onClick={() => setRulesOpen((open) => !open)}
-                        aria-expanded={rulesOpen}
-                      >
-                        <span>{rulesOpen ? "Hide rules" : "View full rules"}</span>
-                        <span className="rules-toggle-icon" aria-hidden="true">⌄</span>
-                      </button>
                     </div>
 
                     <div className="format-rules-grid">
@@ -2380,7 +2676,12 @@ const isBlackWinner = (result) => {
                       
                       {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
                         <div style={{ marginTop: "40px" }}>
-                          <h2 id="tournament-participants" className="section-title tournament-section-anchor">👥 Registered Participants ({tournament.playersList?.length || 0})</h2>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                            <h2 id="tournament-participants" className="section-title tournament-section-anchor" style={{ margin: 0 }}>👥 Registered Participants ({tournament.playersList?.length || 0})</h2>
+                            {isStaff && tournament.status !== "Completed" && (
+                              <button className="add-btn" onClick={() => setPlayerModalOpen(true)}>+ Add Participant</button>
+                            )}
+                          </div>
                           {(!tournament.playersList || tournament.playersList.length === 0) ? (
                             <p style={{ color: "#888", fontStyle: "italic" }}>No participants registered yet.</p>
                           ) : (
@@ -2925,8 +3226,8 @@ const isBlackWinner = (result) => {
 
       {/* --- ADD PLAYER MODAL --- */}
       {playerModalOpen && (
-        <div className="modal-overlay" onClick={() => setPlayerModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={() => setPlayerModalOpen(false)}>
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="add-participant-title" onClick={(e) => e.stopPropagation()}>
             <button 
               className="modal-close-btn" 
               onClick={() => setPlayerModalOpen(false)}
@@ -2934,7 +3235,7 @@ const isBlackWinner = (result) => {
             >
               <X size={18} />
             </button>
-            <h3 className="modal-title">Add Participant</h3>
+            <h3 id="add-participant-title" className="modal-title">Add Participant</h3>
             <form onSubmit={handleAddPlayerSubmit} className="modal-form">
               <div>
                 <label>Player Name *</label>
@@ -3011,8 +3312,8 @@ const isBlackWinner = (result) => {
 
       {/* --- ADD MATCH MODAL --- */}
       {matchModalOpen && (
-        <div className="modal-overlay" onClick={() => setMatchModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={() => setMatchModalOpen(false)}>
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="record-match-title" onClick={(e) => e.stopPropagation()}>
             <button 
               className="modal-close-btn" 
               onClick={() => setMatchModalOpen(false)}
@@ -3020,7 +3321,7 @@ const isBlackWinner = (result) => {
             >
               <X size={18} />
             </button>
-            <h3 className="modal-title">Record Match Result</h3>
+            <h3 id="record-match-title" className="modal-title">Record Match Result</h3>
             <form onSubmit={handleAddMatchSubmit} className="modal-form">
               <div>
                 <label>Round *</label>
@@ -3097,8 +3398,8 @@ const isBlackWinner = (result) => {
 
       {/* --- EDIT TOURNAMENT DETAILS MODAL --- */}
       {editModalOpen && (
-        <div className="modal-overlay" onClick={() => setEditModalOpen(false)}>
-          <div className="modal-card edit-tournament-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
+        <div className="modal-overlay" role="presentation" onClick={() => setEditModalOpen(false)}>
+          <div className="modal-card edit-tournament-modal" role="dialog" aria-modal="true" aria-labelledby="edit-tournament-title" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
             <button 
               className="modal-close-btn" 
               onClick={() => setEditModalOpen(false)}
@@ -3106,7 +3407,7 @@ const isBlackWinner = (result) => {
             >
               <X size={18} />
             </button>
-            <h3 className="modal-title" style={{ color: "#f3c144" }}>⚙️ Manage Tournament Information</h3>
+            <h3 id="edit-tournament-title" className="modal-title" style={{ color: "#f3c144" }}>⚙️ Manage Tournament Information</h3>
             <p style={{ color: "#b5afa1", fontSize: "0.84rem", marginTop: "-8px", marginBottom: "18px" }}>
               Configure tournament schedule, match timings, format, status, and campus location.
             </p>
@@ -3281,7 +3582,7 @@ const isBlackWinner = (result) => {
                               const compressed = await compressImage(file, 900, 600, 0.8);
                               setEditForm(prev => ({ ...prev, image: compressed }));
                             } catch (err) {
-                              alert("Failed to process image: " + err.message);
+                              notify("Failed to process image: " + err.message, "error");
                             }
                           }
                         }}
@@ -3306,12 +3607,12 @@ const isBlackWinner = (result) => {
 
       {/* --- VISUAL MATCH SCHEDULE MODAL --- */}
       {scheduleModalOpen && (
-        <div className="modal-overlay" onClick={() => setScheduleModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: "520px", maxHeight: "90vh", overflowY: "auto", background: "#1b1710", border: "1px solid rgba(243, 193, 68, 0.35)", borderRadius: "16px", padding: "24px", boxShadow: "0 20px 50px rgba(0,0,0,0.8)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" role="presentation" onClick={() => setScheduleModalOpen(false)}>
+          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="schedule-match-title" style={{ maxWidth: "520px", maxHeight: "90vh", overflowY: "auto", background: "#1b1710", border: "1px solid rgba(243, 193, 68, 0.35)", borderRadius: "16px", padding: "24px", boxShadow: "0 20px 50px rgba(0,0,0,0.8)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #36332b", paddingBottom: "12px" }}>
               <div>
                 <h3 style={{ margin: 0, color: "#f3c144", fontSize: "1.25rem", fontWeight: "800", display: "flex", alignItems: "center", gap: "8px" }}>
-                  🕒 Set Match Schedule
+                  <span id="schedule-match-title">🕒 Set Match Schedule</span>
                 </h3>
                 {schedulingMatchData.white && schedulingMatchData.black && (
                   <span style={{ fontSize: "0.82rem", color: "#bab19c", marginTop: "4px", display: "block" }}>
@@ -3719,7 +4020,7 @@ const isBlackWinner = (result) => {
                   onClick={async () => {
                     const formatted = formatPickerToSchedule(schedulingMatchData.date, schedulingMatchData.time);
                     if (!formatted) {
-                      alert("Please select a date first!");
+                      notify("Please select a date first.", "warning");
                       return;
                     }
                     await handleUpdateMatch(schedulingMatchData.matchId, { matchTime: formatted });
@@ -3751,13 +4052,14 @@ const isBlackWinner = (result) => {
       />
       {/* Interactive Player Profile Modal */}
       {selectedPlayerModal && (
-        <div className="player-modal-overlay" onClick={() => setSelectedPlayerModal(null)}>
-          <div className="player-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="player-modal-overlay" role="presentation" onClick={() => setSelectedPlayerModal(null)}>
+          <div className="player-modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="player-profile-title" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={() => setSelectedPlayerModal(null)} aria-label="Close player profile modal">
               <X size={18} />
             </button>
             
             <div className="player-modal-header">
+              <h2 id="player-profile-title" className="sr-only">Player profile</h2>
               <div className="player-modal-avatar-box">
                 <img 
                   src={selectedPlayerModal.avatar} 

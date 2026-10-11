@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { safeFetchJson } from "../utils/api";
 import "./Tournaments.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
@@ -11,11 +12,15 @@ export default function Tournaments() {
 
   const [tournaments, setTournaments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [notice, setNotice] = useState("");
   const [expandedRow, setExpandedRow] = useState(null);
   const [avatarMap, setAvatarMap] = useState({});
 
-  const userEmail = localStorage.getItem("adminEmail");
-  const isLoggedIn = !!localStorage.getItem("adminToken");
+  const userEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail");
+  const isLoggedIn = !!localStorage.getItem("adminToken") || !!userEmail;
 
   // Fetch player avatars once
   useEffect(() => {
@@ -27,24 +32,14 @@ export default function Tournaments() {
 
   const fetchTournaments = () => {
     setIsLoading(true);
-    fetch(`${API_BASE}/api/tournaments`)
-      .then(res => {
-        const contentType = res.headers.get("content-type");
-        if (res.ok && contentType && contentType.includes("application/json")) {
-          return res.json();
-        }
-        return [];
-      })
+    setLoadError("");
+    safeFetchJson(`${API_BASE}/api/tournaments`, {}, { retries: 2 })
       .then(data => {
-        if (Array.isArray(data)) {
-          setTournaments(data);
-        }
-        setIsLoading(false);
+        if (!Array.isArray(data)) throw new Error("The server returned an invalid tournament list.");
+        setTournaments(data);
       })
-      .catch(err => {
-        console.error("Error fetching tournaments:", err);
-        setIsLoading(false);
-      });
+      .catch(err => setLoadError(err.message))
+      .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
@@ -58,8 +53,11 @@ export default function Tournaments() {
     }
 
     try {
-      const userRes = await fetch(`${API_BASE}/api/profile?email=${encodeURIComponent(userEmail)}`);
-      const userData = await userRes.json();
+      const userData = await safeFetchJson(
+        `${API_BASE}/api/profile?email=${encodeURIComponent(userEmail)}`,
+        {},
+        { retries: 1, retryDelayMs: 350 }
+      );
       const name = userData.name || userEmail.split("@")[0];
 
       // Check if tournament is a Knockout tournament: availability is required!
@@ -101,10 +99,12 @@ export default function Tournaments() {
         throw new Error(data.error || "Failed to register for tournament");
       }
 
-      alert("🎉 Successfully registered for " + (data.data?.title || "the tournament") + "!");
+      setNotice("🎉 Successfully registered for " + (data.data?.title || "the tournament") + "!");
+      setTimeout(() => setNotice(""), 4500);
       fetchTournaments();
     } catch (err) {
-      alert(err.message);
+      setNotice(`⚠️ ${err.message}`);
+      setTimeout(() => setNotice(""), 5000);
     }
   };
 
@@ -156,6 +156,14 @@ export default function Tournaments() {
   const liveCount = tournaments.filter(t => t.status === 'Ongoing').length;
   const upcomingCount = tournaments.filter(t => t.status === 'Upcoming').length;
   const completedCount = tournaments.filter(t => t.status === 'Completed').length;
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredTournaments = tournaments.filter((t) => {
+    const statusMatches = activeFilter === "all" || t.status?.toLowerCase() === activeFilter;
+    const queryMatches = !normalizedQuery || [t.title, t.type, t.location, t.description]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalizedQuery));
+    return statusMatches && queryMatches;
+  });
 
   return (
     <div className="app-container">
@@ -172,6 +180,39 @@ export default function Tournaments() {
                 <p className="page-description">
                   Explore and join exciting chess tournaments happening now or soon.
                 </p>
+              </div>
+
+              {notice && <div className="tournaments-notice" role="status">{notice}</div>}
+
+              <div className="tournaments-controls" aria-label="Tournament filters">
+                <div className="tournament-filter-tabs" role="tablist" aria-label="Tournament status">
+                  {[
+                    ["all", "All"],
+                    ["upcoming", "Open"],
+                    ["ongoing", "Ongoing"],
+                    ["completed", "Completed"]
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeFilter === value}
+                      className={activeFilter === value ? "active" : ""}
+                      onClick={() => setActiveFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <label className="tournament-search">
+                  <span className="sr-only">Search tournaments</span>
+                  <input
+                    type="search"
+                    placeholder="Search tournaments..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
+                </label>
               </div>
               <div className="page-header-stats">
                 {liveCount > 0 && (
@@ -196,14 +237,26 @@ export default function Tournaments() {
                   <div className="loading-spinner site-loading-spinner"></div>
                   <p>Loading tournaments…</p>
                 </div>
+              ) : loadError ? (
+                <div className="tournaments-empty-state" role="alert">
+                  <div className="empty-icon">⚠️</div>
+                  <p>{loadError}</p>
+                  <button type="button" className="tournaments-retry-btn" onClick={fetchTournaments}>Retry</button>
+                </div>
               ) : tournaments.length === 0 ? (
                 <div className="tournaments-empty-state">
                   <div className="empty-icon">♟</div>
                   <p>No tournaments scheduled yet. Check back soon!</p>
                 </div>
+              ) : filteredTournaments.length === 0 ? (
+                <div className="tournaments-empty-state">
+                  <div className="empty-icon">♟</div>
+                  <p>No tournaments match your current filters.</p>
+                  <button type="button" className="tournaments-retry-btn" onClick={() => { setActiveFilter("all"); setSearchQuery(""); }}>Clear filters</button>
+                </div>
               ) : (
                 <div className="tournaments-card-grid">
-                  {tournaments.map((t) => {
+                  {filteredTournaments.map((t) => {
                     const isRegistered = userEmail && t.registrations?.some(r => r.email === userEmail);
                     const isExpanded = expandedRow === t._id;
                     const regCount = t.registrations?.length || 0;
@@ -296,6 +349,8 @@ export default function Tournaments() {
                           {showReg && regCount > 0 && (
                             <>
                               <button
+                                type="button"
+                                aria-expanded={isExpanded}
                                 className="t-registrants-toggle"
                                 onClick={() => toggleExpanded(t._id)}
                               >

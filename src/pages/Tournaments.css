@@ -93,6 +93,77 @@
   width: 100%;
 }
 
+.tournaments-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -8px 0 22px;
+}
+
+.tournament-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tournament-filter-tabs button {
+  border: 1px solid rgba(57, 52, 40, 0.7);
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: rgba(57, 52, 40, 0.35);
+  color: #bab19c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tournament-filter-tabs button:hover,
+.tournament-filter-tabs button.active {
+  border-color: rgba(243, 193, 68, 0.7);
+  background: rgba(243, 193, 68, 0.14);
+  color: #f3c144;
+}
+
+.tournament-search input {
+  width: min(260px, 100%);
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid rgba(57, 52, 40, 0.7);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+
+.tournament-search input:focus,
+.tournament-filter-tabs button:focus-visible,
+.tournaments-retry-btn:focus-visible,
+.t-registrants-toggle:focus-visible,
+.t-btn-details:focus-visible,
+.t-btn-join:focus-visible {
+  outline: 2px solid #f3c144;
+  outline-offset: 2px;
+}
+
+.tournaments-notice {
+  margin: -10px 0 18px;
+  padding: 10px 13px;
+  border: 1px solid rgba(243, 193, 68, 0.35);
+  border-radius: 10px;
+  background: rgba(243, 193, 68, 0.1);
+  color: #f3d477;
+}
+
+.tournaments-retry-btn {
+  border: 1px solid rgba(243, 193, 68, 0.5);
+  border-radius: 8px;
+  padding: 9px 14px;
+  background: rgba(243, 193, 68, 0.12);
+  color: #f3c144;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .table-container {
   overflow-x: auto;
   border-radius: 14px;
@@ -923,6 +994,23 @@ tbody tr:hover {
 }
 
 @media (max-width: 600px) {
+  .tournaments-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tournament-filter-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tournament-filter-tabs button {
+    width: 100%;
+  }
+
+  .tournament-search input {
+    width: 100%;
+  }
   .tournaments-card-grid {
     grid-template-columns: 1fr;
   }

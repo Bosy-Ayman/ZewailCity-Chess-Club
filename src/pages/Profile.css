@@ -1114,6 +1114,87 @@
   animation: profileTabFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.my-chess-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding: 20px 22px;
+  border: 1px solid rgba(243, 193, 68, 0.28);
+  background: linear-gradient(135deg, rgba(243, 193, 68, 0.12), rgba(20, 18, 14, 0.72));
+}
+
+.my-chess-eyebrow {
+  color: #f3c144;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.my-chess-summary-card h2 {
+  margin: 5px 0 4px;
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.my-chess-summary-card p {
+  margin: 0;
+  color: #a89f91;
+  font-size: 0.82rem;
+}
+
+.my-chess-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(70px, 1fr));
+  gap: 10px;
+  min-width: min(100%, 360px);
+}
+
+.my-chess-summary-grid > div {
+  padding: 10px;
+  text-align: center;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.my-chess-summary-grid strong,
+.my-chess-summary-grid span {
+  display: block;
+}
+
+.my-chess-summary-grid strong {
+  color: #f3c144;
+  font-size: 1.15rem;
+}
+
+.my-chess-summary-grid span {
+  margin-top: 3px;
+  color: #a89f91;
+  font-size: 0.68rem;
+}
+
+@media (max-width: 768px) {
+  .my-chess-summary-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 16px;
+  }
+
+  .my-chess-summary-grid {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .my-chess-summary-grid > div {
+    padding: 9px 6px;
+  }
+}
+
 @keyframes profileTabFadeIn {
   from { 
     opacity: 0 !important; 
@@ -4784,6 +4865,25 @@
 
 /* Extra Compact Phones (≤ 380px) */
 @media (max-width: 380px) {
+  .my-chess-summary-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .my-chess-summary-grid {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .my-chess-summary-grid > div {
+    padding: 8px 4px;
+  }
+
+  .my-chess-summary-grid strong {
+    font-size: 1rem;
+  }
   .hero-actions-area {
     grid-template-columns: 1fr;
   }
@@ -4837,7 +4937,4 @@
     font-size: 0.76rem;
   }
 }
-
-
-
 

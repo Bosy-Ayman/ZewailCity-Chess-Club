@@ -176,6 +176,93 @@ const TournamentSchema = new mongoose.Schema({
 
 const Tournament = mongoose.model('Tournament', TournamentSchema, 'tournaments');
 
+// --- In-Memory Mock Tournament Sandbox (Zero MongoDB impact) ---
+// Any tournament created with isMock: true, or with id starting with "mock-",
+// lives 100% in local server memory and NEVER writes to or touches MongoDB.
+const mockTournaments = new Map();
+
+class MockTournamentDoc {
+  constructor(data) {
+    this._id = data._id || `mock-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    this.title = data.title || 'Mock Test Tournament';
+    this.type = data.type || 'Swiss';
+    this.status = data.status || 'Upcoming';
+    this.startDate = data.startDate || new Date().toISOString().split('T')[0];
+    this.endDate = data.endDate || 'Unknown';
+    this.time = data.time || 'TBD';
+    this.location = data.location || 'Local Sandbox';
+    this.description = data.description || '';
+    this.image = data.image || '';
+    this.players = data.players || (data.playersList ? data.playersList.length : 0);
+    this.detailsUrl = data.detailsUrl || '';
+    this.rounds = data.rounds || 0;
+    this.winner = data.winner || '';
+    this.podium = data.podium || [];
+    this.playersList = Array.isArray(data.playersList) ? [...data.playersList] : [];
+    this.registrations = Array.isArray(data.registrations) ? [...data.registrations] : [];
+    this.matches = Array.isArray(data.matches) ? data.matches.map(m => ({
+      _id: m._id || new mongoose.Types.ObjectId().toString(),
+      round: m.round || 1,
+      white: m.white || 'TBD',
+      black: m.black || 'TBD',
+      result: m.result || 'pending',
+      bracket: m.bracket || 'upper',
+      matchTime: m.matchTime || '',
+      location: m.location || '',
+      reminderSent15Min: false
+    })) : [];
+    this.isMock = true;
+    this.createdAt = data.createdAt || new Date();
+
+    // Attach matches.id subdocument lookup
+    this.matches.id = (matchId) => {
+      return this.matches.find(m => String(m._id) === String(matchId));
+    };
+  }
+
+  async save() {
+    mockTournaments.set(String(this._id), this);
+    return this;
+  }
+
+  toObject() {
+    return {
+      _id: this._id,
+      title: this.title,
+      type: this.type,
+      status: this.status,
+      startDate: this.startDate,
+      endDate: this.endDate,
+      time: this.time,
+      location: this.location,
+      description: this.description,
+      image: this.image,
+      players: this.players,
+      detailsUrl: this.detailsUrl,
+      rounds: this.rounds,
+      winner: this.winner,
+      podium: this.podium,
+      playersList: this.playersList,
+      registrations: this.registrations,
+      matches: this.matches,
+      isMock: true,
+      createdAt: this.createdAt
+    };
+  }
+}
+
+const isMockId = (id) => String(id || '').startsWith('mock-');
+const getMockTournament = (id) => mockTournaments.get(String(id));
+
+app.get('/api/health', (req, res) => {
+  const databaseState = mongoose.connection.readyState;
+  res.status(databaseState === 1 ? 200 : 503).json({
+    ok: databaseState === 1,
+    database: databaseState === 1 ? 'connected' : 'unavailable',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // --- User Schema & Model ---
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
@@ -2942,17 +3029,10 @@ app.get('/api/tournaments', async (req, res) => {
     if (cached) return res.json(cached);
 
     const tournaments = await Tournament.find().sort({ startDate: 1 }).lean();
-    // Dynamically compute player count and filter orphan registrations
+    // Dynamically compute player count. Registrations are authoritative; older
+    // player records may not contain the registration email.
     const dynamicTournaments = tournaments.map(t => {
       t.players = t.playersList ? t.playersList.length : 0;
-      if (Array.isArray(t.registrations) && Array.isArray(t.playersList)) {
-        const validNames = new Set(t.playersList.map(p => (p.name || '').trim().toLowerCase()).filter(Boolean));
-        const validEmails = new Set(t.playersList.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean));
-        t.registrations = t.registrations.filter(r => 
-          (r.name && validNames.has(r.name.trim().toLowerCase())) || 
-          (r.email && validEmails.has(r.email.trim().toLowerCase()))
-        );
-      }
       return t;
     });
     setCached('tournaments_all', dynamicTournaments, 5000);
@@ -2965,20 +3045,36 @@ app.get('/api/tournaments', async (req, res) => {
 // GET: fetch a single tournament by ID (with dynamic player avatars and profiles)
 app.get('/api/tournaments/:id', async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id);
+    let tournament;
+    if (isMockId(req.params.id)) {
+      tournament = getMockTournament(req.params.id);
+    } else {
+      tournament = await Tournament.findById(req.params.id);
+    }
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
     const obj = tournament.toObject();
     obj.players = obj.playersList ? obj.playersList.length : 0;
 
+    // Keep the participant list in sync with registrations for older records
+    // that contain a registration but missed the corresponding player row.
     if (Array.isArray(obj.registrations) && Array.isArray(obj.playersList)) {
-      const validNames = new Set(obj.playersList.map(p => (p.name || '').trim().toLowerCase()).filter(Boolean));
-      const validEmails = new Set(obj.playersList.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean));
-      obj.registrations = obj.registrations.filter(r => 
-        (r.name && validNames.has(r.name.trim().toLowerCase())) || 
-        (r.email && validEmails.has(r.email.trim().toLowerCase()))
+      const registeredNames = new Set(
+        obj.playersList.map(player => player.name?.trim().toLowerCase()).filter(Boolean)
       );
+      obj.registrations.forEach(registration => {
+        const name = registration.name?.trim();
+        if (name && !registeredNames.has(name.toLowerCase())) {
+          obj.playersList.push({
+            name,
+            rating: 0,
+            major: 'N/A'
+          });
+          registeredNames.add(name.toLowerCase());
+        }
+      });
+      obj.players = obj.playersList.length;
     }
 
     // Collect all player names in this tournament
@@ -3137,7 +3233,7 @@ app.put('/api/tournaments/:id/players', async (req, res) => {
       return res.status(400).json({ error: "Name, rating, and major are required" });
     }
     
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = isMockId(req.params.id) ? getMockTournament(req.params.id) : await Tournament.findById(req.params.id);
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
@@ -3161,12 +3257,13 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
       return res.status(400).json({ error: "Round, white, black, and result are required" });
     }
     
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = isMockId(req.params.id) ? getMockTournament(req.params.id) : await Tournament.findById(req.params.id);
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
     
     const newMatch = { 
+      _id: isMockId(req.params.id) ? new mongoose.Types.ObjectId().toString() : undefined,
       round: Number(round), 
       white, 
       black, 
@@ -3178,7 +3275,9 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
     await tournament.save();
 
     // 🔔 Automated pairing alert
-    notifyTournamentPairings(tournament, [newMatch]).catch(e => console.warn('Pairing alert error:', e.message));
+    if (!tournament.isMock) {
+      notifyTournamentPairings(tournament, [newMatch]).catch(e => console.warn('Pairing alert error:', e.message));
+    }
 
     res.json({ message: "Match result added successfully!", data: tournament });
   } catch (error) {
@@ -3227,10 +3326,10 @@ app.put('/api/tournaments/:id/matches/:matchId', async (req, res) => {
       return res.status(400).json({ error: "At least one update field (result, white, black, matchTime, or location) is required" });
     }
 
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = isMockId(req.params.id) ? getMockTournament(req.params.id) : await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
-    const match = tournament.matches.id(req.params.matchId);
+    const match = tournament.matches.id ? tournament.matches.id(req.params.matchId) : tournament.matches.find(m => String(m._id) === String(req.params.matchId));
     if (!match) return res.status(404).json({ error: "Match not found" });
 
     if (result !== undefined) match.result = result;
@@ -3468,7 +3567,7 @@ app.delete('/api/tournaments/:id/matches', async (req, res) => {
 // POST: generate next round Swiss pairings automatically (FIDE-compliant)
 app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = isMockId(req.params.id) ? getMockTournament(req.params.id) : await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
     const players = tournament.playersList || [];
@@ -3561,6 +3660,15 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
       return lastColor === 'w' ? 'b' : 'w';
     };
 
+    // ---- Helper: detect if assigning a color would violate three-color-streak rule ----
+    const wouldViolateColorStreak = (player, assignedColor) => {
+      const last2 = player.colorsPlayed.slice(-2);
+      if (last2.length === 2 && last2[0] === last2[1] && last2[0] === assignedColor) {
+        return true; // Would create three in a row
+      }
+      return false;
+    };
+
     // ---- Helper: check if two players can be paired ----
     const canPair = (p1, p2) => {
       if (p1.name === p2.name) return false;
@@ -3620,22 +3728,54 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
         for (let j = i + 1; j < toProcess.length; j++) {
           if (paired.has(toProcess[j].name)) continue;
           if (canPair(toProcess[i], toProcess[j])) {
-            // Determine colors
-            const p1Pref = preferredColor(toProcess[i]);
-            const p2Pref = preferredColor(toProcess[j]);
-            
-            let white, black;
-            if (p1Pref === 'w' && p2Pref !== 'w') {
-              white = toProcess[i].name; black = toProcess[j].name;
-            } else if (p2Pref === 'w' && p1Pref !== 'w') {
-              white = toProcess[j].name; black = toProcess[i].name;
-            } else if (p1Pref === 'w') {
-              // Both want white — higher rated gets white if first round, otherwise try to equalize
-              white = toProcess[i].rating >= toProcess[j].rating ? toProcess[i].name : toProcess[j].name;
-              black = white === toProcess[i].name ? toProcess[j].name : toProcess[i].name;
-            } else {
-              white = toProcess[j].name; black = toProcess[i].name;
-            }
+            // Helper: assign colors with strict FIDE streak constraint enforcement
+            const assignColorsStrict = (playerA, playerB) => {
+              const aCannotWhite = wouldViolateColorStreak(playerA, 'w');
+              const aCannotBlack = wouldViolateColorStreak(playerA, 'b');
+              const bCannotWhite = wouldViolateColorStreak(playerB, 'w');
+              const bCannotBlack = wouldViolateColorStreak(playerB, 'b');
+
+              // Hard constraint checks first:
+              if (aCannotWhite && !bCannotWhite && !aCannotBlack) {
+                return { white: playerB.name, black: playerA.name };
+              }
+              if (bCannotWhite && !aCannotWhite && !bCannotBlack) {
+                return { white: playerA.name, black: playerB.name };
+              }
+              if (aCannotBlack && !bCannotBlack && !aCannotWhite) {
+                return { white: playerA.name, black: playerB.name };
+              }
+              if (bCannotBlack && !aCannotBlack && !bCannotWhite) {
+                return { white: playerB.name, black: playerA.name };
+              }
+
+              // Standard preference logic
+              const prefA = preferredColor(playerA);
+              const prefB = preferredColor(playerB);
+
+              if (prefA === 'w' && prefB !== 'w') {
+                return { white: playerA.name, black: playerB.name };
+              }
+              if (prefB === 'w' && prefA !== 'w') {
+                return { white: playerB.name, black: playerA.name };
+              }
+              if (prefA === 'w' && prefB === 'w') {
+                // Both want white: higher rated gets white if no violation
+                const aHigher = playerA.rating >= playerB.rating;
+                return aHigher
+                  ? { white: playerA.name, black: playerB.name }
+                  : { white: playerB.name, black: playerA.name };
+              }
+              // Both want black: lower rated gets black; higher rated gets white
+              const aHigher = playerA.rating >= playerB.rating;
+              return aHigher
+                ? { white: playerA.name, black: playerB.name }
+                : { white: playerB.name, black: playerA.name };
+            };
+
+            const assigned = assignColorsStrict(toProcess[i], toProcess[j]);
+            let white = assigned.white;
+            let black = assigned.black;
 
             newMatches.push({ round: nextRound, white, black, result: "Pending" });
             paired.add(toProcess[i].name);
@@ -3652,13 +3792,32 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
     }
 
     // Handle any remaining unpaired players (last resort: ignore rematch restriction)
+    // FIDE: color streak constraint is still a hard rule even in last-resort pairings
     const remainingPlayers = unpaired.filter(p => !paired.has(p.name));
     for (let i = 0; i + 1 < remainingPlayers.length; i += 2) {
       const p1 = remainingPlayers[i];
       const p2 = remainingPlayers[i + 1];
       const p1Pref = preferredColor(p1);
-      let white = p1Pref === 'w' ? p1.name : p2.name;
-      let black = white === p1.name ? p2.name : p1.name;
+      const p2Pref = preferredColor(p2);
+
+      let white, black;
+      // Initial assignment based on color preference
+      if (p1Pref === 'w') {
+        white = p1.name; black = p2.name;
+      } else {
+        white = p2.name; black = p1.name;
+      }
+
+      // Override if hard FIDE streak constraint is violated
+      const whitePlayer = white === p1.name ? p1 : p2;
+      const blackPlayer = black === p1.name ? p1 : p2;
+      if (wouldViolateColorStreak(whitePlayer, 'w') || wouldViolateColorStreak(blackPlayer, 'b')) {
+        // Reverse colors to fix the violation
+        const temp = white;
+        white = black;
+        black = temp;
+      }
+
       newMatches.push({ round: nextRound, white, black, result: "Pending" });
     }
 
@@ -3676,7 +3835,9 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
     await tournament.save();
 
     // 🔔 Automated tournament match pairing alert dispatch
-    notifyTournamentPairings(tournament, newMatches).catch(e => console.warn('Pairing alert error:', e.message));
+    if (!tournament.isMock) {
+      notifyTournamentPairings(tournament, newMatches).catch(e => console.warn('Pairing alert error:', e.message));
+    }
 
     const byeMsg = byePlayer ? ` Player "${byePlayer.name}" receives a BYE (+1 pt).` : '';
     res.json({ message: `Round ${nextRound} FIDE Swiss pairings generated successfully!${byeMsg}`, data: tournament });
@@ -4203,8 +4364,28 @@ app.put('/api/applications/:id/status', async (req, res) => {
 // POST: create a new tournament
 app.post('/api/tournaments', async (req, res) => {
   try {
-    const { title, type, status, startDate, endDate, time, location, description, image, players, detailsUrl, rounds } = req.body;
+    const { title, type, status, startDate, endDate, time, location, description, image, players, detailsUrl, rounds, isMock, _id } = req.body;
     
+    if (isMock || isMockId(_id)) {
+      const mockDoc = new MockTournamentDoc({
+        _id: _id || `mock-${Date.now()}`,
+        title: title || 'Mock Test Tournament',
+        type: type || 'Swiss',
+        status: status || 'Upcoming',
+        startDate: startDate || new Date().toISOString().split('T')[0],
+        endDate: endDate || 'Unknown',
+        time: time || 'TBD',
+        location: location || 'Local Sandbox (Memory Only)',
+        description: description || '',
+        image: image || '',
+        players: players || 0,
+        detailsUrl: detailsUrl || '',
+        rounds: rounds ? Number(rounds) : 0
+      });
+      await mockDoc.save();
+      return res.status(201).json({ message: 'In-Memory Mock Tournament created successfully! (Zero MongoDB touch)', data: mockDoc });
+    }
+
     const newTournament = new Tournament({
       title: title || 'Untitled Tournament',
       type: type || 'Swiss',
@@ -4233,6 +4414,11 @@ app.post('/api/tournaments', async (req, res) => {
 // DELETE: delete a tournament by ID
 app.delete('/api/tournaments/:id', async (req, res) => {
   try {
+    if (isMockId(req.params.id)) {
+      const existed = mockTournaments.delete(String(req.params.id));
+      if (!existed) return res.status(404).json({ error: 'Mock Tournament not found' });
+      return res.json({ message: 'Mock Tournament removed from memory!', data: { _id: req.params.id } });
+    }
     const deletedTournament = await Tournament.findByIdAndDelete(req.params.id);
     if (!deletedTournament) {
       return res.status(404).json({ error: 'Tournament not found' });
@@ -4246,6 +4432,18 @@ app.delete('/api/tournaments/:id', async (req, res) => {
 // PUT: update tournament status or details by ID
 app.put('/api/tournaments/:id', async (req, res) => {
   try {
+    if (isMockId(req.params.id)) {
+      const mockDoc = getMockTournament(req.params.id);
+      if (!mockDoc) return res.status(404).json({ error: 'Mock Tournament not found' });
+      Object.assign(mockDoc, req.body);
+      if (req.body.playersList && Array.isArray(req.body.playersList)) {
+        mockDoc.playersList = req.body.playersList;
+        mockDoc.players = req.body.playersList.length;
+      }
+      await mockDoc.save();
+      return res.json({ message: 'Mock Tournament updated in memory!', data: mockDoc });
+    }
+
     const updatedTournament = await Tournament.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
@@ -5034,13 +5232,44 @@ app.post('/api/tournaments/:id/register', async (req, res) => {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
-    // Check if already registered
-    if (tournament.registrations.some(reg => reg.email.toLowerCase() === email.toLowerCase())) {
-      return res.status(400).json({ error: 'Already registered for this tournament' });
+    if (tournament.status !== 'Upcoming') {
+      return res.status(400).json({ error: 'Registration is closed for this tournament.' });
     }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingRegistration = (tournament.registrations || []).find(
+      reg => reg.email?.trim().toLowerCase() === normalizedEmail
+    );
 
     const emailRegex = new RegExp(`^${email.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
     const joiningUser = await User.findOne({ email: emailRegex });
+
+    // Repair older records where registration succeeded but the player row
+    // was not persisted, so standings and participant tables stay in sync.
+    if (existingRegistration) {
+      const registeredName = existingRegistration.name || name.trim();
+      const hasPlayerRow = (tournament.playersList || []).some(
+        player => player.name?.trim().toLowerCase() === registeredName.trim().toLowerCase()
+      );
+
+      if (!hasPlayerRow) {
+        const userRating = (joiningUser?.chessComRating > 0 && joiningUser.chessComRating) ||
+                           (joiningUser?.fideRating > 0 && joiningUser.fideRating) ||
+                           (joiningUser?.lichessRating > 0 && joiningUser.lichessRating) ||
+                           (joiningUser?.rating > 0 && joiningUser.rating) ||
+                           0;
+        tournament.playersList.push({
+          name: registeredName,
+          rating: userRating,
+          major: joiningUser?.major || 'N/A'
+        });
+        tournament.players = tournament.playersList.length;
+        const repaired = await tournament.save();
+        return res.json({ message: 'Tournament registration restored!', data: repaired });
+      }
+
+      return res.status(400).json({ error: 'Already registered for this tournament' });
+    }
 
     // Enforce weekly free time / availability for Knockout tournaments
     const isKnockout = tournament.type && (
@@ -5118,11 +5347,16 @@ app.post('/api/tournaments/:id/leave', async (req, res) => {
     }
 
     // Remove from registrations
-    tournament.registrations = tournament.registrations.filter(reg => reg.email !== email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim().toLowerCase();
+    tournament.registrations = tournament.registrations.filter(
+      reg => reg.email?.trim().toLowerCase() !== normalizedEmail
+    );
     
     // Remove from players list
-    const initialCount = tournament.playersList.length;
-    tournament.playersList = tournament.playersList.filter(p => p.name !== name);
+    tournament.playersList = tournament.playersList.filter(
+      p => p.name?.trim().toLowerCase() !== normalizedName
+    );
     tournament.players = tournament.playersList.length;
 
     const saved = await tournament.save();
@@ -5775,4 +6009,3 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = app;
-
