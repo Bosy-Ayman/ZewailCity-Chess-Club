@@ -221,6 +221,15 @@ class MockTournamentDoc {
   }
 
   async save() {
+    // Ensure all matches have an _id
+    if (Array.isArray(this.matches)) {
+      this.matches.forEach(m => {
+        if (!m._id) m._id = new mongoose.Types.ObjectId().toString();
+      });
+      this.matches.id = (matchId) => {
+        return this.matches.find(m => String(m._id) === String(matchId));
+      };
+    }
     mockTournaments.set(String(this._id), this);
     return this;
   }
