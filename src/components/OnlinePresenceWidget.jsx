@@ -41,6 +41,9 @@ export default function OnlinePresenceWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [onlineData, setOnlineData] = useState({ count: 0, users: [] });
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all"); // "all", "tactics", "tournaments", "lounge"
+  const [isCompactOnScroll, setIsCompactOnScroll] = useState(false);
+
   const location = useLocation();
   const heartbeatTimerRef = useRef(null);
   const fetchTimerRef = useRef(null);
@@ -50,6 +53,23 @@ export default function OnlinePresenceWidget() {
   const userName = localStorage.getItem("userName") || (userEmail ? userEmail.split("@")[0] : "");
   const userRole = localStorage.getItem("userRole") || (userEmail ? "member" : "guest");
   const userAvatar = localStorage.getItem("userAvatar") || "";
+
+  // Smart Auto-Collapse on Mobile Scroll Down
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > 140 && currentScrollY > lastScrollY + 10) {
+        setIsCompactOnScroll(true);
+      } else if (currentScrollY < lastScrollY - 15 || currentScrollY <= 80) {
+        setIsCompactOnScroll(false);
+      }
+      lastScrollY = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Send Heartbeat ping to server
   const sendHeartbeat = async () => {
@@ -71,7 +91,7 @@ export default function OnlinePresenceWidget() {
         })
       });
     } catch (err) {
-      // Fire-and-forget, silent fail for heartbeat
+      // Fire-and-forget
     }
   };
 
@@ -90,27 +110,19 @@ export default function OnlinePresenceWidget() {
     }
   };
 
-  // Heartbeat and polling lifecycle
+  // Heartbeat & polling lifecycle
   useEffect(() => {
-    // 1. Initial heartbeat and fetch
     sendHeartbeat();
     fetchOnlineUsers();
 
-    // 2. Periodic heartbeat every 25 seconds
     heartbeatTimerRef.current = setInterval(() => {
-      if (!document.hidden) {
-        sendHeartbeat();
-      }
+      if (!document.hidden) sendHeartbeat();
     }, 25000);
 
-    // 3. Periodic fetch of online list every 15 seconds
     fetchTimerRef.current = setInterval(() => {
-      if (!document.hidden) {
-        fetchOnlineUsers();
-      }
+      if (!document.hidden) fetchOnlineUsers();
     }, 15000);
 
-    // 4. On tab visibility change, send immediate heartbeat
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         sendHeartbeat();
@@ -127,18 +139,39 @@ export default function OnlinePresenceWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, userEmail, userName, userAvatar, userRole]);
 
-  // Filtered list based on search
+  // Category counts for quick filter chips
+  const categoryCounts = useMemo(() => {
+    const list = onlineData.users || [];
+    return {
+      all: list.length,
+      tactics: list.filter((u) => u.currentPage && u.currentPage.toLowerCase().includes("tactics")).length,
+      tournaments: list.filter((u) => u.currentPage && (u.currentPage.toLowerCase().includes("tournament") || u.currentPage.toLowerCase().includes("knockout"))).length,
+      lounge: list.filter((u) => u.currentPage && (u.currentPage.toLowerCase().includes("lounge") || u.currentPage.toLowerCase().includes("browsing") || u.currentPage.toLowerCase().includes("community"))).length
+    };
+  }, [onlineData.users]);
+
+  // Filtered users by category + search query
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return onlineData.users;
+    let list = onlineData.users || [];
+
+    if (activeCategory === "tactics") {
+      list = list.filter((u) => u.currentPage && u.currentPage.toLowerCase().includes("tactics"));
+    } else if (activeCategory === "tournaments") {
+      list = list.filter((u) => u.currentPage && (u.currentPage.toLowerCase().includes("tournament") || u.currentPage.toLowerCase().includes("knockout")));
+    } else if (activeCategory === "lounge") {
+      list = list.filter((u) => u.currentPage && (u.currentPage.toLowerCase().includes("lounge") || u.currentPage.toLowerCase().includes("browsing") || u.currentPage.toLowerCase().includes("community")));
+    }
+
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return onlineData.users.filter(
+    return list.filter(
       (u) =>
         (u.name && u.name.toLowerCase().includes(q)) ||
         (u.email && u.email.toLowerCase().includes(q)) ||
         (u.role && u.role.toLowerCase().includes(q)) ||
         (u.currentPage && u.currentPage.toLowerCase().includes(q))
     );
-  }, [onlineData.users, searchQuery]);
+  }, [onlineData.users, activeCategory, searchQuery]);
 
   // Format display role
   const getRoleBadge = (role, email) => {
@@ -148,7 +181,7 @@ export default function OnlinePresenceWidget() {
       return { label: "👑 Admin", className: "role-admin" };
     }
     if (r.includes("vice") || r.includes("vp")) {
-      return { label: "🎖️ Vice President", className: "role-vp" };
+      return { label: "🎖️ VP", className: "role-vp" };
     }
     if (r.includes("trainer") || r.includes("coach")) {
       return { label: "♟️ Trainer", className: "role-trainer" };
@@ -157,7 +190,7 @@ export default function OnlinePresenceWidget() {
       return { label: `✨ ${role.toUpperCase()}`, className: "role-committee" };
     }
     if (r === "guest") {
-      return { label: "♟️ Guest Tactician", className: "role-guest" };
+      return { label: "♟️ Guest", className: "role-guest" };
     }
     return { label: "♟️ Tactician", className: "role-member" };
   };
@@ -166,46 +199,60 @@ export default function OnlinePresenceWidget() {
 
   return (
     <>
-      {/* Floating Bottom-Right Presence Dock (Social Media Style) */}
+      {/* Backdrop for mobile drawer dismissal */}
+      {isOpen && (
+        <div
+          className="online-presence-backdrop"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Floating Presence Dock */}
       <div
-        className={`online-presence-dock ${isOpen ? "active-dock" : ""}`}
+        className={`online-presence-dock ${isOpen ? "active-dock" : ""} ${isCompactOnScroll ? "compact-scrolled" : ""}`}
         onClick={() => setIsOpen((prev) => !prev)}
-        title="View Tacticians Online"
+        title="Tacticians Online (Click to expand)"
       >
         <div className="dock-pulse-indicator">
           <span className="pulse-dot"></span>
           <span className="pulse-ring"></span>
         </div>
 
-        {/* Overlapping mini avatars */}
-        <div className="dock-avatar-stack">
-          {onlineData.users.slice(0, 3).map((u, i) => (
-            <img
-              key={u.id || i}
-              src={u.avatar || "/Icons/unknown.png"}
-              alt={u.name}
-              className="dock-avatar"
-              style={{ zIndex: 4 - i }}
-              onError={(e) => {
-                e.currentTarget.src = "/Icons/unknown.png";
-              }}
-            />
-          ))}
-        </div>
+        {/* Stacked Avatars (hidden when scrolled compact on mobile) */}
+        {!isCompactOnScroll && (
+          <div className="dock-avatar-stack">
+            {onlineData.users.slice(0, 3).map((u, i) => (
+              <img
+                key={u.id || i}
+                src={u.avatar || "/Icons/unknown.png"}
+                alt={u.name}
+                className="dock-avatar"
+                style={{ zIndex: 4 - i }}
+                onError={(e) => {
+                  e.currentTarget.src = "/Icons/unknown.png";
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="dock-text-group">
           <span className="dock-count">
-            {totalCount} {totalCount === 1 ? "Online" : "Online"}
+            {totalCount} <span className="dock-count-label">{totalCount === 1 ? "Online" : "Online"}</span>
           </span>
         </div>
 
         <span className="dock-expand-arrow">{isOpen ? "▾" : "▴"}</span>
       </div>
 
-      {/* Expanded Social Online Drawer Modal */}
+      {/* Expanded Social Drawer / Mobile Bottom Sheet */}
       {isOpen && (
         <div className="online-presence-drawer" onClick={(e) => e.stopPropagation()}>
-          <div className="drawer-header">
+          {/* Mobile Drag Indicator Handle */}
+          <div className="drawer-drag-handle" />
+
+          <div className="presence-drawer-header">
             <div className="drawer-title-row">
               <div className="drawer-title-group">
                 <span className="drawer-live-badge">
@@ -227,6 +274,38 @@ export default function OnlinePresenceWidget() {
               {totalCount} active {totalCount === 1 ? "member" : "members"} on ZC Chess Club right now
             </p>
 
+            {/* Activity Category Filter Chips */}
+            <div className="drawer-filter-chips">
+              <button
+                type="button"
+                className={`chip-btn ${activeCategory === "all" ? "active" : ""}`}
+                onClick={() => setActiveCategory("all")}
+              >
+                All ({categoryCounts.all})
+              </button>
+              <button
+                type="button"
+                className={`chip-btn ${activeCategory === "tactics" ? "active" : ""}`}
+                onClick={() => setActiveCategory("tactics")}
+              >
+                🧩 Tactics ({categoryCounts.tactics})
+              </button>
+              <button
+                type="button"
+                className={`chip-btn ${activeCategory === "tournaments" ? "active" : ""}`}
+                onClick={() => setActiveCategory("tournaments")}
+              >
+                🏆 Events ({categoryCounts.tournaments})
+              </button>
+              <button
+                type="button"
+                className={`chip-btn ${activeCategory === "lounge" ? "active" : ""}`}
+                onClick={() => setActiveCategory("lounge")}
+              >
+                🏠 Lounge ({categoryCounts.lounge})
+              </button>
+            </div>
+
             {/* Quick Search */}
             {totalCount > 3 && (
               <div className="drawer-search-wrap">
@@ -244,51 +323,97 @@ export default function OnlinePresenceWidget() {
           <div className="drawer-body">
             {filteredUsers.length === 0 ? (
               <div className="drawer-empty-state">
-                <span style={{ fontSize: "2rem" }}>♟️</span>
-                <p>No tacticians match your search.</p>
+                <span className="empty-icon">♟️</span>
+                <p>No tacticians match your current filter.</p>
               </div>
             ) : (
               <div className="online-users-list">
                 {filteredUsers.map((u, idx) => {
                   const isSelf = userEmail && u.email && u.email.toLowerCase() === userEmail;
                   const roleObj = getRoleBadge(u.role, u.email);
+                  const profileHref = u.email
+                    ? `/profile?email=${encodeURIComponent(u.email)}`
+                    : null;
 
                   return (
                     <div
                       key={u.id || idx}
                       className={`online-user-card ${isSelf ? "is-self" : ""}`}
                     >
-                      <div className="user-avatar-wrap">
-                        <img
-                          src={u.avatar || "/Icons/unknown.png"}
-                          alt={u.name}
-                          className="online-user-avatar"
-                          onError={(e) => {
-                            e.currentTarget.src = "/Icons/unknown.png";
-                          }}
-                        />
-                        <span className="avatar-online-dot"></span>
-                      </div>
+                      {profileHref ? (
+                        <Link
+                          to={profileHref}
+                          className="online-user-profile-link"
+                          onClick={() => setIsOpen(false)}
+                        >
+                          <div className="user-avatar-wrap">
+                            <img
+                              src={u.avatar || "/Icons/unknown.png"}
+                              alt={u.name}
+                              className="online-user-avatar"
+                              onError={(e) => {
+                                e.currentTarget.src = "/Icons/unknown.png";
+                              }}
+                            />
+                            <span className="avatar-online-dot"></span>
+                          </div>
 
-                      <div className="online-user-details">
-                        <div className="user-name-row">
-                          <strong className="online-user-name">
-                            {u.name || "Tactician"}
-                          </strong>
-                          {isSelf && <span className="you-pill-tag">YOU</span>}
-                        </div>
+                          <div className="online-user-details">
+                            <div className="user-name-row">
+                              <strong className="online-user-name">
+                                {u.name || "Tactician"}
+                              </strong>
+                              {isSelf && <span className="you-pill-tag">YOU</span>}
+                            </div>
 
-                        <div className="user-badges-row">
-                          <span className={`user-role-pill ${roleObj.className}`}>
-                            {roleObj.label}
-                          </span>
-                        </div>
+                            <div className="user-badges-row">
+                              <span className={`user-role-pill ${roleObj.className}`}>
+                                {roleObj.label}
+                              </span>
+                            </div>
 
-                        <div className="user-activity-status">
-                          <span className="activity-icon">📍</span>
-                          <span className="activity-text">{u.currentPage || "Online"}</span>
-                        </div>
-                      </div>
+                            <div className="user-activity-status">
+                              <span className="activity-icon">📍</span>
+                              <span className="activity-text">{u.currentPage || "Online"}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      ) : (
+                        <>
+                          <div className="user-avatar-wrap">
+                            <img
+                              src={u.avatar || "/Icons/unknown.png"}
+                              alt={u.name}
+                              className="online-user-avatar"
+                              onError={(e) => {
+                                e.currentTarget.src = "/Icons/unknown.png";
+                              }}
+                            />
+                            <span className="avatar-online-dot"></span>
+                          </div>
+
+                          <div className="online-user-details">
+                            <div className="user-name-row">
+                              <strong className="online-user-name">
+                                {u.name || "Tactician"}
+                              </strong>
+                              {isSelf && <span className="you-pill-tag">YOU</span>}
+                            </div>
+
+                            <div className="user-badges-row">
+                              <span className={`user-role-pill ${roleObj.className}`}>
+                                {roleObj.label}
+                              </span>
+                            </div>
+
+                            <div className="user-activity-status">
+                              <span className="activity-icon">📍</span>
+                              <span className="activity-text">{u.currentPage || "Online"}</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
                     </div>
                   );
                 })}
@@ -298,7 +423,7 @@ export default function OnlinePresenceWidget() {
 
           <div className="drawer-footer">
             <div className="drawer-footer-note">
-              <span>🟢 Auto-refreshes every 15s</span>
+              <span>🟢 Live Sync (15s)</span>
             </div>
             <Link
               to="/community"
