@@ -19,6 +19,9 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
+  const [activeSection, setActiveSectionState] = useState("");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const updateActiveSection = (sectionId) => setActiveSectionState(sectionId);
   const [certActionLoading, setCertActionLoading] = useState(false);
   const [certStatusMsg, setCertStatusMsg] = useState("");
   const [celebrationModalOpen, setCelebrationModalOpen] = useState(false);
@@ -298,6 +301,37 @@ const isBlackWinner = (result) => {
       }
 
       alert("🎉 Successfully registered for " + (tournament.title || "the tournament") + "!");
+      fetchTournamentDetails();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleLeaveTournament = async () => {
+    if (!isLoggedIn || !loggedInUserEmail) {
+      window.location.href = "/?login=true";
+      return;
+    }
+
+    const registration = (tournament?.registrations || []).find(
+      (entry) => entry.email?.trim().toLowerCase() === loggedInUserEmail
+    );
+    const playerName = registration?.name || loggedInUserName || loggedInUserEmail.split("@")[0];
+
+    if (!window.confirm(`Leave ${tournament?.title || "this tournament"}? You can join again while registration is open.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/leave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loggedInUserEmail, name: playerName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to leave tournament");
+
+      alert("You have left the tournament.");
       fetchTournamentDetails();
     } catch (err) {
       alert(err.message);
@@ -1014,7 +1048,42 @@ const isBlackWinner = (result) => {
     (tournament?.type && tournament.type.toLowerCase().includes("double")) ||
     (tournament?.matches && tournament.matches.some(m => m.bracket === "lower" || m.bracket === "grand_finals"))
   );
+  const isTournamentUpcoming = tournament?.status?.toLowerCase() === "upcoming";
+  const isTournamentOngoing = tournament?.status?.toLowerCase() === "ongoing";
+  const certificatesAvailable = tournament?.status?.toLowerCase() === "completed";
+  const currentUserIsRegistered = Boolean(
+    (loggedInUserEmail && tournament?.registrations?.some(
+      (registration) => registration.email?.trim().toLowerCase() === loggedInUserEmail
+    )) ||
+    (loggedInUserName && tournament?.playersList?.some(
+      (player) => player.name?.trim().toLowerCase() === loggedInUserName.toLowerCase()
+    ))
+  );
   const swissStandings = isSwissFormat ? calculateSwissStandings(tournament?.playersList, tournament?.matches) : [];
+
+  useEffect(() => {
+    const sectionIds = isSwissFormat
+      ? ["tournament-standings", "tournament-pairings"]
+      : ["tournament-bracket", "tournament-participants"];
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+
+    if (!sections.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) updateActiveSection(visible[0].target.id);
+      },
+      { rootMargin: "-96px 0px -55% 0px", threshold: 0 }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [isSwissFormat, tournament]);
 
   // Group matches by Round for Swiss Round-by-Round display
   const matchesByRound = {};
@@ -1200,16 +1269,16 @@ const isBlackWinner = (result) => {
           ) : (
             <>
               {/* Premium Hero Banner */}
-              <div className="tournament-hero-card">
+              <div id="tournament-overview" className="tournament-hero-card tournament-section-anchor">
                 <div className="tournament-hero-top">
                   <div className="tournament-breadcrumb">
                     <a href="/tournaments" className="back-link">← All Tournaments</a>
                     <span className="breadcrumb-sep">/</span>
                     <span className="breadcrumb-curr">{tournament.type || "Tournament"}</span>
                   </div>
-                  <div className="tournament-type-pill">
+                  <div className={`tournament-type-pill status-${(tournament.status || "upcoming").toLowerCase()}`}>
                     <span className="pill-dot"></span>
-                    <span>{tournament.type || "Swiss Format"}</span>
+                    <span>{tournament.status || "Upcoming"} · {tournament.type || "Swiss Format"}</span>
                   </div>
                 </div>
 
@@ -1325,22 +1394,34 @@ const isBlackWinner = (result) => {
                     </button>
                   )}
                   {/* Certificate download is available in the player standings table below */}
-                  {!isStaff && tournament.status === "Upcoming" && !tournament?.registrations?.some(r => r.email?.toLowerCase() === loggedInUserEmail?.toLowerCase()) && !tournament?.playersList?.some(p => p.name?.toLowerCase() === loggedInUserName?.toLowerCase()) && (
-                    <button 
-                      type="button"
-                      onClick={handleJoinTournament}
-                      className="export-tournament-btn"
-                      style={{
-                        background: "linear-gradient(135deg, #2ecc71, #27ae60)",
-                        color: "#fff",
-                        fontWeight: "800",
-                        boxShadow: "0 4px 15px rgba(46, 204, 113, 0.4)"
-                      }}
-                      title="Register for this tournament"
-                    >
-                      <span>♟️</span>
-                      <span>Join Tournament</span>
-                    </button>
+                  {!isStaff && isTournamentUpcoming && (
+                    currentUserIsRegistered ? (
+                      <button
+                        type="button"
+                        onClick={handleLeaveTournament}
+                        className="export-tournament-btn tournament-action-btn leave-tournament-btn"
+                        title="Leave this tournament"
+                      >
+                        <span>↩</span>
+                        <span>Exit Tournament</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleJoinTournament}
+                        className="export-tournament-btn tournament-action-btn join-tournament-btn"
+                        style={{
+                          background: "linear-gradient(135deg, #2ecc71, #27ae60)",
+                          color: "#fff",
+                          fontWeight: "800",
+                          boxShadow: "0 4px 15px rgba(46, 204, 113, 0.4)"
+                        }}
+                        title="Register for this tournament"
+                      >
+                        <span>♟️</span>
+                        <span>Join Tournament</span>
+                      </button>
+                    )
                   )}
                   {isStaff && (
                     <button 
@@ -1375,6 +1456,29 @@ const isBlackWinner = (result) => {
                   </button>
                 </div>
               </div>
+
+              <nav className="tournament-quick-nav" aria-label="Tournament sections">
+                <span className="quick-nav-label">Tournament sections</span>
+                <div className="quick-nav-links">
+                  <a
+                    className={activeSection === (isSwissFormat ? "tournament-standings" : "tournament-bracket") ? "active" : ""}
+                    href={isSwissFormat ? "#tournament-standings" : "#tournament-bracket"}
+                  >
+                    {isSwissFormat ? "Standings" : "Bracket"}
+                  </a>
+                  <a
+                    className={activeSection === (isSwissFormat ? "tournament-pairings" : "tournament-participants") ? "active" : ""}
+                    href={isSwissFormat ? "#tournament-pairings" : "#tournament-participants"}
+                  >
+                    {isSwissFormat ? "Pairings" : "Players"}
+                  </a>
+                  {!isSwissFormat && (
+                    <a className={activeSection === "tournament-bracket" ? "active" : ""} href="#tournament-bracket">
+                      Matches
+                    </a>
+                  )}
+                </div>
+              </nav>
 
               {/* Staff controls for OC and Admins */}
               {isStaff && (
@@ -1412,14 +1516,14 @@ const isBlackWinner = (result) => {
                     {/* Email Certificates removed as requested */}
 
                     {/* Add Match Pairing only makes sense for Knockout if no bracket is generated yet */}
-                    {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
+                    {!isSwissFormat && isTournamentOngoing && (!tournament.matches || tournament.matches.length === 0) && (
                       <button className="add-btn" onClick={() => setMatchModalOpen(true)}>
                         + Add Manual Matchup
                       </button>
                     )}
 
                     {/* Bracket Generation buttons for Knockout */}
-                    {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
+                    {!isSwissFormat && isTournamentOngoing && (!tournament.matches || tournament.matches.length === 0) && (
                       <button 
                         className="add-btn" 
                         onClick={() => handleGenerateKnockoutBracket(false)}
@@ -1439,7 +1543,7 @@ const isBlackWinner = (result) => {
                     )}
 
                     {/* Advance to next round for Knockout */}
-                    {!isSwissFormat && tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
+                    {!isSwissFormat && isTournamentOngoing && tournament.matches && tournament.matches.length > 0 && (
                       <button 
                         className="add-btn" 
                         onClick={handleGenerateNextKnockoutRound}
@@ -1450,7 +1554,7 @@ const isBlackWinner = (result) => {
                     )}
 
                     {/* Swiss pairings generation */}
-                    {isSwissFormat && tournament.status !== "Completed" && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
+                    {isSwissFormat && isTournamentOngoing && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
                       <button 
                         className="add-btn" 
                         onClick={handleGenerateNextRound}
@@ -1490,7 +1594,7 @@ const isBlackWinner = (result) => {
               {isSwissFormat ? (
                 <>
                   {/* Official FIDE Swiss System Match Format & Rules Card */}
-                  <div className="format-rules-guide-card">
+                  <div className={`format-rules-guide-card ${rulesOpen ? "rules-open" : "rules-collapsed"}`}>
                     <div className="format-rules-header">
                       <div className="format-rules-title-group">
                         <span className="format-rules-icon">🏛️</span>
@@ -1508,6 +1612,15 @@ const isBlackWinner = (result) => {
                         <span>♟️</span>
                         <span>{tournament.rounds || 5} Scheduled Rounds</span>
                       </div>
+                      <button
+                        type="button"
+                        className={`rules-toggle-btn ${rulesOpen ? "is-open" : ""}`}
+                        onClick={() => setRulesOpen((open) => !open)}
+                        aria-expanded={rulesOpen}
+                      >
+                        <span>{rulesOpen ? "Hide rules" : "View full rules"}</span>
+                        <span className="rules-toggle-icon" aria-hidden="true">⌄</span>
+                      </button>
                     </div>
 
                     <div className="format-rules-grid">
@@ -1561,17 +1674,21 @@ const isBlackWinner = (result) => {
                     </div>
                   </div>
 
-                  {/* Swiss Standings & Honors Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  {/* Swiss standings or pre-tournament participant roster */}
+                  <div id="tournament-standings" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
                     <div>
-                      <h2 className="section-title" style={{ margin: 0 }}>🏆 Swiss System Standings & Honors</h2>
+                      <h2 className="section-title" style={{ margin: 0 }}>
+                        {isTournamentUpcoming ? "👥 Registered Players" : "🏆 Swiss System Standings & Honors"}
+                      </h2>
                       <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.8rem" }}>
-                        {isStaff
+                        {isTournamentUpcoming
+                          ? "Rankings and results will appear when the tournament starts."
+                          : isStaff
                           ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
                           : "Players can view and download their personalized certificate."}
                       </p>
                     </div>
-                    {isStaff && (
+                    {isStaff && certificatesAvailable && (
                       <button
                         type="button"
                         disabled={certActionLoading}
@@ -1619,19 +1736,19 @@ const isBlackWinner = (result) => {
                   
                   {/* Desktop Table View */}
                   <div className="application-table-wrapper tournaments-desktop-table" style={{ marginBottom: "40px" }}>
-                    <table className="application-table">
+                    <table className={`application-table${isTournamentUpcoming ? " registered-players-table" : ""}`}>
                       <thead>
                         <tr>
-                          <th>Rank</th>
+                          {!isTournamentUpcoming && <th>Rank</th>}
                           <th>Player Name</th>
-                          <th>Points</th>
-                          <th>Record (W-D-L)</th>
-                          <th>Played</th>
-                          <th>Byes</th>
+                          {!isTournamentUpcoming && <th>Points</th>}
+                          {!isTournamentUpcoming && <th>Record (W-D-L)</th>}
+                          {!isTournamentUpcoming && <th>Played</th>}
+                          {!isTournamentUpcoming && <th>Byes</th>}
                           <th>Rating</th>
                           <th>Major</th>
-                          <th style={{ textAlign: "center" }}>Honors Certificate</th>
-                          {isStaff && <th style={{ textAlign: "center" }}>Email PDF</th>}
+                          {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
+                          {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
                           {isStaff && <th>Actions</th>}
                         </tr>
                       </thead>
@@ -1641,14 +1758,16 @@ const isBlackWinner = (result) => {
                             (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
                             (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
                           );
-                          const canViewCert = isStaff || isMe;
+                          const canViewCert = certificatesAvailable && (isStaff || isMe);
                           const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
 
                           return (
-                            <tr key={idx} style={{ background: idx === 0 ? "rgba(243, 193, 68, 0.08)" : "transparent" }}>
-                              <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
-                                {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
-                              </td>
+                            <tr key={idx} style={{ background: !isTournamentUpcoming && idx === 0 ? "rgba(243, 193, 68, 0.08)" : "transparent" }}>
+                              {!isTournamentUpcoming && (
+                                <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
+                                  {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
+                                </td>
+                              )}
                               <td style={{ fontWeight: "600", color: "#fff" }}>
                                 <div 
                                   className="tournament-player-cell"
@@ -1669,13 +1788,13 @@ const isBlackWinner = (result) => {
                                   )}
                                 </div>
                               </td>
-                              <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
-                              <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
-                              <td>{p.played}</td>
-                              <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                              {!isTournamentUpcoming && <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>}
+                              {!isTournamentUpcoming && <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>}
+                              {!isTournamentUpcoming && <td>{p.played}</td>}
+                              {!isTournamentUpcoming && <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>}
                               <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
                               <td>{p.major}</td>
-                              <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                              {certificatesAvailable && <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                 {canViewCert ? (
                                   <button
                                     type="button"
@@ -1715,8 +1834,8 @@ const isBlackWinner = (result) => {
                                     🔒 Private
                                   </span>
                                 )}
-                              </td>
-                              {isStaff && (
+                              </td>}
+                              {isStaff && certificatesAvailable && (
                                 <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                   <button
                                     type="button"
@@ -1772,16 +1891,18 @@ const isBlackWinner = (result) => {
                         (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
                         (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
                       );
-                      const canViewCert = isStaff || isMe;
+                      const canViewCert = certificatesAvailable && (isStaff || isMe);
                       const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
 
                       return (
                         <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243, 193, 68, 0.5)" : "rgba(57, 52, 40, 0.6)" }}>
                           <div className="mobile-card-header">
-                            <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
-                              {idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
+                            <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: !isTournamentUpcoming && idx === 0 ? "#f3c144" : "#e8e8e8" }}>
+                              {isTournamentUpcoming
+                                ? "Registered Player"
+                                : idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
                             </span>
-                            <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
+                            {!isTournamentUpcoming && <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>}
                           </div>
 
                           <div 
@@ -1802,14 +1923,14 @@ const isBlackWinner = (result) => {
                           </div>
 
                           <div className="mobile-card-details">
-                            <div className="detail-item">
+                            {!isTournamentUpcoming && <div className="detail-item">
                               <span className="detail-label">Record</span>
                               <span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span>
-                            </div>
-                            <div className="detail-item">
+                            </div>}
+                            {!isTournamentUpcoming && <div className="detail-item">
                               <span className="detail-label">Played</span>
                               <span className="detail-val">{p.played}</span>
-                            </div>
+                            </div>}
                             <div className="detail-item">
                               <span className="detail-label">Rating</span>
                               <span className="detail-val">{p.rating}</span>
@@ -1818,7 +1939,7 @@ const isBlackWinner = (result) => {
                               <span className="detail-label">Major</span>
                               <span className="detail-val">{p.major}</span>
                             </div>
-                            {p.byes > 0 && (
+                            {!isTournamentUpcoming && p.byes > 0 && (
                               <div className="detail-item">
                                 <span className="detail-label">Byes</span>
                                 <span className="detail-val gold">{p.byes} BYE</span>
@@ -1888,7 +2009,7 @@ const isBlackWinner = (result) => {
                   {/* Swiss Round-by-Round Results */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", marginBottom: "15px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-                      <h2 className="section-title" style={{ margin: 0 }}>🗓️ Round-by-Round Pairings & Results</h2>
+                      <h2 id="tournament-pairings" className="section-title tournament-section-anchor" style={{ margin: 0 }}>🗓️ Round-by-Round Pairings & Results</h2>
                       {tournament?.rounds > 0 && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                           <span style={{ fontSize: "0.78rem", color: "#888" }}>
@@ -1904,7 +2025,7 @@ const isBlackWinner = (result) => {
                         </div>
                       )}
                     </div>
-                    {isStaff && tournament.status !== "Completed" && (!tournament?.rounds || sortedRounds.length < tournament.rounds) && (
+                    {isStaff && isTournamentOngoing && (!tournament?.rounds || sortedRounds.length < tournament.rounds) && (
                       <button 
                         onClick={handleGenerateNextRound}
                         style={{
@@ -1933,8 +2054,8 @@ const isBlackWinner = (result) => {
                           Round {rNum} Pairings & Results
                         </h3>
                         {/* Desktop Table View */}
-                        <div className="application-table-wrapper tournaments-desktop-table">
-                          <table className="application-table">
+                        <div className="application-table-wrapper tournaments-desktop-table tournament-standings-wrapper">
+                          <table className="application-table tournament-standings-table">
                             <thead>
                               <tr>
                                 <th>Board</th>
@@ -2087,7 +2208,7 @@ const isBlackWinner = (result) => {
                 /* KNOCKOUT FORMAT SPECIFIC DISPLAY (Challonge Tree + Table View) */
                 <>
                   {/* Knockout & Double Knockout 2-Game & Armageddon Guide Card */}
-                  <div className="format-rules-guide-card">
+                  <div className={`format-rules-guide-card ${rulesOpen ? "rules-open" : "rules-collapsed"}`}>
                     <div className="format-rules-header">
                       <div className="format-rules-title-group">
                         <span className="format-rules-icon">{isDoubleElimination ? "⚡" : "⚔️"}</span>
@@ -2129,6 +2250,15 @@ const isBlackWinner = (result) => {
                         <span>▶</span>
                         <span>Watch Armageddon Video Guide</span>
                       </a>
+                      <button
+                        type="button"
+                        className={`rules-toggle-btn ${rulesOpen ? "is-open" : ""}`}
+                        onClick={() => setRulesOpen((open) => !open)}
+                        aria-expanded={rulesOpen}
+                      >
+                        <span>{rulesOpen ? "Hide rules" : "View full rules"}</span>
+                        <span className="rules-toggle-icon" aria-hidden="true">⌄</span>
+                      </button>
                     </div>
 
                     <div className="format-rules-grid">
@@ -2190,7 +2320,7 @@ const isBlackWinner = (result) => {
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", margin: "30px 0 15px" }}>
-                    <h2 className="section-title" style={{ margin: 0 }}>Knockout Matches & Bracket</h2>
+                    <h2 id="tournament-bracket" className="section-title tournament-section-anchor" style={{ margin: 0 }}>Knockout Matches & Bracket</h2>
                     
                     {/* View Mode Toggle Buttons */}
                     <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b" }}>
@@ -2250,14 +2380,14 @@ const isBlackWinner = (result) => {
                       
                       {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
                         <div style={{ marginTop: "40px" }}>
-                          <h2 className="section-title">👥 Registered Participants ({tournament.playersList?.length || 0})</h2>
+                          <h2 id="tournament-participants" className="section-title tournament-section-anchor">👥 Registered Participants ({tournament.playersList?.length || 0})</h2>
                           {(!tournament.playersList || tournament.playersList.length === 0) ? (
                             <p style={{ color: "#888", fontStyle: "italic" }}>No participants registered yet.</p>
                           ) : (
                             <>
                               {/* Desktop Table View */}
                               <div className="application-table-wrapper tournaments-desktop-table">
-                            <table className="application-table">
+                            <table className="application-table registered-players-table">
                               <thead>
                                 <tr>
                                   <th>Name</th>
@@ -2532,7 +2662,7 @@ const isBlackWinner = (result) => {
                                 : "Players can view and download their personalized certificate."}
                             </p>
                           </div>
-                          {isStaff && (
+                          {isStaff && certificatesAvailable && (
                             <button
                               type="button"
                               disabled={certActionLoading}
@@ -2587,8 +2717,8 @@ const isBlackWinner = (result) => {
                                 <th>Player</th>
                                 <th>Rating</th>
                                 <th>Major</th>
-                                <th style={{ textAlign: "center" }}>Honors Certificate</th>
-                                {isStaff && <th style={{ textAlign: "center" }}>Email PDF</th>}
+                                {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
+                                {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
                               </tr>
                             </thead>
                             <tbody>
@@ -2597,7 +2727,7 @@ const isBlackWinner = (result) => {
                                   (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
                                   (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
                                 );
-                                const canViewCert = isStaff || isMe;
+                                const canViewCert = certificatesAvailable && (isStaff || isMe);
                                 const rStr = knockoutRankStr(p.name, idx);
                                 const rankColor = p.name === champName ? "#f3c144" : p.name === runnerUpName ? "#d0d0d0" : "#e8e8e8";
                                 const rankLabel = p.name === champName ? "🥇 Champion" : p.name === runnerUpName ? "🥈 Finalist" : `#${idx + 1}`;
@@ -2622,7 +2752,7 @@ const isBlackWinner = (result) => {
                                     </td>
                                     <td>{p.rating || "—"}</td>
                                     <td>{p.major || "—"}</td>
-                                    <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                                    {certificatesAvailable && <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                       {canViewCert ? (
                                         <button
                                           type="button"
@@ -2658,8 +2788,8 @@ const isBlackWinner = (result) => {
                                       ) : (
                                         <span style={{ color: "#7a7267", fontSize: "0.75rem", fontStyle: "italic" }}>🔒 Private</span>
                                       )}
-                                    </td>
-                                    {isStaff && (
+                                    </td>}
+                                    {isStaff && certificatesAvailable && (
                                       <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                         <button
                                           type="button"
@@ -2695,7 +2825,7 @@ const isBlackWinner = (result) => {
                               (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
                               (p.email && loggedInUserEmail && p.email.trim().toLowerCase() === loggedInUserEmail)
                             );
-                            const canViewCert = isStaff || isMe;
+                            const canViewCert = certificatesAvailable && (isStaff || isMe);
                             const rStr = knockoutRankStr(p.name, idx);
                             const rankColor = p.name === champName ? "#f3c144" : p.name === runnerUpName ? "#d0d0d0" : "#e8e8e8";
                             const rankLabel = p.name === champName ? "🥇 Champion" : p.name === runnerUpName ? "🥈 Finalist" : `#${idx + 1} Rank`;
@@ -2755,7 +2885,7 @@ const isBlackWinner = (result) => {
                                     >
                                       📜 {isMe ? "My Certificate" : "PDF Cert"}
                                     </button>
-                                    {isStaff && (
+                                    {isStaff && certificatesAvailable && (
                                       <button
                                         type="button"
                                         disabled={certActionLoading}

@@ -91,25 +91,34 @@ export function blobToBase64(blob) {
  * Load the official stamp PNG as-is (no pixel masking — draw at 82% opacity with warm tone)
  */
 async function loadOfficialStampImage() {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    let settled = false;
-    const finish = (result) => {
-      if (!settled) {
+  const publicBase = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
+  const stampUrl = `${publicBase}/Icons/official-stamp.png`;
+
+  try {
+    const response = await fetch(stampUrl);
+    if (!response.ok) throw new Error(`Official stamp request failed (${response.status})`);
+
+    const stampBlob = await response.blob();
+    const objectUrl = URL.createObjectURL(stampBlob);
+
+    return await new Promise((resolve) => {
+      const img = new Image();
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
         settled = true;
+        URL.revokeObjectURL(objectUrl);
         resolve(result && img.naturalWidth > 0 ? img : null);
-      }
-    };
-    img.onload = () => finish(true);
-    img.onerror = () => finish(false);
-    img.src = "/Icons/official-stamp.png";
-    if (img.complete && img.naturalWidth > 0) {
-      finish(true);
-    } else {
-      setTimeout(() => finish(false), 4000);
-    }
-  });
+      };
+
+      img.onload = () => finish(true);
+      img.onerror = () => finish(false);
+      img.src = objectUrl;
+    });
+  } catch (error) {
+    console.warn("Could not load official certificate stamp:", error);
+    return null;
+  }
 }
 
 /**
