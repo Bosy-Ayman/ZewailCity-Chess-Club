@@ -261,7 +261,74 @@ class MockTournamentDoc {
 }
 
 const isMockId = (id) => String(id || '').startsWith('mock-');
-const getMockTournament = (id) => mockTournaments.get(String(id));
+
+// Helper to auto-generate sample mock tournament on demand
+const createSample42pSwissMock = () => {
+  const t = new MockTournamentDoc({
+    _id: 'mock-swiss-42p',
+    title: 'Sandbox 42-Player 5-Round Swiss Test',
+    type: 'Swiss',
+    status: 'Ongoing',
+    rounds: 5,
+    location: 'Zewail City Campus Lounge',
+    description: 'In-memory sandbox test tournament for FIDE 5-round Swiss pairing validation (Never stored in MongoDB).'
+  });
+
+  const majors = ['CSAI', 'Nanotechnology', 'Aerospace', 'BMS', 'CIE', 'Physics'];
+  const playersList = [];
+  for (let i = 1; i <= 42; i++) {
+    playersList.push({
+      name: `Player ${String(i).padStart(2, '0')}`,
+      rating: 1200 + ((i * 23) % 850),
+      major: majors[i % majors.length]
+    });
+  }
+  t.playersList = playersList;
+  t.players = 42;
+
+  // Pre-seed 5 completed rounds with matches
+  // Sort seeded players by rating
+  const sorted = [...playersList].sort((a, b) => b.rating - a.rating);
+  let currentScores = {};
+  sorted.forEach(p => currentScores[p.name] = 0);
+
+  for (let r = 1; r <= 5; r++) {
+    // Pair adjacent in score group
+    const roundPlayers = [...sorted].sort((a, b) => {
+      if (currentScores[b.name] !== currentScores[a.name]) return currentScores[b.name] - currentScores[a.name];
+      return b.rating - a.rating;
+    });
+
+    for (let i = 0; i < roundPlayers.length; i += 2) {
+      const p1 = roundPlayers[i];
+      const p2 = roundPlayers[i + 1];
+      const outcome = (i % 3 === 0) ? "1-0" : (i % 3 === 1) ? "0-1" : "1/2-1/2";
+      if (outcome === "1-0") currentScores[p1.name] += 1;
+      else if (outcome === "0-1") currentScores[p2.name] += 1;
+      else { currentScores[p1.name] += 0.5; currentScores[p2.name] += 0.5; }
+
+      t.matches.push({
+        _id: new mongoose.Types.ObjectId().toString(),
+        round: r,
+        white: (r % 2 === 1) ? p1.name : p2.name,
+        black: (r % 2 === 1) ? p2.name : p1.name,
+        result: outcome,
+        bracket: 'upper'
+      });
+    }
+  }
+
+  mockTournaments.set('mock-swiss-42p', t);
+  return t;
+};
+
+const getMockTournament = (id) => {
+  const key = String(id || '');
+  if (!mockTournaments.has(key) && key === 'mock-swiss-42p') {
+    return createSample42pSwissMock();
+  }
+  return mockTournaments.get(key);
+};
 
 app.get('/api/health', (req, res) => {
   const databaseState = mongoose.connection.readyState;
