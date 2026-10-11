@@ -279,6 +279,7 @@ const createSample42pSwissMock = () => {
   for (let i = 1; i <= 42; i++) {
     playersList.push({
       name: `Player ${String(i).padStart(2, '0')}`,
+      email: `player${String(i).padStart(2, '0')}@zewailcity.edu.eg`,
       rating: 1200 + ((i * 23) % 850),
       major: majors[i % majors.length]
     });
@@ -317,6 +318,19 @@ const createSample42pSwissMock = () => {
       });
     }
   }
+
+  // Mark completed and set podium/winner for completed swiss test
+  const finalStandings = [...sorted].sort((a, b) => {
+    if (currentScores[b.name] !== currentScores[a.name]) return currentScores[b.name] - currentScores[a.name];
+    return b.rating - a.rating;
+  });
+  t.status = 'Completed';
+  t.winner = finalStandings[0]?.name || 'Player 01';
+  t.podium = [
+    { place: 1, name: finalStandings[0]?.name || 'Player 01' },
+    { place: 2, name: finalStandings[1]?.name || 'Player 02' },
+    { place: 3, name: finalStandings[2]?.name || 'Player 03' }
+  ];
 
   mockTournaments.set('mock-swiss-42p', t);
   return t;
