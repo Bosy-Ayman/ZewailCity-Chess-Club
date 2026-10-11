@@ -2267,16 +2267,65 @@ const isBlackWinner = (result) => {
                             <div className="mobile-card-details">
                               <div className="detail-item"><span className="detail-label">Record</span><span className="detail-val">{p.wins}W - {p.draws}D - {p.losses}L</span></div>
                               <div className="detail-item"><span className="detail-label">Played</span><span className="detail-val">{p.played}</span></div>
-                              <div className="detail-item"><span className="detail-label">Rating</span><span className="detail-val">{p.rating}</span></div>
+                              <div className="detail-item"><span className="detail-label">Rating</span><span className="detail-val">{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? "Unrated" : p.rating}</span></div>
                               {p.byes > 0 && <div className="detail-item"><span className="detail-label">Byes</span><span className="detail-val gold">{p.byes} BYE</span></div>}
                             </div>
-                            {canViewCert && (
-                              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "10px", textAlign: "right" }}>
-                                <button type="button" onClick={() => generateWinnerCertificate({ playerName: p.name, rank: rankStr, tournamentTitle: tournament?.title || "ZC Chess Tournament", tournamentType: tournament?.type || "Swiss Championship", pointsOrScore: p.points != null ? `${p.points} pts` : "", format: "pdf" })}
-                                  style={{ background: isMe ? "linear-gradient(135deg,#f7ce68 0%,#f3c144 60%,#c99522 100%)" : "linear-gradient(135deg,rgba(243,193,68,0.2) 0%,rgba(212,163,42,0.1) 100%)", border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)", color: isMe ? "#12100d" : "#f3c144", padding: "6px 14px", borderRadius: "6px", fontSize: "0.8rem", fontWeight: "800", cursor: "pointer", width: "100%", justifyContent: "center", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                                >
-                                  <span>📜</span><span>{isMe ? "Download My Certificate (PDF)" : `Certificate (${p.name})`}</span>
-                                </button>
+
+                            {/* Round-by-Round Breakdown (R1, R2, R3, ...) */}
+                            {standingsRoundCount > 0 && (
+                              <div className="mobile-standings-rounds-row" style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
+                                <span className="detail-label" style={{ letterSpacing: "0.04em" }}>Rounds Breakdown:</span>
+                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                                  {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
+                                    const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
+                                    const isWin = result.tone === "win";
+                                    const isDraw = result.tone === "draw";
+                                    const isLoss = result.tone === "loss";
+                                    const bg = isWin ? "rgba(104, 211, 145, 0.15)" : isDraw ? "rgba(243, 193, 68, 0.15)" : isLoss ? "rgba(252, 129, 129, 0.15)" : "rgba(255, 255, 255, 0.05)";
+                                    const borderColor = isWin ? "rgba(104, 211, 145, 0.4)" : isDraw ? "rgba(243, 193, 68, 0.4)" : isLoss ? "rgba(252, 129, 129, 0.4)" : "rgba(255, 255, 255, 0.1)";
+                                    const textColor = isWin ? "#68d391" : isDraw ? "#f3c144" : isLoss ? "#fc8181" : "#8e8777";
+                                    return (
+                                      <div
+                                        key={`mobile-r-${p.name}-${roundIndex + 1}`}
+                                        title={`Round ${roundIndex + 1}: ${result.label}`}
+                                        style={{
+                                          background: bg,
+                                          border: `1px solid ${borderColor}`,
+                                          borderRadius: "6px",
+                                          padding: "3px 8px",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "4px",
+                                          fontSize: "0.74rem"
+                                        }}
+                                      >
+                                        <span style={{ color: "#8e8777", fontWeight: "700", fontSize: "0.68rem" }}>R{roundIndex + 1}:</span>
+                                        <strong style={{ color: textColor }}>{result.value}</strong>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Honors Certificate and Staff Email buttons */}
+                            {certificatesAvailable && (
+                              <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                                {canViewCert && (
+                                  <button type="button" onClick={() => generateWinnerCertificate({ playerName: p.name, rank: rankStr, tournamentTitle: tournament?.title || "ZC Chess Tournament", tournamentType: tournament?.type || "Swiss Championship", pointsOrScore: p.points != null ? `${p.points} pts` : "", format: "pdf" })}
+                                    style={{ background: isMe ? "linear-gradient(135deg,#f7ce68 0%,#f3c144 60%,#c99522 100%)" : "linear-gradient(135deg,rgba(243,193,68,0.2) 0%,rgba(212,163,42,0.1) 100%)", border: isMe ? "none" : "1px solid rgba(243,193,68,0.45)", color: isMe ? "#12100d" : "#f3c144", padding: "6px 14px", borderRadius: "6px", fontSize: "0.8rem", fontWeight: "800", cursor: "pointer", width: "100%", justifyContent: "center", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                  >
+                                    <span>📜</span><span>{isMe ? "Download My Certificate (PDF)" : `Certificate (${p.name})`}</span>
+                                  </button>
+                                )}
+                                {isStaff && (
+                                  <button type="button" disabled={certActionLoading} onClick={() => handleEmailPlayerCertificate(p.name, p.email || "", rankStr, p.points != null ? `${p.points} pts` : "")}
+                                    style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.2)", color: "#e2d9cc", padding: "6px 12px", borderRadius: "6px", fontSize: "0.78rem", fontWeight: "700", cursor: certActionLoading ? "wait" : "pointer", width: "100%", justifyContent: "center", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                    title={`Email official PDF certificate to ${p.email || p.name}`}
+                                  >
+                                    <span>✉️</span><span>Email Certificate PDF</span>
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
