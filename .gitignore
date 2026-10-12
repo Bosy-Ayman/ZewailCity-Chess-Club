@@ -25,3 +25,6 @@ yarn-debug.log*
 yarn-error.log*
 
 .vercel
+
+# local dev server logs
+.run-logs/

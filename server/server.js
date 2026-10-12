@@ -963,6 +963,9 @@ async function notifyTournamentPairings(tournament, matchesList) {
 • 🏆 FIDE Tiebreaks: Direct Encounter • Buchholz Cut 1 • Sonneborn-Berger Score • Most Wins.`;
   }
 
+  // Basic RFC-5322 email format check to skip typo/invalid addresses without crashing the loop
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+
   for (let i = 0; i < matchesList.length; i++) {
     const match = matchesList[i];
     const boardNumber = i + 1;
@@ -970,74 +973,92 @@ async function notifyTournamentPairings(tournament, matchesList) {
     const matchTimeStr = match.matchTime ? ` at ${match.matchTime}` : '';
     const locationStr = match.location || tournament.location || 'ZC Chess Club Lounge';
 
-    // Look up both players
-    const whitePlayer = await findPlayerContact(match.white, tournament);
-    const blackPlayer = await findPlayerContact(match.black, tournament);
+    // Look up both players — each in its own try/catch so one bad lookup never kills the loop
+    let whitePlayer = null;
+    let blackPlayer = null;
+    try { whitePlayer = await findPlayerContact(match.white, tournament); } catch (e) { console.warn(`[Pairing] Could not resolve white player "${match.white}":`, e.message); }
+    try { blackPlayer = await findPlayerContact(match.black, tournament); } catch (e) { console.warn(`[Pairing] Could not resolve black player "${match.black}":`, e.message); }
 
     // Notify White player
     if (whitePlayer && whitePlayer.email) {
-      const oppText = blackPlayer ? blackPlayer.name : (match.black || 'TBD');
-      const msg = isKnockout
-        ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
-        : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
+      if (!isValidEmail(whitePlayer.email)) {
+        console.warn(`[Pairing] Skipping white player "${whitePlayer.name}" — invalid email format: "${whitePlayer.email}"`);
+      } else {
+        try {
+          const oppText = blackPlayer ? blackPlayer.name : (match.black || 'TBD');
+          const msg = isKnockout
+            ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
+            : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play White ⚪ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
 
-      await createNotification({
-        recipientEmail: whitePlayer.email,
-        type: 'tournament_start',
-        actorName: 'ZC Chess Club Administration',
-        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
-        message: msg,
-        link: `/tournamentdetails?id=${tournament._id}`
-      });
+          await createNotification({
+            recipientEmail: whitePlayer.email,
+            type: 'tournament_start',
+            actorName: 'ZC Chess Club Administration',
+            actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+            message: msg,
+            link: `/tournamentdetails?id=${tournament._id}`
+          });
 
-      const emailHtml = generateClubEmailHtml({
-        title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
-        recipientName: whitePlayer.name,
-        message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: White ⚪ (Game 1)\n• Opponent: ${oppText} ⚫\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
-        actionLabel: 'View Tournament Bracket & Schedule →',
-        actionUrl: `/tournamentdetails?id=${tournament._id}`,
-        senderName: 'Tournament Arbiters & ZC Chess Club'
-      });
+          const emailHtml = generateClubEmailHtml({
+            title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
+            recipientName: whitePlayer.name,
+            message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: White ⚪ (Game 1)\n• Opponent: ${oppText} ⚫\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
+            actionLabel: 'View Tournament Bracket & Schedule →',
+            actionUrl: `/tournamentdetails?id=${tournament._id}`,
+            senderName: 'Tournament Arbiters & ZC Chess Club'
+          });
 
-      sendEmail({
-        to: whitePlayer.email,
-        subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
-        html: emailHtml,
-        text: `${msg}\n${matchRuleNote}`
-      }).catch(e => console.warn('Pairing email to white failed:', e.message));
+          sendEmail({
+            to: whitePlayer.email,
+            subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
+            html: emailHtml,
+            text: `${msg}\n${matchRuleNote}`
+          }).catch(e => console.warn(`[Pairing] Email to white "${whitePlayer.email}" failed:`, e.message));
+        } catch (e) {
+          console.warn(`[Pairing] Skipped white player "${whitePlayer.name}" (${whitePlayer.email}) due to error:`, e.message);
+        }
+      }
     }
 
     // Notify Black player (if not BYE)
     if (blackPlayer && blackPlayer.email && match.black !== 'BYE') {
-      const oppText = whitePlayer ? whitePlayer.name : (match.white || 'TBD');
-      const msg = isKnockout
-        ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
-        : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
+      if (!isValidEmail(blackPlayer.email)) {
+        console.warn(`[Pairing] Skipping black player "${blackPlayer.name}" — invalid email format: "${blackPlayer.email}"`);
+      } else {
+        try {
+          const oppText = whitePlayer ? whitePlayer.name : (match.white || 'TBD');
+          const msg = isKnockout
+            ? `⚔️ Knockout Match Alert: Round ${roundNumber} in "${tournament.title}" — 2-Game Match (Game 1: Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr}, Game 2: Reverse colors). Tied 1-1 goes to Armageddon (Secret Time Bid, Black has draw odds)!`
+            : `⚔️ Match Alert: Round ${roundNumber} in "${tournament.title}" — You play Black ⚫ vs ${oppText} on Board #${boardNumber}${matchTimeStr} (${locationStr})!`;
 
-      await createNotification({
-        recipientEmail: blackPlayer.email,
-        type: 'tournament_start',
-        actorName: 'ZC Chess Club Administration',
-        actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
-        message: msg,
-        link: `/tournamentdetails?id=${tournament._id}`
-      });
+          await createNotification({
+            recipientEmail: blackPlayer.email,
+            type: 'tournament_start',
+            actorName: 'ZC Chess Club Administration',
+            actorEmail: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
+            message: msg,
+            link: `/tournamentdetails?id=${tournament._id}`
+          });
 
-      const emailHtml = generateClubEmailHtml({
-        title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
-        recipientName: blackPlayer.name,
-        message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: Black ⚫ (Game 1)\n• Opponent: ${oppText} ⚪\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
-        actionLabel: 'View Tournament Bracket & Schedule →',
-        actionUrl: `/tournamentdetails?id=${tournament._id}`,
-        senderName: 'Tournament Arbiters & ZC Chess Club'
-      });
+          const emailHtml = generateClubEmailHtml({
+            title: `⚔️ Round ${roundNumber} Match Pairing: ${tournament.title}`,
+            recipientName: blackPlayer.name,
+            message: `Your upcoming tournament match pairing has been scheduled:\n\n• Tournament: ${tournament.title}\n• Round: ${roundNumber}\n• Board: #${boardNumber}\n• Your Piece: Black ⚫ (Game 1)\n• Opponent: ${oppText} ⚪\n• Location: ${locationStr}${match.matchTime ? `\n• Match Time: ${match.matchTime}` : ''}${matchRuleNote}\n\nPlease report to your designated board 5 minutes prior to the start time with your student ID.\n\nGood luck!`,
+            actionLabel: 'View Tournament Bracket & Schedule →',
+            actionUrl: `/tournamentdetails?id=${tournament._id}`,
+            senderName: 'Tournament Arbiters & ZC Chess Club'
+          });
 
-      sendEmail({
-        to: blackPlayer.email,
-        subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
-        html: emailHtml,
-        text: `${msg}\n${matchRuleNote}`
-      }).catch(e => console.warn('Pairing email to black failed:', e.message));
+          sendEmail({
+            to: blackPlayer.email,
+            subject: `[ZC Chess Club] ⚔️ Match Alert: Round ${roundNumber} Pairing in ${tournament.title}`,
+            html: emailHtml,
+            text: `${msg}\n${matchRuleNote}`
+          }).catch(e => console.warn(`[Pairing] Email to black "${blackPlayer.email}" failed:`, e.message));
+        } catch (e) {
+          console.warn(`[Pairing] Skipped black player "${blackPlayer.name}" (${blackPlayer.email}) due to error:`, e.message);
+        }
+      }
     }
   }
 }
