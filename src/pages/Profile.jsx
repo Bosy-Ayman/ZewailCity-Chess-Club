@@ -101,7 +101,7 @@ export default function Profile() {
   const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
   const loggedInRole = localStorage.getItem("userRole") || "member";
   const isAdmin = loggedInRole === "admin" || (loggedInEmail && (
-    loggedInEmail.toLowerCase() === "admin@zcchessclub.com" ||
+    loggedInEmail.toLowerCase() === "chesszc@zewailcity.edu.eg" ||
     loggedInEmail.toLowerCase().includes("poussy.ayman") ||
     loggedInEmail.toLowerCase().includes("bosy.ayman") ||
     loggedInEmail.toLowerCase().includes("poussyayman")
@@ -715,7 +715,7 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fromEmail: loggedInEmail || "guest@zcchessclub.com",
+          fromEmail: loggedInEmail || "chesszc@zewailcity.edu.eg",
           fromName: localStorage.getItem("userName") || (loggedInEmail ? loggedInEmail.split("@")[0] : "Campus Tactician"),
           targetEmail: profile.email,
           timeControl: challengeTimeControl,

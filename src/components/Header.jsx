@@ -558,7 +558,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
                 <span className="user-role-badge admin">👑 President</span>
               ) : userRole === 'vice_president' ? (
                 <span className="user-role-badge" style={{ background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.4)" }}>⭐ Vice President</span>
-              ) : (userRole === 'admin' || userEmail?.toLowerCase() === 'admin@zcchessclub.com') ? (
+              ) : (userRole === 'admin' || userEmail?.toLowerCase() === 'chesszc@zewailcity.edu.eg') ? (
                 <span className="user-role-badge admin">👑 Admin</span>
               ) : (
                 userRole && <span className="user-role-badge">{userRole}</span>

@@ -219,7 +219,7 @@ const HomePage = () => {
       verified: true
     },
     {
-      email: "admin@zcchessclub.com",
+      email: "chesszc@zewailcity.edu.eg",
       name: "ZC Chess Club Admin",
       role: "admin",
       major: "Board & Governance",
@@ -243,7 +243,7 @@ const HomePage = () => {
   // Social & Admin State
   const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
   const userRole = localStorage.getItem("userRole") || "member";
-  const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "admin@zcchessclub.com");
+  const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "chesszc@zewailcity.edu.eg");
   const [followingState, setFollowingState] = useState({});
   const [copiedEmail, setCopiedEmail] = useState(null);
   const [clubActivity, setClubActivity] = useState([]);
@@ -332,8 +332,8 @@ const HomePage = () => {
         if (uRes.ok) {
           const uList = await uRes.json();
           if (Array.isArray(uList)) {
-            setLiveStats(prev => ({ ...prev, members: uList.filter(u => u.email && u.email.toLowerCase() !== 'admin2@zcchessclub.com').length }));
-            const valid = uList.filter(u => u.email && u.email.toLowerCase() !== "admin2@zcchessclub.com");
+            setLiveStats(prev => ({ ...prev, members: uList.filter(u => u.email && u.email.toLowerCase() !== 'chesszc@zewailcity.edu.eg').length }));
+            const valid = uList.filter(u => u.email && u.email.toLowerCase() !== "chesszc@zewailcity.edu.eg");
             if (valid.length > 0) {
               setRegisteredUsers(valid);
               // Initialize cheer counts from real DB values
@@ -550,7 +550,7 @@ const HomePage = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            fromEmail: loggedInEmail || "guest@zcchessclub.com",
+            fromEmail: loggedInEmail || "chesszc@zewailcity.edu.eg",
             fromName: localStorage.getItem("userName") || (loggedInEmail ? loggedInEmail.split("@")[0] : "Campus Visitor"),
             targetEmail: selectedTactician.email,
             timeControl: challengeTimeControl,
@@ -584,7 +584,7 @@ const HomePage = () => {
     // 1. Leadership Check
     const isLeader = ["president", "vice_president", "admin", "hr", "pr", "oc", "media", "trainer", "officer"].includes(u.role) ||
       (Array.isArray(u.clubRoles) && u.clubRoles.length > 0) ||
-      emailKey.includes("admin@zcchessclub.com");
+      emailKey.includes("chesszc@zewailcity.edu.eg");
 
     // 2. Champions Check
     const wonTournament = (tournamentsList || []).some(t =>
@@ -888,7 +888,7 @@ const HomePage = () => {
               <Crown size={14} /> Executive Admin
             </span>
             <span className="admin-ribbon-text">
-              Active Administrator: <strong>{loggedInEmail || "admin@zcchessclub.com"}</strong>. You have full oversight over all tactician dossiers, pairings & roles.
+              Active Administrator: <strong>{loggedInEmail || "chesszc@zewailcity.edu.eg"}</strong>. You have full oversight over all tactician dossiers, pairings & roles.
             </span>
           </div>
           <div className="admin-ribbon-links">

@@ -26,7 +26,7 @@ const isAdminEmail = (email) => {
   if (!email) return false;
   const e = email.toLowerCase().trim();
   return (
-    e === 'admin@zcchessclub.com' ||
+    e === (process.env.SMTP_USER || '').toLowerCase() ||
     e === 'chesszc@zewailcity.edu.eg' ||
     e.includes('chesszc') ||
     e.includes('admin') ||
@@ -1507,12 +1507,12 @@ async function seedAdminUser() {
       console.log('No users found in database. Seeding default admin user...');
       const hashedPassword = await bcrypt.hash('chessadmin123', 10);
       const defaultAdmin = new User({
-        email: 'admin@zcchessclub.com',
+        email: process.env.SMTP_USER || 'chesszc@zewailcity.edu.eg',
         password: hashedPassword,
         role: 'admin'
       });
       await defaultAdmin.save();
-      console.log('Default admin user successfully seeded: admin@zcchessclub.com / chessadmin123');
+      console.log('Default admin user successfully seeded:', process.env.SMTP_USER, '/ chessadmin123');
     } else {
       console.log('Users collection is not empty. Seeding skipped.');
     }
@@ -1903,7 +1903,7 @@ app.post('/api/admin/signup', async (req, res) => {
       phone: phone || "",
       major: major || "",
       batch: derivedBatch,
-      role: email === 'admin@zcchessclub.com' ? 'admin' : 'member'
+      role: isAdminEmail(email) ? 'admin' : 'member'
     });
 
     const savedUser = await newUser.save();
@@ -1982,7 +1982,7 @@ app.get('/api/profile', async (req, res) => {
     const isOwner = cleanViewer && cleanViewer === (user.email || "").toLowerCase();
     let viewerIsAdmin = false;
     if (cleanViewer) {
-      if (cleanViewer === 'admin@zcchessclub.com') {
+      if (isAdminEmail(cleanViewer)) {
         viewerIsAdmin = true;
       } else {
         const viewerDoc = await User.findOne({ email: new RegExp(`^${cleanViewer}$`, 'i') });

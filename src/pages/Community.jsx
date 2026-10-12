@@ -38,7 +38,7 @@ const Community = () => {
   // Social & Auth State
   const loggedInEmail = localStorage.getItem("adminEmail") || "";
   const userRole = localStorage.getItem("userRole") || "member";
-  const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "admin@zcchessclub.com");
+  const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "chesszc@zewailcity.edu.eg");
   
   const [myProfile, setMyProfile] = useState(null);
   const [followingMap, setFollowingMap] = useState({});
@@ -70,7 +70,7 @@ const Community = () => {
         // Fetch all registered users
         const uList = await safeFetchJson(`${API_BASE}/api/users`);
         if (Array.isArray(uList)) {
-        const validUsers = uList.filter(u => u.email && u.email.toLowerCase() !== "admin2@zcchessclub.com");
+        const validUsers = uList.filter(u => u.email && u.email.toLowerCase() !== "chesszc@zewailcity.edu.eg");
           setUsers(validUsers);
           // Seed cheer counts from real DB values
           const cMap = {};
