@@ -1271,51 +1271,47 @@ const isBlackWinner = (result) => {
       const black = m.black;
       const isWhiteBye = black === "BYE";
 
-      if (!statsMap[white]) {
-        const profile = tournament?.playerProfiles?.[white] || tournament?.playerProfiles?.[white?.trim()] || tournament?.playerProfiles?.[white?.trim()?.toLowerCase()];
-        const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
-        statsMap[white] = { name: white, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0, roundResults: {} };
+      // Only update stats for active players in statsMap (do not revive removed players)
+      if (statsMap[white]) {
+        if (isWhiteBye) {
+          statsMap[white].byes += 1;
+          statsMap[white].points += 1;
+          statsMap[white].roundResults[m.round || 1] = { value: "1", label: "BYE", tone: "win" };
+        } else {
+          statsMap[white].played += 1;
+          if (m.result === "1-0" || m.result === "1 - 0") {
+            statsMap[white].wins += 1;
+            statsMap[white].points += 1;
+            statsMap[white].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
+          } else if (m.result === "0-1" || m.result === "0 - 1") {
+            statsMap[white].losses += 1;
+            statsMap[white].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
+          } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+            statsMap[white].draws += 1;
+            statsMap[white].points += 0.5;
+            statsMap[white].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+          } else {
+            statsMap[white].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
+          }
+        }
       }
 
-      if (isWhiteBye) {
-        // BYE: full point, doesn't count as a played game in W-D-L
-        statsMap[white].byes += 1;
-        statsMap[white].points += 1;
-        statsMap[white].roundResults[m.round || 1] = { value: "1", label: "BYE", tone: "win" };
-        return;
-      }
-
-      if (!statsMap[black]) {
-        const profile = tournament?.playerProfiles?.[black] || tournament?.playerProfiles?.[black?.trim()] || tournament?.playerProfiles?.[black?.trim()?.toLowerCase()];
-        const dynamicRating = profile?.effectiveRating || (profile?.chessComRating > 0 && profile.chessComRating) || (profile?.fideRating > 0 && profile.fideRating) || (profile?.lichessRating > 0 && profile.lichessRating) || 0;
-        statsMap[black] = { name: black, rating: dynamicRating > 0 ? dynamicRating : "Unrated", major: profile?.major || "-", played: 0, wins: 0, draws: 0, losses: 0, byes: 0, points: 0, roundResults: {} };
-      }
-
-      statsMap[white].played += 1;
-      statsMap[black].played += 1;
-
-      if (m.result === "1-0" || m.result === "1 - 0") {
-        statsMap[white].wins += 1;
-        statsMap[white].points += 1;
-        statsMap[black].losses += 1;
-        statsMap[white].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
-        statsMap[black].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
-      } else if (m.result === "0-1" || m.result === "0 - 1") {
-        statsMap[black].wins += 1;
-        statsMap[black].points += 1;
-        statsMap[white].losses += 1;
-        statsMap[white].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
-        statsMap[black].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
-      } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
-        statsMap[white].draws += 1;
-        statsMap[white].points += 0.5;
-        statsMap[black].draws += 1;
-        statsMap[black].points += 0.5;
-        statsMap[white].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
-        statsMap[black].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
-      } else {
-        statsMap[white].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
-        statsMap[black].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
+      if (!isWhiteBye && statsMap[black]) {
+        statsMap[black].played += 1;
+        if (m.result === "0-1" || m.result === "0 - 1") {
+          statsMap[black].wins += 1;
+          statsMap[black].points += 1;
+          statsMap[black].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
+        } else if (m.result === "1-0" || m.result === "1 - 0") {
+          statsMap[black].losses += 1;
+          statsMap[black].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
+        } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+          statsMap[black].draws += 1;
+          statsMap[black].points += 0.5;
+          statsMap[black].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+        } else {
+          statsMap[black].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
+        }
       }
     });
 
@@ -2516,9 +2512,9 @@ const isBlackWinner = (result) => {
                             const canViewCert = certificatesAvailable && (isStaff || isMe);
                             const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
                             return (
-                              <tr key={idx} style={{ background: idx === 0 ? "rgba(243,193,68,0.08)" : "transparent" }}>
+                              <tr key={idx} style={{ background: (idx === 0 && (tournament?.status === "Completed" || ((tournament?.matches || []).length > 0 && (tournament?.matches || []).every(m => m.result && m.result !== "Pending") && sortedRounds.length >= (Number(tournament?.rounds) || 5)))) ? "rgba(243,193,68,0.08)" : "transparent" }}>
                                 <td style={{ fontWeight: "bold", color: idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#e8e8e8" }}>
-                                  {idx === 0 ? "🥇 1st" : idx === 1 ? "🥈 2nd" : idx === 2 ? "🥉 3rd" : `#${idx + 1}`}
+                                  {(() => { const isLastRoundDone = tournament?.status === "Completed" || ((tournament?.matches || []).length > 0 && (tournament?.matches || []).every(m => m.result && m.result !== "Pending") && sortedRounds.length >= (Number(tournament?.rounds) || 5)); if (idx === 0) return isLastRoundDone ? "🥇 1st" : "#1"; if (idx === 1) return isLastRoundDone ? "🥈 2nd" : "#2"; if (idx === 2) return isLastRoundDone ? "🥉 3rd" : "#3"; return `#${idx + 1}`; })()}
                                 </td>
                                 <td style={{ fontWeight: "600", color: "#fff" }}>
                                   <div className="tournament-player-cell" onClick={() => openPlayerPreview(p.name, p)} title={`Click to view ${p.name}'s Profile Card`}>
@@ -2593,10 +2589,10 @@ const isBlackWinner = (result) => {
                         const canViewCert = certificatesAvailable && (isStaff || isMe);
                         const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
                         return (
-                          <div key={idx} className="mobile-tournament-card" style={{ borderColor: idx === 0 ? "rgba(243,193,68,0.5)" : "rgba(57,52,40,0.6)" }}>
+                          <div key={idx} className="mobile-tournament-card" style={{ borderColor: (idx === 0 && (tournament?.status === "Completed" || ((tournament?.matches || []).length > 0 && (tournament?.matches || []).every(m => m.result && m.result !== "Pending") && sortedRounds.length >= (Number(tournament?.rounds) || 5)))) ? "rgba(243,193,68,0.5)" : "rgba(57,52,40,0.6)" }}>
                             <div className="mobile-card-header">
-                              <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: idx === 0 ? "#f3c144" : "#e8e8e8" }}>
-                                {idx === 0 ? "🥇 1st Rank" : idx === 1 ? "🥈 2nd Rank" : idx === 2 ? "🥉 3rd Rank" : `#${idx + 1} Rank`}
+                              <span style={{ fontWeight: "bold", fontSize: "0.95rem", color: (idx === 0 && (tournament?.status === "Completed" || ((tournament?.matches || []).length > 0 && (tournament?.matches || []).every(m => m.result && m.result !== "Pending") && sortedRounds.length >= (Number(tournament?.rounds) || 5)))) ? "#f3c144" : "#e8e8e8" }}>
+                                {(() => { const isLastRoundDone = tournament?.status === "Completed" || ((tournament?.matches || []).length > 0 && (tournament?.matches || []).every(m => m.result && m.result !== "Pending") && sortedRounds.length >= (Number(tournament?.rounds) || 5)); if (idx === 0) return isLastRoundDone ? "🥇 1st Rank" : "#1 Rank"; if (idx === 1) return isLastRoundDone ? "🥈 2nd Rank" : "#2 Rank"; if (idx === 2) return isLastRoundDone ? "🥉 3rd Rank" : "#3 Rank"; return `#${idx + 1} Rank`; })()}
                               </span>
                               <span style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.1rem" }}>{p.points} pts</span>
                             </div>

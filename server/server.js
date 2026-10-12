@@ -3682,9 +3682,9 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
     const players = tournament.playersList || [];
-    const minPlayersRequired = tournament.rounds ? tournament.rounds + 1 : 2;
+    const minPlayersRequired = 2;
     if (players.length < minPlayersRequired) {
-      return res.status(400).json({ error: `Not enough players! A ${tournament.rounds || 1}-round Swiss tournament requires at least ${minPlayersRequired} players to generate pairings. Currently registered: ${players.length}` });
+      return res.status(400).json({ error: `Not enough players! At least 2 active players are required to generate pairings. Currently registered: ${players.length}` });
     }
 
     const existingMatches = tournament.matches || [];
@@ -3693,8 +3693,10 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
     const pendingMatches = existingMatches.filter(m => !m.result || m.result === "Pending");
     if (pendingMatches.length > 0) {
       const maxR = Math.max(...existingMatches.map(m => m.round || 1));
+      const pendingBoards = pendingMatches.map(m => `${m.white} vs ${m.black}`).slice(0, 3).join(", ");
+      const moreCount = pendingMatches.length > 3 ? ` (+ ${pendingMatches.length - 3} more)` : "";
       return res.status(400).json({ 
-        error: `Cannot generate next round. There are still ${pendingMatches.length} pending match(es) in Round ${maxR}. Please record all match results first!` 
+        error: `Cannot generate next round. There are still ${pendingMatches.length} pending match(es) in Round ${maxR} [${pendingBoards}${moreCount}]. Please record all match results first!` 
       });
     }
 
@@ -3721,37 +3723,41 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
       };
     });
 
-    // Parse all historical match results
+    // Parse all historical match results (only update active players in statsMap)
     existingMatches.forEach(m => {
       const isWhiteBye = m.black === "BYE";
-      // Ensure white entry exists
-      if (!statsMap[m.white]) {
-        statsMap[m.white] = { name: m.white, rating: 1500, points: 0, colorsPlayed: [], opponents: [], byeReceived: false };
-      }
-      if (!isWhiteBye && !statsMap[m.black]) {
-        statsMap[m.black] = { name: m.black, rating: 1500, points: 0, colorsPlayed: [], opponents: [], byeReceived: false };
-      }
+      const whiteName = (m.white || "").trim().toLowerCase();
+      const blackName = (m.black || "").trim().toLowerCase();
+
+      // Find active player keys in statsMap (case-insensitive)
+      const whiteKey = Object.keys(statsMap).find(k => k.trim().toLowerCase() === whiteName);
+      const blackKey = !isWhiteBye ? Object.keys(statsMap).find(k => k.trim().toLowerCase() === blackName) : null;
 
       if (isWhiteBye) {
-        // BYE match: white gets 1 point, mark as having received a BYE
-        statsMap[m.white].points += 1;
-        statsMap[m.white].byeReceived = true;
+        if (whiteKey) {
+          statsMap[whiteKey].points += 1;
+          statsMap[whiteKey].byeReceived = true;
+        }
         return; // Don't record color or opponent for BYE
       }
 
-      // Normal match
-      statsMap[m.white].opponents.push(m.black);
-      statsMap[m.black].opponents.push(m.white);
-      statsMap[m.white].colorsPlayed.push('w');
-      statsMap[m.black].colorsPlayed.push('b');
+      // Normal match: record history for active players
+      if (whiteKey) {
+        statsMap[whiteKey].opponents.push(m.black);
+        statsMap[whiteKey].colorsPlayed.push('w');
+      }
+      if (blackKey) {
+        statsMap[blackKey].opponents.push(m.white);
+        statsMap[blackKey].colorsPlayed.push('b');
+      }
 
       if (m.result === "1-0" || m.result === "1 - 0") {
-        statsMap[m.white].points += 1;
+        if (whiteKey) statsMap[whiteKey].points += 1;
       } else if (m.result === "0-1" || m.result === "0 - 1") {
-        statsMap[m.black].points += 1;
+        if (blackKey) statsMap[blackKey].points += 1;
       } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
-        statsMap[m.white].points += 0.5;
-        statsMap[m.black].points += 0.5;
+        if (whiteKey) statsMap[whiteKey].points += 0.5;
+        if (blackKey) statsMap[blackKey].points += 0.5;
       }
     });
 
@@ -4346,6 +4352,40 @@ app.delete('/api/tournaments/:id/players/:playerName', async (req, res) => {
     // 3. Keep player count in sync
     tournament.players = tournament.playersList.length;
     
+    
+    // 4. Clean up pending matches involving the removed player in the current round
+    const matches = tournament.matches || [];
+    const maxRound = matches.reduce((max, m) => Math.max(max, m.round || 1), 0);
+    tournament.matches = matches.filter(m => {
+      const isTargetWhite = (m.white || '').trim().toLowerCase() === targetName;
+      const isTargetBlack = (m.black || '').trim().toLowerCase() === targetName;
+
+      if (!isTargetWhite && !isTargetBlack) return true;
+
+      // Keep past finished matches intact for tournament history and tiebreaks
+      if (m.round < maxRound && m.result && m.result !== "Pending") {
+        return true;
+      }
+
+      // If removed player had a BYE, discard that match
+      if (isTargetWhite && m.black === "BYE") {
+        return false;
+      }
+
+      // If it is a pending match in the current round, award forfeit win to attending opponent
+      if (!m.result || m.result === "Pending") {
+        if (isTargetWhite) {
+          m.result = "0-1";
+          return true;
+        } else if (isTargetBlack) {
+          m.result = "1-0";
+          return true;
+        }
+      }
+
+      return true;
+    });
+
     // Clear server cache so frontend updates immediately
     clearCache('tournaments');
 
