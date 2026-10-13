@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { X, Search, Users, UserPlus, Check } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPickerToSchedule } from "../components/ChallongeBracket";
@@ -133,7 +133,85 @@ const isBlackWinner = (result) => {
 
   // Modals state
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
-  const [playerForm, setPlayerForm] = useState({ name: "", rating: "", major: "" });
+  const [playerForm, setPlayerForm] = useState({ name: "", rating: "", major: "", email: "" });
+  const [dbUsers, setDbUsers] = useState([]);
+  const [loadingDbUsers, setLoadingDbUsers] = useState(false);
+  const [addParticipantMode, setAddParticipantMode] = useState("database"); // "database" | "manual"
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [selectedDbUser, setSelectedDbUser] = useState(null);
+
+  const fetchDbUsers = async () => {
+    if (dbUsers.length > 0) return;
+    setLoadingDbUsers(true);
+    try {
+      const token = localStorage.getItem("adminToken");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE}/api/users`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setDbUsers(data);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch database users:", e.message);
+    } finally {
+      setLoadingDbUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (playerModalOpen) {
+      fetchDbUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerModalOpen]);
+
+  const checkUserInTournament = (user) => {
+    if (!tournament || !user) return false;
+    const uName = (user.name || "").trim().toLowerCase();
+    const uEmail = (user.email || "").trim().toLowerCase();
+    const inPlayersList = (tournament.playersList || []).some(
+      (p) => (p.name || "").trim().toLowerCase() === uName
+    );
+    const inRegistrations = (tournament.registrations || []).some(
+      (r) => (r.email || "").trim().toLowerCase() === uEmail || (r.name || "").trim().toLowerCase() === uName
+    );
+    return inPlayersList || inRegistrations;
+  };
+
+  const getUserBestRating = (user) => {
+    if (!user) return 1200;
+    return (
+      (user.fideRating > 0 && user.fideRating) ||
+      (user.chessComRating > 0 && user.chessComRating) ||
+      (user.lichessRating > 0 && user.lichessRating) ||
+      (user.rating > 0 && user.rating) ||
+      1200
+    );
+  };
+
+  const handleSelectDbUser = (user) => {
+    setSelectedDbUser(user);
+    const bestRating = getUserBestRating(user);
+    setPlayerForm({
+      name: user.name || "",
+      rating: bestRating,
+      major: user.major || "General / Foundation Year",
+      email: user.email || ""
+    });
+  };
+
+  const filteredDbUsers = dbUsers.filter((u) => {
+    if (!userSearchQuery.trim()) return true;
+    const q = userSearchQuery.trim().toLowerCase();
+    return (
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.major && u.major.toLowerCase().includes(q)) ||
+      (u.chessTitle && u.chessTitle.toLowerCase().includes(q))
+    );
+  });
 
   const [matchModalOpen, setMatchModalOpen] = useState(false);
   const [matchForm, setMatchForm] = useState({ round: 1, white: "", black: "", result: "1-0", matchTime: "" });
@@ -404,15 +482,20 @@ const isBlackWinner = (result) => {
 
   const handleAddPlayerSubmit = async (e) => {
     e.preventDefault();
-    if (!playerForm.name || !playerForm.rating || !playerForm.major) {
-      notify("All fields are required.", "warning");
+    if (!playerForm.name || playerForm.rating === "" || !playerForm.major) {
+      notify("Player name, rating, and major are required.", "warning");
       return;
     }
     try {
       const res = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/players`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(playerForm)
+        body: JSON.stringify({
+          name: playerForm.name.trim(),
+          rating: Number(playerForm.rating) || 1200,
+          major: playerForm.major.trim(),
+          email: playerForm.email ? playerForm.email.trim() : ""
+        })
       });
       const text = await res.text();
       let result;
@@ -420,7 +503,10 @@ const isBlackWinner = (result) => {
       if (!res.ok) {
         throw new Error(result.error || "Failed to add player.");
       }
-      setPlayerForm({ name: "", rating: "", major: "" });
+      notify(`✓ Player "${playerForm.name}" added to tournament successfully!`, "success");
+      setPlayerForm({ name: "", rating: "", major: "", email: "" });
+      setSelectedDbUser(null);
+      setUserSearchQuery("");
       setPlayerModalOpen(false);
       fetchTournamentDetails();
     } catch (err) {
@@ -3638,7 +3724,14 @@ const isBlackWinner = (result) => {
       {/* --- ADD PLAYER MODAL --- */}
       {playerModalOpen && (
         <div className="modal-overlay" role="presentation" onClick={() => setPlayerModalOpen(false)}>
-          <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="add-participant-title" onClick={(e) => e.stopPropagation()}>
+          <div 
+            className="modal-card add-participant-modal" 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="add-participant-title" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "600px", width: "95%" }}
+          >
             <button 
               className="modal-close-btn" 
               onClick={() => setPlayerModalOpen(false)}
@@ -3646,7 +3739,261 @@ const isBlackWinner = (result) => {
             >
               <X size={18} />
             </button>
-            <h3 id="add-participant-title" className="modal-title">Add Participant</h3>
+
+            {/* Modal Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
+              <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "rgba(244, 198, 83, 0.15)", border: "1px solid rgba(244, 198, 83, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f4c653" }}>
+                <UserPlus size={20} />
+              </div>
+              <div>
+                <h3 id="add-participant-title" className="modal-title" style={{ margin: 0, fontSize: "20px" }}>Add Tournament Participant</h3>
+                <p style={{ margin: "2px 0 0", color: "#a89f91", fontSize: "0.82rem" }}>
+                  Add a participant to <strong style={{ color: "#f4c653" }}>{tournament?.title}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div style={{ display: "flex", gap: "8px", margin: "14px 0", background: "#14120c", padding: "4px", borderRadius: "10px", border: "1px solid rgba(244, 198, 83, 0.2)" }}>
+              <button
+                type="button"
+                onClick={() => setAddParticipantMode("database")}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  background: addParticipantMode === "database" ? "linear-gradient(135deg, #f4c653, #d4a326)" : "transparent",
+                  color: addParticipantMode === "database" ? "#14120c" : "#caba91"
+                }}
+              >
+                <Users size={15} /> Database Users {dbUsers.length > 0 ? `(${dbUsers.length})` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddParticipantMode("manual");
+                  setSelectedDbUser(null);
+                }}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  background: addParticipantMode === "manual" ? "linear-gradient(135deg, #f4c653, #d4a326)" : "transparent",
+                  color: addParticipantMode === "manual" ? "#14120c" : "#caba91"
+                }}
+              >
+                <UserPlus size={15} /> Manual / Guest Entry
+              </button>
+            </div>
+
+            {/* --- TAB 1: DATABASE USERS --- */}
+            {addParticipantMode === "database" && (
+              <div style={{ marginBottom: "14px" }}>
+                {/* Search Bar */}
+                <div style={{ position: "relative", marginBottom: "10px" }}>
+                  <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#a89f91", pointerEvents: "none" }} />
+                  <input
+                    type="text"
+                    placeholder="Search users by name, email, major, or title..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px 10px 36px",
+                      background: "#181611",
+                      border: "1px solid rgba(244, 198, 83, 0.25)",
+                      borderRadius: "8px",
+                      color: "#fff",
+                      fontSize: "0.88rem"
+                    }}
+                  />
+                  {userSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setUserSearchQuery("")}
+                      style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#a89f91", cursor: "pointer" }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Users List Box */}
+                <div 
+                  className="db-users-picker-list"
+                  style={{
+                    maxHeight: "220px",
+                    overflowY: "auto",
+                    background: "#14120c",
+                    border: "1px solid rgba(244, 198, 83, 0.2)",
+                    borderRadius: "10px",
+                    padding: "6px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px"
+                  }}
+                >
+                  {loadingDbUsers ? (
+                    <div style={{ padding: "24px", textAlign: "center", color: "#a89f91", fontSize: "0.88rem" }}>
+                      ⏳ Loading registered users from database...
+                    </div>
+                  ) : filteredDbUsers.length === 0 ? (
+                    <div style={{ padding: "24px", textAlign: "center", color: "#a89f91", fontSize: "0.88rem" }}>
+                      {userSearchQuery ? `No users matching "${userSearchQuery}"` : "No registered users found."}
+                    </div>
+                  ) : (
+                    filteredDbUsers.map((u) => {
+                      const isAlreadyInTournament = checkUserInTournament(u);
+                      const isSelected = selectedDbUser && (selectedDbUser._id === u._id || selectedDbUser.email === u.email);
+                      const bestRating = getUserBestRating(u);
+                      const avatarUrl = u.profileImage || getPlayerAvatarUrl(u.name, tournament?.playerAvatars);
+
+                      return (
+                        <div
+                          key={u._id || u.email || u.name}
+                          className={`db-user-picker-row ${isAlreadyInTournament ? "disabled" : ""}`}
+                          onClick={() => {
+                            if (!isAlreadyInTournament) {
+                              handleSelectDbUser(u);
+                            }
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            cursor: isAlreadyInTournament ? "not-allowed" : "pointer",
+                            background: isSelected 
+                              ? "rgba(244, 198, 83, 0.18)" 
+                              : isAlreadyInTournament 
+                                ? "rgba(255, 255, 255, 0.02)" 
+                                : "#1b1812",
+                            border: isSelected 
+                              ? "1px solid #f4c653" 
+                              : "1px solid rgba(255, 255, 255, 0.05)",
+                            opacity: isAlreadyInTournament ? 0.55 : 1
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
+                            {/* Avatar */}
+                            <div style={{ width: "34px", height: "34px", borderRadius: "50%", overflow: "hidden", background: "#2a2418", border: "1px solid rgba(244, 198, 83, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              {avatarUrl && avatarUrl !== "/Icons/unknown.png" ? (
+                                <img src={avatarUrl} alt={u.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              ) : (
+                                <span style={{ color: "#f4c653", fontWeight: "700", fontSize: "0.8rem" }}>
+                                  {(u.name || "P").charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* User Info */}
+                            <div style={{ minWidth: 0, overflow: "hidden" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                <span style={{ fontWeight: "600", color: "#fff", fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {u.name}
+                                </span>
+                                {u.chessTitle && (
+                                  <span style={{ fontSize: "0.68rem", fontWeight: "800", background: "rgba(244, 198, 83, 0.2)", color: "#f4c653", padding: "1px 5px", borderRadius: "4px" }}>
+                                    {u.chessTitle}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ color: "#8e8679", fontSize: "0.74rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {u.email} {u.major ? `• ${u.major}` : ""}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Badges / Action */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginLeft: "10px" }}>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: "0.82rem", fontWeight: "700", color: "#f4c653" }}>
+                                {u.fideRating > 0 ? `♟️ FIDE ${u.fideRating}` : `⚡ ${bestRating}`}
+                              </div>
+                              {u.fideRating > 0 && u.chessComRating > 0 && (
+                                <div style={{ fontSize: "0.68rem", color: "#8e8679" }}>
+                                  Chess.com: {u.chessComRating}
+                                </div>
+                              )}
+                            </div>
+
+                            {isAlreadyInTournament ? (
+                              <span style={{ fontSize: "0.72rem", background: "rgba(255,255,255,0.08)", color: "#a89f91", padding: "3px 8px", borderRadius: "6px", fontWeight: "600" }}>
+                                ✓ In Roster
+                              </span>
+                            ) : isSelected ? (
+                              <span style={{ fontSize: "0.72rem", background: "#f4c653", color: "#14120c", padding: "3px 8px", borderRadius: "6px", fontWeight: "700", display: "flex", alignItems: "center", gap: "3px" }}>
+                                <Check size={12} /> Selected
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: "0.72rem", background: "rgba(244, 198, 83, 0.12)", color: "#f4c653", padding: "3px 8px", borderRadius: "6px", fontWeight: "600" }}>
+                                Select
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Selected User Badge */}
+            {selectedDbUser && addParticipantMode === "database" && (
+              <div style={{ padding: "10px 14px", background: "rgba(244, 198, 83, 0.08)", border: "1px solid rgba(244, 198, 83, 0.3)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#2a2418", border: "1px solid #f4c653", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {(selectedDbUser.profileImage || getPlayerAvatarUrl(selectedDbUser.name, tournament?.playerAvatars)) && (selectedDbUser.profileImage || getPlayerAvatarUrl(selectedDbUser.name, tournament?.playerAvatars)) !== "/Icons/unknown.png" ? (
+                      <img src={selectedDbUser.profileImage || getPlayerAvatarUrl(selectedDbUser.name, tournament?.playerAvatars)} alt={selectedDbUser.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <span style={{ color: "#f4c653", fontWeight: "700", fontSize: "0.8rem" }}>
+                        {(selectedDbUser.name || "P").charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: "700", color: "#fff" }}>
+                      Selected: <span style={{ color: "#f4c653" }}>{selectedDbUser.name}</span>
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "#a89f91" }}>
+                      {selectedDbUser.email}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDbUser(null);
+                    setPlayerForm({ name: "", rating: "", major: "", email: "" });
+                  }}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "none", color: "#a89f91", padding: "4px 8px", borderRadius: "6px", fontSize: "0.75rem", cursor: "pointer" }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {/* Participant Details Form */}
             <form onSubmit={handleAddPlayerSubmit} className="modal-form">
               <div>
                 <label>Player Name *</label>
@@ -3658,62 +4005,86 @@ const isBlackWinner = (result) => {
                   required 
                 />
               </div>
-              <div>
-                <label>Rating *</label>
-                <input 
-                  type="number" 
-                  value={playerForm.rating} 
-                  onChange={(e) => setPlayerForm({ ...playerForm, rating: e.target.value })} 
-                  placeholder="e.g. 2100"
-                  required 
-                />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label>
+                    Tournament Rating *
+                    {selectedDbUser?.fideRating > 0 && (
+                      <span style={{ fontSize: "0.72rem", color: "#f4c653", marginLeft: "6px" }}>(FIDE Rating)</span>
+                    )}
+                  </label>
+                  <input 
+                    type="number" 
+                    value={playerForm.rating} 
+                    onChange={(e) => setPlayerForm({ ...playerForm, rating: e.target.value })} 
+                    placeholder="e.g. 1500"
+                    required 
+                  />
+                </div>
+
+                <div>
+                  <label>Major / Program *</label>
+                  <select 
+                    value={playerForm.major || ""} 
+                    onChange={(e) => setPlayerForm({ ...playerForm, major: e.target.value })} 
+                    required 
+                    style={{ width: "100%", padding: "10px 12px", background: "#1c1914", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "8px", color: "#fff", fontSize: "14px" }}
+                  >
+                    <option value="" disabled>-- Select ZC Major / Program --</option>
+                    
+                    <optgroup label="🏛️ School of Engineering">
+                      <option value="Aerospace Engineering">Aerospace Engineering</option>
+                      <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
+                      <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
+                      <option value="Mechatronics Engineering">Mechatronics Engineering</option>
+                      <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
+                      <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
+                    </optgroup>
+
+                    <optgroup label="🔬 School of Science">
+                      <option value="Biomedical Sciences">Biomedical Sciences</option>
+                      <option value="Biotechnology">Biotechnology</option>
+                      <option value="Nano Science">Nano Science</option>
+                      <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
+                    </optgroup>
+
+                    <optgroup label="💻 School of Business & Computing (CSAI)">
+                      <option value="Data Science and Artificial Intelligence (DSAI)">Data Science and Artificial Intelligence (DSAI)</option>
+                      <option value="Software Development (SW)">Software Development (SW)</option>
+                      <option value="Information Technology (IT)">Information Technology (IT)</option>
+                      <option value="Computer Science and Artificial Intelligence (CSAI - General)">Computer Science and Artificial Intelligence (CSAI - General)</option>
+                      <option value="Business Informatics">Business Informatics</option>
+                    </optgroup>
+
+                    <optgroup label="✨ General & Other">
+                      <option value="General / Foundation Year">General / Foundation Year</option>
+                      <option value="Other">Other</option>
+                    </optgroup>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label>Major / Program *</label>
-                <select 
-                  value={playerForm.major || ""} 
-                  onChange={(e) => setPlayerForm({ ...playerForm, major: e.target.value })} 
-                  required 
-                  style={{ width: "100%", padding: "10px 12px", background: "#1c1914", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "8px", color: "#fff", fontSize: "14px" }}
-                >
-                  <option value="" disabled>-- Select ZC Major / Program --</option>
-                  
-                  <optgroup label="🏛️ School of Engineering">
-                    <option value="Aerospace Engineering">Aerospace Engineering</option>
-                    <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
-                    <option value="Communications and Computer Engineering">Communications and Computer Engineering</option>
-                    <option value="Mechatronics Engineering">Mechatronics Engineering</option>
-                    <option value="Nanotechnology and Nanoelectronics Engineering">Nanotechnology and Nanoelectronics Engineering</option>
-                    <option value="Renewable Energy Engineering">Renewable Energy Engineering</option>
-                  </optgroup>
 
-                  <optgroup label="🔬 School of Science">
-                    <option value="Biomedical Sciences">Biomedical Sciences</option>
-                    <option value="Biotechnology">Biotechnology</option>
-                    <option value="Nano Science">Nano Science</option>
-                    <option value="Physics (Physics of the Universe)">Physics (Physics of the Universe)</option>
-                  </optgroup>
+              {/* Late Entrant Note for In-Progress Swiss Tournaments */}
+              {isSwissFormat && tournament?.matches && tournament.matches.length > 0 && (
+                <div style={{ padding: "8px 12px", background: "rgba(244, 198, 83, 0.08)", border: "1px solid rgba(244, 198, 83, 0.2)", borderRadius: "8px", fontSize: "0.78rem", color: "#caba91", display: "flex", gap: "8px", alignItems: "center" }}>
+                  <span>ℹ️</span>
+                  <span>
+                    <strong>FIDE Late Entry:</strong> This participant will be recorded with 0 points for past rounds and paired in the next round you generate.
+                  </span>
+                </div>
+              )}
 
-                  <optgroup label="💻 School of Business & Computing (CSAI)">
-                    <option value="Data Science and Artificial Intelligence (DSAI)">Data Science and Artificial Intelligence (DSAI)</option>
-                    <option value="Software Development (SW)">Software Development (SW)</option>
-                    <option value="Information Technology (IT)">Information Technology (IT)</option>
-                    <option value="Computer Science and Artificial Intelligence (CSAI - General)">Computer Science and Artificial Intelligence (CSAI - General)</option>
-                    <option value="Business Informatics">Business Informatics</option>
-                  </optgroup>
-
-                  <optgroup label="✨ General & Other">
-                    <option value="General / Foundation Year">General / Foundation Year</option>
-                    <option value="Other">Other</option>
-                  </optgroup>
-                </select>
-              </div>
               <div className="modal-btn-row">
                 <button type="button" className="btn-secondary" onClick={() => setPlayerModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Add Participant
+                <button 
+                  type="submit" 
+                  className="btn-primary"
+                  disabled={addParticipantMode === "database" && !selectedDbUser && !playerForm.name}
+                >
+                  + Add Participant
                 </button>
               </div>
             </form>

@@ -3339,8 +3339,8 @@ app.get('/api/players/avatars', async (req, res) => {
 // PUT: add a player to a tournament
 app.put('/api/tournaments/:id/players', async (req, res) => {
   try {
-    const { name, rating, major } = req.body;
-    if (!name || !rating || !major) {
+    const { name, rating, major, email } = req.body;
+    if (!name || rating === undefined || rating === null || rating === '' || !major) {
       return res.status(400).json({ error: "Name, rating, and major are required" });
     }
     
@@ -3348,10 +3348,47 @@ app.put('/api/tournaments/:id/players', async (req, res) => {
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
+
+    const trimmedName = String(name).trim();
+    const cleanName = trimmedName.toLowerCase();
+
+    // Prevent duplicate player in tournament roster (case-insensitive)
+    const isDuplicate = (tournament.playersList || []).some(
+      p => (p.name || '').trim().toLowerCase() === cleanName
+    );
+    if (isDuplicate) {
+      return res.status(400).json({ error: `Player "${trimmedName}" is already registered in this tournament.` });
+    }
     
-    tournament.playersList.push({ name, rating: Number(rating), major });
+    if (!tournament.playersList) tournament.playersList = [];
+    tournament.playersList.push({ name: trimmedName, rating: Number(rating) || 1200, major: String(major).trim() });
     // Keep 'players' count field in sync
     tournament.players = tournament.playersList.length;
+
+    // Link user registration for avatars, availability, and match notifications
+    let resolvedEmail = email ? String(email).trim().toLowerCase() : null;
+    if (!resolvedEmail && !isMockId(req.params.id)) {
+      try {
+        const foundUser = await User.findOne({ 
+          name: new RegExp(`^${trimmedName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') 
+        });
+        if (foundUser?.email) resolvedEmail = foundUser.email.trim().toLowerCase();
+      } catch (e) {}
+    }
+
+    if (resolvedEmail) {
+      if (!Array.isArray(tournament.registrations)) tournament.registrations = [];
+      const hasReg = tournament.registrations.some(
+        r => (r.email || '').trim().toLowerCase() === resolvedEmail
+      );
+      if (!hasReg) {
+        tournament.registrations.push({
+          email: resolvedEmail,
+          name: trimmedName,
+          status: 'Approved'
+        });
+      }
+    }
     
     await tournament.save();
     res.json({ message: "Player added successfully!", data: tournament });
