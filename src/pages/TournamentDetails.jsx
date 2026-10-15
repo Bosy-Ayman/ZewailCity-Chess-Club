@@ -1323,10 +1323,24 @@ const formatSwissResult = (result) => {
         const p = targetPlayers[idx];
         const pName = typeof p === "string" ? p : p.name;
         const normalizedName = pName?.trim().toLocaleLowerCase();
+        const normalizedEmailName = value => typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
         let pEmail = typeof p === "object" ? (p.email || "") : "";
-        if (!pEmail && tournament?.playersList) {
-          const matchedPlayer = tournament.playersList.find(pl => typeof pl === "object" && pl.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
-          if (matchedPlayer && matchedPlayer.email) pEmail = matchedPlayer.email;
+        // Swiss standings are synthesized from playersList and matches, so their
+        // rows don't carry registration emails. Resolve by name through the source
+        // roster, registrations, and profile data before deciding an email is absent.
+        const samePlayer = candidate => normalizedEmailName(candidate?.name) === normalizedEmailName(pName);
+        if (!pEmail) {
+          const matchedPlayer = (tournament?.playersList || []).find(samePlayer);
+          pEmail = matchedPlayer?.email || "";
+        }
+        if (!pEmail) {
+          const registration = (tournament?.registrations || []).find(samePlayer);
+          pEmail = registration?.email || "";
+        }
+        if (!pEmail) {
+          const profileEntries = Object.values(tournament?.playerProfiles || {});
+          const profile = profileEntries.find(samePlayer);
+          pEmail = profile?.email || "";
         }
         pEmail = typeof pEmail === "string" ? pEmail.trim() : "";
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pEmail)) {
