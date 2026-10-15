@@ -1550,22 +1550,134 @@ const formatSwissResult = (result) => {
       }
     });
 
-    // 2. Compute Buchholz (sum of opponents' points) & Sonneborn-Berger (SB)
+    // FIDE C.07 Article 6: apply the direct-encounter mini-table within each
+    // tied score group. Forfeit encounters are excluded by default (6.1.1).
+    // In an incomplete Swiss mini-table, only award a direct-encounter place
+    // when it is guaranteed regardless of the missing encounters (6.3).
+    const directRankByName = new Map();
+    const rankByDirectEncounter = (group, startingRank = 0) => {
+      if (group.length < 2) {
+        group.forEach((player, index) => directRankByName.set(player.name, startingRank + index));
+        return group.length;
+      }
+      const hasEncounter = (left, right) => directScores[left.name]?.[right.name] != null;
+      const complete = group.every((player, index) => group.slice(index + 1).every(opponent => hasEncounter(player, opponent)));
+      if (complete) {
+        const byScore = new Map();
+        group.forEach(player => {
+          const score = group.reduce((sum, opponent) => sum + (directScores[player.name]?.[opponent.name] || 0), 0);
+          const sameScore = byScore.get(score) || [];
+          sameScore.push(player);
+          byScore.set(score, sameScore);
+        });
+        let consumed = 0;
+        for (const sameScore of [...byScore.entries()].sort((a, b) => b[0] - a[0]).map(([, playersAtScore]) => playersAtScore)) {
+          if (sameScore.length === group.length) {
+            sameScore.forEach(player => directRankByName.set(player.name, startingRank));
+            return group.length;
+          }
+          consumed += rankByDirectEncounter(sameScore, startingRank + consumed);
+        }
+        return consumed;
+      }
+
+      let remaining = [...group];
+      let consumed = 0;
+      while (remaining.length > 1) {
+        const directScore = player => remaining.reduce((sum, opponent) => (
+          opponent.name === player.name ? sum : sum + (directScores[player.name]?.[opponent.name] || 0)
+        ), 0);
+        const possibleExtra = player => remaining.reduce((count, opponent) => (
+          opponent.name !== player.name && !hasEncounter(player, opponent) ? count + 1 : count
+        ), 0);
+        const guaranteedLeaders = remaining.filter(candidate => remaining.every(opponent => (
+          opponent.name === candidate.name || directScore(candidate) > directScore(opponent) + possibleExtra(opponent)
+        )));
+        if (guaranteedLeaders.length !== 1) break;
+        directRankByName.set(guaranteedLeaders[0].name, startingRank + consumed);
+        consumed += 1;
+        remaining = remaining.filter(player => player.name !== guaranteedLeaders[0].name);
+      }
+      remaining.forEach(player => directRankByName.set(player.name, startingRank + consumed));
+      return consumed + remaining.length;
+    };
+    const pointsGroups = new Map();
+    Object.values(statsMap).forEach(player => {
+      const group = pointsGroups.get(player.points) || [];
+      group.push(player);
+      pointsGroups.set(player.points, group);
+    });
+    pointsGroups.forEach(group => rankByDirectEncounter(group));
+
+    // FIDE C.07 Article 16.3: scores used for an opponent's tie-break must
+    // reflect unplayed rounds. For forfeits the awarded win/draw/loss already
+    // matches the standings score. A withdrawn player's later zero-point
+    // rounds (16.2.5) are treated as draws for their opponents' tie-breaks.
+    const allNames = new Set();
+    const playedRoundsByName = new Map();
+    const rawScoresByName = new Map();
+    const award = (name, points) => {
+      if (!name || name === "BYE") return;
+      allNames.add(name);
+      rawScoresByName.set(name, (rawScoresByName.get(name) || 0) + points);
+    };
+    matches.forEach((m) => {
+      if (!m.white || !m.black) return;
+      const round = Number(m.round) || 1;
+      [m.white, m.black].forEach(name => {
+        if (name && name !== "BYE") {
+          allNames.add(name);
+          const rounds = playedRoundsByName.get(name) || new Set();
+          rounds.add(round);
+          playedRoundsByName.set(name, rounds);
+        }
+      });
+      const result = normalizeSwissResult(m.result);
+      if (m.black === "BYE") {
+        award(m.white, 1);
+      } else if (result === "1-0" || result === "1-0F") {
+        award(m.white, 1);
+        award(m.black, 0);
+      } else if (result === "0-1" || result === "0-1F") {
+        award(m.white, 0);
+        award(m.black, 1);
+      } else if (result === "1/2-1/2") {
+        award(m.white, 0.5);
+        award(m.black, 0.5);
+      } else if (result === "0-0") {
+        award(m.white, 0);
+        award(m.black, 0);
+      }
+    });
+    players.forEach(p => { if (p?.name) allNames.add(p.name); });
+    const tournamentRoundCount = Math.max(0, Number(tournament?.rounds) || 0);
+    const adjustedScores = new Map(rawScoresByName);
+    allNames.forEach(name => {
+      // A player absent from the active roster after a recorded round has
+      // withdrawn. Their remaining zero-point rounds are VURs/late requested
+      // byes and Article 16.3.2 evaluates them as draws for opponent tie-breaks.
+      if (!statsMap[name] && tournamentRoundCount > 0) {
+        const playedRounds = playedRoundsByName.get(name) || new Set();
+        const lastRecordedRound = playedRounds.size ? Math.max(...playedRounds) : 0;
+        const laterUnplayedRounds = Math.max(0, tournamentRoundCount - lastRecordedRound);
+        adjustedScores.set(name, (adjustedScores.get(name) || 0) + laterUnplayedRounds * 0.5);
+      }
+    });
+
+    // 2. Compute Buchholz (sum of adjusted opponents' scores) & Sonneborn-Berger.
     Object.keys(statsMap).forEach((name) => {
       const player = statsMap[name];
-      const opponentScores = [];
-      const virtualRoundScores = [];
+      const buchholzContributions = [];
       let sbScore = 0;
 
       matches.forEach((m) => {
-        if (!m.result || m.result === "Pending") return;
+        if ((!m.result || m.result === "Pending") && m.black !== "BYE") return;
         let opponentName = null;
         let myScore = null;
 
         if (m.white === name && m.black === "BYE") {
-          const virtualScore = Math.min(player.points, (Number(tournament?.rounds) || 0) * 0.5);
-          opponentScores.push(virtualScore);
-          virtualRoundScores.push({ buchholz: virtualScore });
+          const virtualScore = Math.min(player.points, tournamentRoundCount * 0.5);
+          buchholzContributions.push({ score: virtualScore, isVUR: false });
           sbScore += virtualScore;
           return;
         }
@@ -1586,27 +1698,34 @@ const formatSwissResult = (result) => {
 
         const normalizedResult = normalizeSwissResult(m.result);
         const isForfeit = normalizedResult === "1-0F" || normalizedResult === "0-1F" || normalizedResult === "0-0";
-        if (opponentName && statsMap[opponentName] && isForfeit) {
-          const virtualScore = Math.min(player.points, statsMap[opponentName].points || 0);
-          opponentScores.push(virtualScore);
-          virtualRoundScores.push({ buchholz: virtualScore });
-          if (myScore === 1) sbScore += virtualScore;
-          else if (myScore === 0.5) sbScore += virtualScore * 0.5;
-        } else if (opponentName && statsMap[opponentName]) {
-          const oppPts = statsMap[opponentName].points || 0;
-          opponentScores.push(oppPts);
-          if (myScore === 1) sbScore += oppPts;
-          else if (myScore === 0.5) sbScore += oppPts * 0.5;
-          // For myScore === 0 (including 0-0 forfeit), add nothing to SB
+        if (opponentName && adjustedScores.has(opponentName)) {
+          const opponentAdjustedScore = adjustedScores.get(opponentName) || 0;
+          if (isForfeit) {
+            // Article 16.4.1: a forfeited round is a game against a dummy whose
+            // score is capped at both the player's score and the scheduled
+            // opponent's Article 16.3-adjusted score.
+            const virtualScore = Math.min(player.points, opponentAdjustedScore);
+            buchholzContributions.push({ score: virtualScore, isVUR: myScore === 0 });
+            sbScore += virtualScore * (myScore || 0);
+          } else {
+            buchholzContributions.push({ score: opponentAdjustedScore, isVUR: false });
+            sbScore += opponentAdjustedScore * (myScore || 0);
+          }
         }
       });
 
-      const totalBuchholz = opponentScores.reduce((sum, val) => sum + val, 0);
-      const minOpponentScore = opponentScores.length > 0 ? Math.min(...opponentScores) : 0;
+      const totalBuchholz = buchholzContributions.reduce((sum, contribution) => sum + contribution.score, 0);
+      const minOpponentScore = buchholzContributions.length > 0
+        ? Math.min(...buchholzContributions.map(contribution => contribution.score))
+        : 0;
       let buchholzCut1 = totalBuchholz;
-      if (opponentScores.length > 1) {
-        const lowestVirtual = virtualRoundScores.reduce((lowest, round) => round.buchholz < (lowest?.buchholz ?? Infinity) ? round : lowest, null);
-        const cutValue = lowestVirtual && lowestVirtual.buchholz >= minOpponentScore ? lowestVirtual.buchholz : minOpponentScore;
+      if (buchholzContributions.length > 1) {
+        const lowestVUR = buchholzContributions
+          .filter(contribution => contribution.isVUR)
+          .reduce((lowest, contribution) => contribution.score < (lowest ?? Infinity) ? contribution.score : lowest, null);
+        // Article 16.5.1: for a player with a VUR, cut its lowest Buchholz
+        // contribution when it is not lower than the least significant value.
+        const cutValue = lowestVUR != null && lowestVUR >= minOpponentScore ? lowestVUR : minOpponentScore;
         buchholzCut1 = totalBuchholz - cutValue;
       }
 
@@ -1625,15 +1744,7 @@ const formatSwissResult = (result) => {
       for (const criterion of tieBreakOrder) {
         let difference = 0;
         if (criterion === "DE") {
-          const tiedPlayers = Object.values(statsMap).filter((player) => player.points === a.points);
-          const completeDirectEncounter = tiedPlayers.every((player, index) => tiedPlayers.slice(index + 1).every((opponent) => (
-            directScores[player.name]?.[opponent.name] != null && directScores[opponent.name]?.[player.name] != null
-          )));
-          if (completeDirectEncounter) {
-            const aScore = tiedPlayers.reduce((score, opponent) => score + (directScores[a.name]?.[opponent.name] || 0), 0);
-            const bScore = tiedPlayers.reduce((score, opponent) => score + (directScores[b.name]?.[opponent.name] || 0), 0);
-            difference = bScore - aScore;
-          }
+          difference = (directRankByName.get(a.name) ?? 0) - (directRankByName.get(b.name) ?? 0);
         } else if (criterion === "BH-C1") difference = b.buchholzCut1 - a.buchholzCut1;
         else if (criterion === "BH") difference = b.buchholz - a.buchholz;
         else if (criterion === "SB") difference = b.sonnebornBerger - a.sonnebornBerger;
