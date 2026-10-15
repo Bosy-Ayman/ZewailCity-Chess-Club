@@ -2568,5 +2568,17 @@
 .tournament-feedback-admin-rating { flex-shrink: 0; padding: 5px 9px; color: #f3c144; background: rgba(243, 193, 68, 0.1); border-radius: 8px; font-weight: 800; }
 .tournament-feedback-admin-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 .tournament-feedback-admin-tags span { padding: 4px 8px; color: #dfd4b9; background: rgba(255,255,255,0.06); border-radius: 999px; font-size: 0.78rem; }
+.feedback-chip-badge.highlight {
+  background: rgba(243, 193, 68, 0.12) !important;
+  border: 1px solid rgba(243, 193, 68, 0.3);
+  color: #f3c144 !important;
+  font-weight: 600;
+}
+.feedback-chip-badge.contribution {
+  background: rgba(72, 187, 120, 0.12) !important;
+  border: 1px solid rgba(72, 187, 120, 0.35);
+  color: #68d391 !important;
+  font-weight: 600;
+}
 .tournament-feedback-admin-card > p { line-height: 1.55; }
 .tournament-feedback-admin-card > small { color: #928b7c; }

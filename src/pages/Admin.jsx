@@ -2193,31 +2193,142 @@ const PrettyRoleData = ({ data }) => {
 
           {activeTab === "tournament-feedback" && (
             <div className="table-card">
-              <h2>💬 Tournament Feedback</h2>
-              <p className="empty-message">Player ratings and suggestions submitted after completed tournaments.</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+                <div>
+                  <h2 style={{ margin: "0 0 6px" }}>💬 Tournament Feedback Responses</h2>
+                  <p className="empty-message" style={{ margin: 0 }}>
+                    Player ratings, highlight impressions, volunteering interests, and suggestions submitted after completed tournaments.
+                  </p>
+                </div>
+                {tournamentFeedback.length > 0 && (
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <div style={{ background: "rgba(243,193,68,0.12)", border: "1px solid rgba(243,193,68,0.3)", borderRadius: "10px", padding: "8px 16px", textAlign: "center" }}>
+                      <span style={{ fontSize: "0.72rem", color: "#a89f91", textTransform: "uppercase", display: "block", fontWeight: "700" }}>Total Responses</span>
+                      <strong style={{ fontSize: "1.2rem", color: "#f3c144" }}>{tournamentFeedback.length}</strong>
+                    </div>
+                    <div style={{ background: "rgba(243,193,68,0.12)", border: "1px solid rgba(243,193,68,0.3)", borderRadius: "10px", padding: "8px 16px", textAlign: "center" }}>
+                      <span style={{ fontSize: "0.72rem", color: "#a89f91", textTransform: "uppercase", display: "block", fontWeight: "700" }}>Avg Rating</span>
+                      <strong style={{ fontSize: "1.2rem", color: "#f3c144" }}>
+                        {(tournamentFeedback.reduce((acc, f) => acc + (Number(f.rating) || 0), 0) / tournamentFeedback.length).toFixed(1)} ★
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {tournamentFeedback.length === 0 ? (
-                <p className="empty-message">No tournament feedback has been submitted yet.</p>
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#8e8677" }}>
+                  <span style={{ fontSize: "2.2rem", display: "block", marginBottom: "8px" }}>📭</span>
+                  <p className="empty-message">No tournament feedback responses submitted yet.</p>
+                </div>
               ) : (
                 <div className="tournament-feedback-admin-list">
-                  {tournamentFeedback.map((item) => (
-                    <article key={item._id} className="tournament-feedback-admin-card">
-                      <div className="tournament-feedback-admin-header">
-                        <div>
-                          <h3>{item.playerName}</h3>
-                          <p>{item.tournamentTitle} · {item.email}</p>
+                  {tournamentFeedback.map((item) => {
+                    const ratingNum = Number(item.rating) || 0;
+                    const ratingLabel = ratingNum === 5 ? "Outstanding" : ratingNum === 4 ? "Great" : ratingNum === 3 ? "Good" : ratingNum === 2 ? "Fair" : "Poor";
+                    const contributionLabels = {
+                      highboard: "👑 High Board Applicant",
+                      organizing: "⏱️ Match Arbiter / Organizing",
+                      media: "📸 Media & Content",
+                      equipment: "♟️ Brings Clocks/Boards",
+                      cannot_contribute: "🎮 Player Only",
+                      other: "✨ Other Contribution"
+                    };
+                    const highlightLabels = {
+                      smooth_pairings: "⚡ Punctual & Fair Pairings",
+                      great_atmosphere: "🎉 Great Atmosphere",
+                      friendly_arbiters: "🤝 Helpful Organizers",
+                      quality_boards: "♟️ Good Boards & Clocks",
+                      long_waiting: "⏳ Long Waiting Times",
+                      noisy_hall: "📢 Noisy Hall",
+                      clearer_rules: "📖 Unclear Tiebreaks",
+                      more_rounds: "⏱️ Prefers Longer Time Control"
+                    };
+
+                    return (
+                      <article key={item._id} className="tournament-feedback-admin-card">
+                        <div className="tournament-feedback-admin-header">
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                              <h3 style={{ margin: 0 }}>{item.playerName}</h3>
+                              <span style={{ fontSize: "0.75rem", color: "#a89f91", background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: "4px" }}>
+                                {item.email}
+                              </span>
+                            </div>
+                            <p style={{ margin: "4px 0 0", color: "#d6cfbe", fontSize: "0.85rem" }}>
+                              🏆 <strong>{item.tournamentTitle}</strong>
+                            </p>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <span className="tournament-feedback-admin-rating" aria-label={`Rating ${ratingNum} out of 5`}>
+                              ⭐ {ratingNum}/5
+                            </span>
+                            <span style={{ display: "block", fontSize: "0.72rem", color: "#f3c144", fontWeight: "700", marginTop: "3px" }}>
+                              {ratingLabel}
+                            </span>
+                          </div>
                         </div>
-                        <span className="tournament-feedback-admin-rating" aria-label={`Rating ${item.rating} out of 5`}>⭐ {item.rating}/5</span>
-                      </div>
-                      <div className="tournament-feedback-admin-tags">
-                        {(item.contributions || []).map((value) => (
-                          <span key={value}>{({ highboard: "Interested in High Board", equipment: "Can bring chess equipment", cannot_contribute: "Can’t contribute", other: "Other" })[value] || value}</span>
-                        ))}
-                      </div>
-                      {item.otherText && <p><strong>Other:</strong> {item.otherText}</p>}
-                      {item.improvements && <p><strong>Suggestions:</strong> {item.improvements}</p>}
-                      <small>Submitted {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "—"}</small>
-                    </article>
-                  ))}
+
+                        {/* Highlight Impressions */}
+                        {Array.isArray(item.highlightTags) && item.highlightTags.length > 0 && (
+                          <div style={{ marginTop: "10px" }}>
+                            <span style={{ fontSize: "0.75rem", color: "#a89f91", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                              Player Impressions:
+                            </span>
+                            <div className="tournament-feedback-admin-tags" style={{ marginTop: "4px" }}>
+                              {item.highlightTags.map((tagKey) => (
+                                <span key={tagKey} className="feedback-chip-badge highlight">
+                                  {highlightLabels[tagKey] || tagKey}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Volunteering / Contributions */}
+                        {Array.isArray(item.contributions) && item.contributions.length > 0 && (
+                          <div style={{ marginTop: "10px" }}>
+                            <span style={{ fontSize: "0.75rem", color: "#a89f91", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                              Community Involvement:
+                            </span>
+                            <div className="tournament-feedback-admin-tags" style={{ marginTop: "4px" }}>
+                              {item.contributions.map((val) => (
+                                <span key={val} className="feedback-chip-badge contribution">
+                                  {contributionLabels[val] || val}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {item.otherText && (
+                          <div style={{ marginTop: "8px", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                            <strong style={{ fontSize: "0.78rem", color: "#f3c144" }}>Other Contribution Details:</strong>
+                            <p style={{ margin: "2px 0 0", fontSize: "0.86rem", color: "#eee8d9" }}>{item.otherText}</p>
+                          </div>
+                        )}
+
+                        {item.improvements && (
+                          <div style={{ marginTop: "8px", background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                            <strong style={{ fontSize: "0.78rem", color: "#f3c144" }}>Suggestions &amp; Ideas:</strong>
+                            <p style={{ margin: "2px 0 0", fontSize: "0.86rem", color: "#eee8d9" }}>{item.improvements}</p>
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <small style={{ color: "#8e8677" }}>
+                            📅 {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "—"}
+                          </small>
+                          <a
+                            href={`mailto:${item.email}?subject=Thank you for your feedback on ${encodeURIComponent(item.tournamentTitle)}`}
+                            style={{ fontSize: "0.78rem", color: "#f3c144", textDecoration: "none", fontWeight: "700" }}
+                          >
+                            ✉️ Reply
+                          </a>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>
