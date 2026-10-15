@@ -82,6 +82,93 @@ html {
 .tournament-feedback-rating input { position: absolute; opacity: 0; pointer-events: none; }
 .tournament-feedback-rating span { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #514938; border-radius: 10px; color: #d6d0c2; font-weight: 800; cursor: pointer; }
 .tournament-feedback-rating label.selected span, .tournament-feedback-rating label:focus-within span { color: #15120c; background: #f3c144; border-color: #f3c144; }
+
+/* Enhanced 1-5 Star Rating with Anchors */
+.tournament-feedback-rating-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.feedback-rate-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #484030;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.feedback-rate-btn input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.feedback-rate-btn .rate-num {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #f3c144;
+}
+.feedback-rate-btn .rate-desc {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #a89f91;
+  margin-top: 2px;
+}
+.feedback-rate-btn:hover {
+  background: rgba(243, 193, 68, 0.08);
+  border-color: rgba(243, 193, 68, 0.4);
+}
+.feedback-rate-btn.selected {
+  background: linear-gradient(135deg, rgba(243, 193, 68, 0.25), rgba(212, 163, 42, 0.15));
+  border-color: #f3c144;
+  box-shadow: 0 0 14px rgba(243, 193, 68, 0.2);
+}
+.feedback-rate-btn.selected .rate-desc {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Quick Highlight Impression Chips */
+.feedback-tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.feedback-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #c9c1b1;
+  padding: 7px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.feedback-chip:hover {
+  background: rgba(243, 193, 68, 0.1);
+  border-color: rgba(243, 193, 68, 0.35);
+  color: #f3c144;
+}
+.feedback-chip.selected {
+  background: rgba(243, 193, 68, 0.2);
+  border-color: #f3c144;
+  color: #f3c144;
+  font-weight: 750;
+}
+.feedback-chip .chip-check {
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
 .tournament-feedback-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .tournament-feedback-actions button { padding: 10px 18px; color: #15120c; background: linear-gradient(135deg, #f3c144, #d4a32a); border: 0; border-radius: 9px; font-weight: 850; cursor: pointer; }
 .tournament-feedback-actions button:disabled { opacity: 0.6; cursor: wait; }
@@ -94,6 +181,7 @@ html {
 @media (max-width: 600px) {
   .tournament-feedback-modal { padding: 20px 16px 16px; }
   .tournament-feedback-heading { padding-right: 26px; }
+  .tournament-feedback-rating-labels { grid-template-columns: repeat(3, 1fr); }
   .tournament-feedback-modal-actions { flex-direction: column-reverse; }
   .tournament-feedback-modal-actions button { width: 100%; }
 }

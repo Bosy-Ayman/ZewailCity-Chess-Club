@@ -41,6 +41,7 @@ export default function TournamentDetails() {
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackHighlightTags, setFeedbackHighlightTags] = useState([]);
   const [feedbackContributions, setFeedbackContributions] = useState([]);
   const [feedbackOtherText, setFeedbackOtherText] = useState("");
   const [feedbackImprovements, setFeedbackImprovements] = useState("");
@@ -1828,6 +1829,7 @@ const formatSwissResult = (result) => {
         }
         setTournamentFeedback(data);
         setFeedbackRating(Number(data.rating) || 0);
+        setFeedbackHighlightTags(Array.isArray(data.highlightTags) ? data.highlightTags : []);
         setFeedbackContributions(Array.isArray(data.contributions) ? data.contributions : []);
         setFeedbackOtherText(data.otherText || "");
         setFeedbackImprovements(data.improvements || "");
@@ -1840,7 +1842,7 @@ const formatSwissResult = (result) => {
   const submitTournamentFeedback = async (event) => {
     event.preventDefault();
     setFeedbackError("");
-    if (!feedbackRating) return setFeedbackError("Please rate the tournament day from 1 to 5.");
+    if (!feedbackRating) return setFeedbackError("Please choose an overall rating (1 to 5 stars).");
     if (feedbackContributions.includes("other") && !feedbackOtherText.trim()) return setFeedbackError("Please describe your other contribution.");
     const token = localStorage.getItem("adminToken");
     if (!token) return setFeedbackError("Please sign in again to submit feedback.");
@@ -1849,7 +1851,13 @@ const formatSwissResult = (result) => {
       const response = await fetch(`${API_BASE}/api/tournaments/${tournamentId}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ contributions: feedbackContributions, otherText: feedbackOtherText, rating: feedbackRating, improvements: feedbackImprovements })
+        body: JSON.stringify({
+          rating: feedbackRating,
+          highlightTags: feedbackHighlightTags,
+          improvements: feedbackImprovements,
+          contributions: feedbackContributions,
+          otherText: feedbackOtherText
+        })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save feedback.");
@@ -1861,6 +1869,12 @@ const formatSwissResult = (result) => {
     } finally {
       setFeedbackSaving(false);
     }
+  };
+
+  const toggleFeedbackHighlightTag = (tag) => {
+    setFeedbackHighlightTags((current) =>
+      current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
+    );
   };
 
   const toggleFeedbackContribution = (value) => {
@@ -4082,12 +4096,71 @@ const formatSwissResult = (result) => {
               </div>
               {feedbackLoading ? <p className="tournament-feedback-muted">Loading your feedback…</p> : (
                 <>
+                  {/* 1. Overall Rating with Descriptive Anchors */}
                   <fieldset className="tournament-feedback-fieldset">
-                    <legend>Is there a way you can help us improve the chess experience in Zewail?</legend>
+                    <legend>1. How would you rate your overall tournament experience? <span aria-hidden="true">*</span></legend>
+                    <div className="tournament-feedback-rating-labels" role="radiogroup" aria-label="Rate the tournament day from 1 to 5 stars">
+                      {[
+                        { score: 1, star: "⭐", label: "Poor" },
+                        { score: 2, star: "⭐⭐", label: "Fair" },
+                        { score: 3, star: "⭐⭐⭐", label: "Good" },
+                        { score: 4, star: "⭐⭐⭐⭐", label: "Great" },
+                        { score: 5, star: "⭐⭐⭐⭐⭐", label: "Outstanding" }
+                      ].map(({ score, star, label }) => (
+                        <label key={score} className={`feedback-rate-btn ${feedbackRating === score ? "selected" : ""}`}>
+                          <input type="radio" name="tournament-feedback-rating" value={score} checked={feedbackRating === score} onChange={() => setFeedbackRating(score)} required />
+                          <span className="rate-num">{score} ★</span>
+                          <span className="rate-desc">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  {/* 2. Quick Highlight Chips */}
+                  <fieldset className="tournament-feedback-fieldset">
+                    <legend>2. Quick Highlights &amp; Impressions <span style={{ fontSize: "0.78rem", fontWeight: "400", color: "#a89f91" }}>(select all that apply)</span></legend>
+                    <div className="feedback-tag-cloud">
+                      {[
+                        ["smooth_pairings", "⚡ Punctual & Fair Pairings"],
+                        ["great_atmosphere", "🎉 Great Hall Atmosphere"],
+                        ["friendly_arbiters", "🤝 Helpful Organizers"],
+                        ["quality_boards", "♟️ Good Boards & Clocks"],
+                        ["long_waiting", "⏳ Too Much Waiting Between Rounds"],
+                        ["noisy_hall", "📢 Hall Was Noisy / Distracting"],
+                        ["clearer_rules", "📖 Needed Clearer Tiebreak Rules"],
+                        ["more_rounds", "⏱️ Preferred Longer Time Control"]
+                      ].map(([tagKey, tagLabel]) => {
+                        const isSelected = feedbackHighlightTags.includes(tagKey);
+                        return (
+                          <button
+                            type="button"
+                            key={tagKey}
+                            className={`feedback-chip ${isSelected ? "selected" : ""}`}
+                            onClick={() => toggleFeedbackHighlightTag(tagKey)}
+                          >
+                            <span>{tagLabel}</span>
+                            {isSelected && <span className="chip-check">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+
+                  {/* 3. Suggestions & Open Thoughts */}
+                  <label className="tournament-feedback-field">
+                    <span>3. What do you think can be improved? <span style={{ fontSize: "0.78rem", fontWeight: "400", color: "#a89f91" }}>(Optional ideas or suggestions)</span></span>
+                    <textarea value={feedbackImprovements} onChange={(event) => setFeedbackImprovements(event.target.value)} maxLength={3000} rows={3} placeholder="Share any feedback on the schedule, venue, arbitration, prizes, or what you'd like to see next time…" />
+                  </label>
+
+                  {/* 4. Future Involvement & Community Support */}
+                  <fieldset className="tournament-feedback-fieldset">
+                    <legend>4. Is there a way you can help us improve the chess experience in Zewail?</legend>
                     {[
-                      ["highboard", "Would like to apply as a member in the High Board"],
-                      ["equipment", "Would like to bring my chess board or chess clock to upcoming tournaments"],
-                      ["cannot_contribute", "Can’t contribute"],
+                      ["highboard", "Apply as a member in the High Board"],
+                      ["organizing", "Help with tournament arbitration & organizing matches"],
+                      ["media", "Media, photography & social content creation"],
+                      ["equipment", "Bring personal chess boards or chess clocks to future events"],
+                      ["cannot_contribute", "Just here to play! (Can’t contribute right now)"],
                       ["other", "Other"]
                     ].map(([value, label]) => (
                       <label className="tournament-feedback-choice" key={value}>
@@ -4097,21 +4170,7 @@ const formatSwissResult = (result) => {
                     ))}
                     {feedbackContributions.includes("other") && <input className="tournament-feedback-input" value={feedbackOtherText} onChange={(event) => setFeedbackOtherText(event.target.value)} maxLength={500} placeholder="Tell us how you’d like to contribute" aria-label="Other contribution" />}
                   </fieldset>
-                  <fieldset className="tournament-feedback-fieldset">
-                    <legend>How would you rate the day? <span aria-hidden="true">*</span></legend>
-                    <div className="tournament-feedback-rating" role="radiogroup" aria-label="Rate the tournament day from 1 to 5">
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <label key={rating} className={feedbackRating === rating ? "selected" : ""}>
-                          <input type="radio" name="tournament-feedback-rating" value={rating} checked={feedbackRating === rating} onChange={() => setFeedbackRating(rating)} required />
-                          <span>{rating}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <label className="tournament-feedback-field">
-                    <span>What do you think can be improved?</span>
-                    <textarea value={feedbackImprovements} onChange={(event) => setFeedbackImprovements(event.target.value)} maxLength={3000} rows={3} placeholder="Share any ideas or suggestions…" />
-                  </label>
+
                   {feedbackError && <p className="tournament-feedback-error" role="alert">{feedbackError}</p>}
                   <div className="tournament-feedback-modal-actions">
                     <button type="button" className="tournament-feedback-later" onClick={dismissFeedbackModal}>Not now</button>

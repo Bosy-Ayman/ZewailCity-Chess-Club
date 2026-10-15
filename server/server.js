@@ -182,9 +182,10 @@ const TournamentFeedbackSchema = new mongoose.Schema({
   tournamentTitle: { type: String, required: true },
   email: { type: String, required: true, lowercase: true, trim: true },
   playerName: { type: String, required: true },
-  contributions: [{ type: String, enum: ['highboard', 'equipment', 'cannot_contribute', 'other'] }],
+  contributions: [{ type: String }],
   otherText: { type: String, default: '', maxlength: 500 },
   rating: { type: Number, required: true, min: 1, max: 5 },
+  highlightTags: [{ type: String }],
   improvements: { type: String, default: '', maxlength: 3000 },
   submittedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
@@ -3337,19 +3338,19 @@ app.post('/api/tournaments/:id/feedback', async (req, res) => {
     const registration = (tournament.registrations || []).find(r => r.email?.trim().toLowerCase() === email && String(r.status || '').toLowerCase() !== 'rejected');
     if (!registration) return res.status(403).json({ error: 'Only registered tournament participants can submit feedback.' });
 
-    const allowed = new Set(['highboard', 'equipment', 'cannot_contribute', 'other']);
-    const contributions = Array.isArray(req.body.contributions) ? [...new Set(req.body.contributions)] : [];
+    const allowedContributions = new Set(['highboard', 'organizing', 'media', 'equipment', 'cannot_contribute', 'other']);
+    const contributions = Array.isArray(req.body.contributions) ? [...new Set(req.body.contributions)].filter(c => allowedContributions.has(c)) : [];
+    const highlightTags = Array.isArray(req.body.highlightTags) ? [...new Set(req.body.highlightTags)].filter(t => typeof t === 'string').slice(0, 10) : [];
     const rating = Number(req.body.rating);
     const otherText = String(req.body.otherText || '').trim();
     const improvements = String(req.body.improvements || '').trim();
-    if (contributions.some(option => !allowed.has(option))) return res.status(400).json({ error: 'Invalid contribution selection.' });
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Choose a rating from 1 to 5.' });
     if (contributions.includes('other') && !otherText) return res.status(400).json({ error: 'Please describe your other contribution.' });
     if (otherText.length > 500 || improvements.length > 3000) return res.status(400).json({ error: 'Feedback is too long.' });
 
     const feedback = await TournamentFeedback.findOneAndUpdate(
       { tournamentId: tournament._id, email },
-      { $set: { tournamentTitle: tournament.title, playerName: registration.name, contributions, otherText, rating, improvements, submittedAt: new Date() } },
+      { $set: { tournamentTitle: tournament.title, playerName: registration.name, contributions, highlightTags, otherText, rating, improvements, submittedAt: new Date() } },
       { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
     );
     res.json({ ok: true, feedback });
