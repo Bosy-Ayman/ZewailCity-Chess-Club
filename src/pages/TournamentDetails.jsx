@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { PDFDocument } from "pdf-lib";
 import { useNavigate } from "react-router-dom";
 import { X, Search, Users, UserPlus, Check } from "lucide-react";
 import Header from "../components/Header";
@@ -7,7 +8,7 @@ import ChallongeBracket, { extractDateForPicker, extractTimeForPicker, formatPic
 import WinnerCelebrationModal from "../components/WinnerCelebrationModal";
 import { getPlayerAvatarUrl, compressImage } from "../utils/api";
 import { findCommonFreeSlots, findNearOverlapSlots, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
-import { generateWinnerCertificate, canvasToPdfBlob } from "../utils/certificateGenerator";
+import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import './TournamentDetails.css';
 
 export default function TournamentDetails() {
@@ -1023,88 +1024,90 @@ const formatSwissResult = (result) => {
   };
 
   // Export Official A4 Standings Sheet as PDF
-  const handleExportStandingsPDF = () => {
+  const handleExportStandingsPDF = async () => {
     if (!tournament) return;
     const cleanTitle = (tournament.title || "ZC Chess Tournament").replace(/[^\w\s-]/g, "").trim();
-    const canvas = document.createElement("canvas");
-    // Standard A4 landscape proportions at high DPI
-    canvas.width = 1920;
-    canvas.height = 1357;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Background
-    ctx.fillStyle = "#0d0b08";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Header border line
-    ctx.strokeStyle = "#f3c144";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
-
-    // Title & Header info
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 38px 'Inter', sans-serif";
-    ctx.fillText("ZEWAIL CITY CHESS CLUB", 70, 95);
-
-    ctx.fillStyle = "#f3c144";
-    ctx.font = "bold 26px 'Inter', sans-serif";
-    ctx.fillText(tournament.title || "Official Championship Standings", 70, 135);
-
-    ctx.fillStyle = "#a89f91";
-    ctx.font = "16px 'Inter', sans-serif";
+    const pageSize = 30;
+    const pageCount = Math.max(1, Math.ceil(swissStandings.length / pageSize));
+    const pdf = await PDFDocument.create();
     const dateStr = tournament.startDate ? new Date(tournament.startDate).toLocaleDateString() : new Date().toLocaleDateString();
-    ctx.fillText(`Format: ${tournament.type || "Swiss System"}   |   Rounds: ${tournament.rounds || 5}   |   Status: ${tournament.status || "Completed"}   |   Date: ${dateStr}`, 70, 165);
 
-    // Draw Table Headers
-    const startY = 210;
-    const rowH = 34;
-    ctx.fillStyle = "rgba(243, 193, 68, 0.18)";
-    ctx.fillRect(60, startY - 24, canvas.width - 120, 32);
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const canvas = document.createElement("canvas");
+      // Standard A4 landscape proportions at high DPI.
+      canvas.width = 1920;
+      canvas.height = 1357;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    ctx.fillStyle = "#f3c144";
-    ctx.font = "bold 15px 'Inter', sans-serif";
-    ctx.fillText("Rank", 75, startY);
-    ctx.fillText("Player Name", 150, startY);
-    ctx.fillText("Points", 550, startY);
-    ctx.fillText("Record (W-D-L)", 660, startY);
-    ctx.fillText("Played", 840, startY);
-    ctx.fillText("BH-1", 930, startY);
-    ctx.fillText("SB", 1020, startY);
-    ctx.fillText("Rating", 1110, startY);
-    ctx.fillText("Major", 1230, startY);
+      ctx.fillStyle = "#0d0b08";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#f3c144";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
 
-    // Rows
-    const maxRows = Math.min(swissStandings.length, 30);
-    swissStandings.slice(0, maxRows).forEach((p, idx) => {
-      const y = startY + 36 + (idx * rowH);
-      if (idx % 2 === 0) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-        ctx.fillRect(60, y - 22, canvas.width - 120, rowH);
-      }
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 38px 'Inter', sans-serif";
+      ctx.fillText("ZEWAIL CITY CHESS CLUB", 70, 95);
+      ctx.fillStyle = "#f3c144";
+      ctx.font = "bold 26px 'Inter', sans-serif";
+      ctx.fillText(tournament.title || "Official Championship Standings", 70, 135);
+      ctx.fillStyle = "#a89f91";
+      ctx.font = "16px 'Inter', sans-serif";
+      ctx.fillText(`Format: ${tournament.type || "Swiss System"}   |   Rounds: ${tournament.rounds || 5}   |   Status: ${tournament.status || "Completed"}   |   Date: ${dateStr}`, 70, 165);
 
-      ctx.fillStyle = idx === 0 ? "#f3c144" : idx === 1 ? "#d0d0d0" : idx === 2 ? "#cd7f32" : "#ffffff";
-      ctx.font = idx < 3 ? "bold 15px 'Inter', sans-serif" : "14px 'Inter', sans-serif";
+      const startY = 210;
+      const rowH = 34;
+      ctx.fillStyle = "rgba(243, 193, 68, 0.18)";
+      ctx.fillRect(60, startY - 24, canvas.width - 120, 32);
+      ctx.fillStyle = "#f3c144";
+      ctx.font = "bold 15px 'Inter', sans-serif";
+      ctx.fillText("Rank", 75, startY);
+      ctx.fillText("Player Name", 150, startY);
+      ctx.fillText("Points", 550, startY);
+      ctx.fillText("Record (W-D-L)", 660, startY);
+      ctx.fillText("Played", 840, startY);
+      ctx.fillText("BH-1", 930, startY);
+      ctx.fillText("SB", 1020, startY);
+      ctx.fillText("Rating", 1110, startY);
+      ctx.fillText("Major", 1230, startY);
 
-      ctx.fillText(`#${idx + 1}`, 75, y);
-      ctx.fillText(p.name, 150, y);
-      ctx.fillText(`${p.points} pts`, 550, y);
+      const pagePlayers = swissStandings.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+      pagePlayers.forEach((p, pageRowIndex) => {
+        const rank = pageIndex * pageSize + pageRowIndex;
+        const y = startY + 36 + (pageRowIndex * rowH);
+        if (pageRowIndex % 2 === 0) {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+          ctx.fillRect(60, y - 22, canvas.width - 120, rowH);
+        }
 
-      ctx.fillStyle = "#cccccc";
-      ctx.fillText(`${p.wins}W - ${p.draws}D - ${p.losses}L`, 660, y);
-      ctx.fillText(String(p.played), 840, y);
-      ctx.fillText(String(p.buchholzCut1 != null ? p.buchholzCut1 : "—"), 930, y);
-      ctx.fillText(String(p.sonnebornBerger != null ? p.sonnebornBerger : "—"), 1020, y);
-      ctx.fillText(String(p.rating || "Unrated"), 1110, y);
-      ctx.fillText(String(p.major || "-"), 1230, y);
-    });
+        ctx.fillStyle = rank === 0 ? "#f3c144" : rank === 1 ? "#d0d0d0" : rank === 2 ? "#cd7f32" : "#ffffff";
+        ctx.font = rank < 3 ? "bold 15px 'Inter', sans-serif" : "14px 'Inter', sans-serif";
+        ctx.fillText(`#${rank + 1}`, 75, y);
+        ctx.fillText(p.name, 150, y);
+        ctx.fillText(`${p.points} pts`, 550, y);
 
-    // Footer notice
-    ctx.fillStyle = "#8e8677";
-    ctx.font = "14px 'Inter', sans-serif";
-    ctx.fillText("Official FIDE Swiss System Standings Sheet • Zewail City of Science and Technology Chess Club", 70, canvas.height - 60);
+        ctx.fillStyle = "#cccccc";
+        ctx.fillText(`${p.wins}W - ${p.draws}D - ${p.losses}L`, 660, y);
+        ctx.fillText(String(p.played), 840, y);
+        ctx.fillText(String(p.buchholzCut1 != null ? p.buchholzCut1 : "—"), 930, y);
+        ctx.fillText(String(p.sonnebornBerger != null ? p.sonnebornBerger : "—"), 1020, y);
+        ctx.fillText(String(p.rating || "Unrated"), 1110, y);
+        ctx.fillText(String(p.major || "-"), 1230, y);
+      });
 
-    const pdfBlob = canvasToPdfBlob(canvas);
+      ctx.fillStyle = "#8e8677";
+      ctx.font = "14px 'Inter', sans-serif";
+      ctx.fillText("Official FIDE Swiss System Standings Sheet • Zewail City of Science and Technology Chess Club", 70, canvas.height - 60);
+      ctx.textAlign = "right";
+      ctx.fillText(`Page ${pageIndex + 1} of ${pageCount}`, canvas.width - 70, canvas.height - 60);
+
+      const image = await pdf.embedJpg(canvas.toDataURL("image/jpeg", 0.98));
+      const page = pdf.addPage([842, 595]);
+      page.drawImage(image, { x: 0, y: 0, width: 842, height: 595 });
+    }
+
+    const pdfBlob = new Blob([await pdf.save()], { type: "application/pdf" });
     const url = URL.createObjectURL(pdfBlob);
     const link = document.createElement("a");
     link.href = url;
@@ -2863,6 +2866,8 @@ const formatSwissResult = (result) => {
                           <tr>
                             <th>Rank</th>
                             <th>Player Name</th>
+                            <th title="Buchholz Cut-1: FIDE-defined tie-break">BH-1</th>
+                            <th title="Sonneborn-Berger: FIDE-defined tie-break">SB</th>
                             {standingsViewMode === "points" ? (
                               <>
                                 <th>Points</th>
@@ -2872,8 +2877,6 @@ const formatSwissResult = (result) => {
                                 <th>Record (W-D-L)</th>
                                 <th>Played</th>
                                 <th>Byes</th>
-                                <th title="Buchholz Cut-1: FIDE-defined tie-break; included in the standings only when selected in the event tie-break order">BH-1</th>
-                                <th title="Sonneborn-Berger: FIDE-defined tie-break; included in the standings only when selected in the event tie-break order">SB</th>
                                 <th>Rating</th>
                               </>
                             ) : (
@@ -2919,6 +2922,8 @@ const formatSwissResult = (result) => {
                                     {isMe && <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg,#f7ce68,#f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>}
                                   </div>
                                 </td>
+                                <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
+                                <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
                                 {standingsViewMode === "points" ? (
                                   <>
                                     <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
@@ -2934,8 +2939,6 @@ const formatSwissResult = (result) => {
                                     <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
                                     <td>{p.played}</td>
                                     <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
-                                    <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
-                                    <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
                                     <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
                                   </>
                                 ) : (
