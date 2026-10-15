@@ -2549,3 +2549,24 @@
   }
 }
 
+.tournament-feedback-admin-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.tournament-feedback-admin-card {
+  padding: 16px;
+  color: #eee8d9;
+  background: rgba(21, 18, 12, 0.72);
+  border: 1px solid rgba(243, 193, 68, 0.2);
+  border-radius: 12px;
+}
+.tournament-feedback-admin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tournament-feedback-admin-header h3 { margin: 0 0 4px; color: #f3c144; font-size: 1rem; }
+.tournament-feedback-admin-header p, .tournament-feedback-admin-card > p { margin: 0 0 10px; color: #c5beaf; overflow-wrap: anywhere; }
+.tournament-feedback-admin-rating { flex-shrink: 0; padding: 5px 9px; color: #f3c144; background: rgba(243, 193, 68, 0.1); border-radius: 8px; font-weight: 800; }
+.tournament-feedback-admin-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.tournament-feedback-admin-tags span { padding: 4px 8px; color: #dfd4b9; background: rgba(255,255,255,0.06); border-radius: 999px; font-size: 0.78rem; }
+.tournament-feedback-admin-card > p { line-height: 1.55; }
+.tournament-feedback-admin-card > small { color: #928b7c; }

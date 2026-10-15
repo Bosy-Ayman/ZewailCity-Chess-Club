@@ -128,13 +128,13 @@ export const getAccessibleAdminTabs = (userRole) => {
   const isPRMember = userRole === 'member_pr' || (Array.isArray(userClubRoles) && userClubRoles.some(r => r.department === 'Public Relations'));
 
   if (isExec) {
-    return ["add-tournament", "tournaments-list", "applications", "manage-users", "manage-puzzles", "broadcast", "inquiries"];
+    return ["add-tournament", "tournaments-list", "applications", "manage-users", "manage-puzzles", "broadcast", "inquiries", "tournament-feedback"];
   }
 
   const tabIds = [];
   if (isHeadHR) tabIds.push("manage-users", "applications", "broadcast", "inquiries");
-  if (isHeadOC) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles", "inquiries");
-  else if (isOCMember) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles");
+  if (isHeadOC) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles", "inquiries", "tournament-feedback");
+  else if (isOCMember) tabIds.push("add-tournament", "tournaments-list", "manage-puzzles", "tournament-feedback");
   if (isHeadPR || isPRMember) tabIds.push("broadcast", "inquiries");
   if (isHeadMedia) tabIds.push("broadcast", "inquiries");
   if (isHeadTrainer) tabIds.push("manage-puzzles");
@@ -185,6 +185,7 @@ export default function AdminDashboard() {
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [inquiries, setInquiries] = useState([]);
+  const [tournamentFeedback, setTournamentFeedback] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -320,6 +321,18 @@ export default function AdminDashboard() {
           if (Array.isArray(userData)) setUsers(userData);
         } catch (e) {
           console.warn("Failed to fetch users:", e.message);
+        }
+      }
+
+      if (["admin", "president", "vice_president", "oc", "member_oc"].includes(userRole)) {
+        try {
+          const token = localStorage.getItem("adminToken");
+          const feedbackData = await safeFetchJson(`${API_BASE}/api/admin/tournament-feedback`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (Array.isArray(feedbackData)) setTournamentFeedback(feedbackData);
+        } catch (e) {
+          console.warn("Failed to fetch tournament feedback:", e.message);
         }
       }
 
@@ -1532,6 +1545,14 @@ const PrettyRoleData = ({ data }) => {
               desc: "Direct messages, member feedback, and support inquiries",
               roles: ['admin', 'president', 'vice_president', 'hr', 'oc', 'pr', 'media', 'multimedia'],
               badge: inquiries.filter(m => !m.read).length > 0 ? `${inquiries.filter(m => !m.read).length} new` : inquiries.length
+            },
+            {
+              id: "tournament-feedback",
+              label: "Tournament Feedback",
+              icon: "💬",
+              desc: "Review player feedback from completed tournaments",
+              roles: ['admin', 'president', 'vice_president', 'oc', 'member_oc'],
+              badge: tournamentFeedback.length
             }
           ];
 
@@ -1558,6 +1579,7 @@ const PrettyRoleData = ({ data }) => {
             if (item.id === "add-tournament" && (isHeadOC || isOCMember)) return true;
             if (item.id === "tournaments-list" && (isHeadOC || isOCMember)) return true;
             if (item.id === "manage-puzzles" && (isHeadOC || isOCMember || isHeadTrainer)) return true;
+            if (item.id === "tournament-feedback" && (isHeadOC || isOCMember)) return true;
             return false;
           });
           const currentNavItem = accessibleNavItems.find(item => item.id === activeTab) || accessibleNavItems[0] || { id: activeTab, icon: "⚙️", label: "Admin Section" };
@@ -2134,6 +2156,38 @@ const PrettyRoleData = ({ data }) => {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {activeTab === "tournament-feedback" && (
+            <div className="table-card">
+              <h2>💬 Tournament Feedback</h2>
+              <p className="empty-message">Player ratings and suggestions submitted after completed tournaments.</p>
+              {tournamentFeedback.length === 0 ? (
+                <p className="empty-message">No tournament feedback has been submitted yet.</p>
+              ) : (
+                <div className="tournament-feedback-admin-list">
+                  {tournamentFeedback.map((item) => (
+                    <article key={item._id} className="tournament-feedback-admin-card">
+                      <div className="tournament-feedback-admin-header">
+                        <div>
+                          <h3>{item.playerName}</h3>
+                          <p>{item.tournamentTitle} · {item.email}</p>
+                        </div>
+                        <span className="tournament-feedback-admin-rating" aria-label={`Rating ${item.rating} out of 5`}>⭐ {item.rating}/5</span>
+                      </div>
+                      <div className="tournament-feedback-admin-tags">
+                        {(item.contributions || []).map((value) => (
+                          <span key={value}>{({ highboard: "Interested in High Board", equipment: "Can bring chess equipment", cannot_contribute: "Can’t contribute", other: "Other" })[value] || value}</span>
+                        ))}
+                      </div>
+                      {item.otherText && <p><strong>Other:</strong> {item.otherText}</p>}
+                      {item.improvements && <p><strong>Suggestions:</strong> {item.improvements}</p>}
+                      <small>Submitted {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : "—"}</small>
+                    </article>
+                  ))}
+                </div>
               )}
             </div>
           )}

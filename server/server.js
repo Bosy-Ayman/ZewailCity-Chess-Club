@@ -177,6 +177,20 @@ const TournamentSchema = new mongoose.Schema({
 
 const Tournament = mongoose.model('Tournament', TournamentSchema, 'tournaments');
 
+const TournamentFeedbackSchema = new mongoose.Schema({
+  tournamentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tournament', required: true },
+  tournamentTitle: { type: String, required: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  playerName: { type: String, required: true },
+  contributions: [{ type: String, enum: ['highboard', 'equipment', 'cannot_contribute', 'other'] }],
+  otherText: { type: String, default: '', maxlength: 500 },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  improvements: { type: String, default: '', maxlength: 3000 },
+  submittedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+TournamentFeedbackSchema.index({ tournamentId: 1, email: 1 }, { unique: true });
+const TournamentFeedback = mongoose.model('TournamentFeedback', TournamentFeedbackSchema, 'tournament_feedback');
+
 // --- In-Memory Mock Tournament Sandbox (Zero MongoDB impact) ---
 // Any tournament created with isMock: true, or with id starting with "mock-",
 // lives 100% in local server memory and NEVER writes to or touches MongoDB.
@@ -3285,6 +3299,79 @@ app.get('/api/tournaments/:id', async (req, res) => {
     res.json(obj);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch tournament details', details: error.message });
+  }
+});
+
+const getFeedbackAuth = (req) => {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  try { return jwt.verify(header.slice(7), JWT_SECRET); } catch (e) { return null; }
+};
+
+app.get('/api/tournaments/:id/feedback/mine', async (req, res) => {
+  try {
+    const auth = getFeedbackAuth(req);
+    const email = auth?.email?.trim().toLowerCase();
+    if (!email) return res.status(401).json({ error: 'Please sign in to access tournament feedback.' });
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found.' });
+    if (String(tournament.status).toLowerCase() !== 'completed') return res.status(409).json({ error: 'Feedback opens when the tournament is completed.' });
+    const registration = (tournament.registrations || []).find(r => r.email?.trim().toLowerCase() === email && String(r.status || '').toLowerCase() !== 'rejected');
+    if (!registration) return res.status(403).json({ error: 'Only registered tournament participants can submit feedback.' });
+    const feedback = await TournamentFeedback.findOne({ tournamentId: tournament._id, email }).lean();
+    res.json(feedback || null);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load feedback.', details: error.message });
+  }
+});
+
+app.post('/api/tournaments/:id/feedback', async (req, res) => {
+  try {
+    const auth = getFeedbackAuth(req);
+    const email = auth?.email?.trim().toLowerCase();
+    if (!email) return res.status(401).json({ error: 'Please sign in to submit feedback.' });
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found.' });
+    if (String(tournament.status).toLowerCase() !== 'completed') return res.status(409).json({ error: 'Feedback opens when the tournament is completed.' });
+    const registration = (tournament.registrations || []).find(r => r.email?.trim().toLowerCase() === email && String(r.status || '').toLowerCase() !== 'rejected');
+    if (!registration) return res.status(403).json({ error: 'Only registered tournament participants can submit feedback.' });
+
+    const allowed = new Set(['highboard', 'equipment', 'cannot_contribute', 'other']);
+    const contributions = Array.isArray(req.body.contributions) ? [...new Set(req.body.contributions)] : [];
+    const rating = Number(req.body.rating);
+    const otherText = String(req.body.otherText || '').trim();
+    const improvements = String(req.body.improvements || '').trim();
+    if (contributions.some(option => !allowed.has(option))) return res.status(400).json({ error: 'Invalid contribution selection.' });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Choose a rating from 1 to 5.' });
+    if (contributions.includes('other') && !otherText) return res.status(400).json({ error: 'Please describe your other contribution.' });
+    if (otherText.length > 500 || improvements.length > 3000) return res.status(400).json({ error: 'Feedback is too long.' });
+
+    const feedback = await TournamentFeedback.findOneAndUpdate(
+      { tournamentId: tournament._id, email },
+      { $set: { tournamentTitle: tournament.title, playerName: registration.name, contributions, otherText, rating, improvements, submittedAt: new Date() } },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    );
+    res.json({ ok: true, feedback });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save feedback.', details: error.message });
+  }
+});
+
+app.get('/api/admin/tournament-feedback', async (req, res) => {
+  try {
+    const auth = getFeedbackAuth(req);
+    const email = auth?.email?.trim().toLowerCase();
+    if (!email) return res.status(401).json({ error: 'Authentication required.' });
+    const user = await User.findOne({ email }).select('role clubRoles');
+    const role = String(user?.role || auth.role || '').toLowerCase();
+    const hasOcRole = (user?.clubRoles || []).some(r => r.department === 'Tournament Organizing Committee');
+    if (!(isAdminEmail(email) || ['admin', 'president', 'vice_president', 'oc', 'member_oc'].includes(role) || hasOcRole)) {
+      return res.status(403).json({ error: 'Tournament staff access required.' });
+    }
+    const feedback = await TournamentFeedback.find().sort({ submittedAt: -1 }).lean();
+    res.json(feedback);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load tournament feedback.', details: error.message });
   }
 });
 
