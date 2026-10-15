@@ -2651,6 +2651,10 @@
   background: linear-gradient(90deg, #38a169, #68d391);
   box-shadow: 0 0 8px rgba(104, 211, 145, 0.35);
 }
+.analytics-bar-fill.purple {
+  background: linear-gradient(90deg, #805ad5, #b794f4);
+  box-shadow: 0 0 8px rgba(183, 148, 244, 0.35);
+}
 .analytics-bar-val {
   min-width: 48px;
   text-align: right;

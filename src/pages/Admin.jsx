@@ -186,6 +186,7 @@ export default function AdminDashboard() {
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [inquiries, setInquiries] = useState([]);
   const [tournamentFeedback, setTournamentFeedback] = useState([]);
+  const [feedbackTournamentFilter, setFeedbackTournamentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -2216,6 +2217,36 @@ const PrettyRoleData = ({ data }) => {
                 )}
               </div>
 
+              {/* Tournament Selector Filter */}
+              {tournamentFeedback.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "0 0 18px", flexWrap: "wrap", background: "rgba(255,255,255,0.03)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(243,193,68,0.2)" }}>
+                  <span style={{ fontSize: "0.85rem", color: "#f3c144", fontWeight: "700" }}>🏆 Filter by Tournament:</span>
+                  <select
+                    value={feedbackTournamentFilter}
+                    onChange={(e) => setFeedbackTournamentFilter(e.target.value)}
+                    style={{
+                      background: "#16130e",
+                      color: "#eee8d9",
+                      border: "1px solid #484030",
+                      borderRadius: "8px",
+                      padding: "6px 12px",
+                      fontSize: "0.85rem",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      outline: "none"
+                    }}
+                  >
+                    <option value="all">All Tournaments ({tournamentFeedback.length} responses)</option>
+                    {Array.from(new Set(tournamentFeedback.map(f => f.tournamentTitle || "Untitled Tournament"))).map(tTitle => {
+                      const count = tournamentFeedback.filter(f => (f.tournamentTitle || "Untitled Tournament") === tTitle).length;
+                      return (
+                        <option key={tTitle} value={tTitle}>{tTitle} ({count})</option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
               {tournamentFeedback.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 20px", color: "#8e8677" }}>
                   <span style={{ fontSize: "2.2rem", display: "block", marginBottom: "8px" }}>📭</span>
@@ -2224,117 +2255,185 @@ const PrettyRoleData = ({ data }) => {
               ) : (
                 <>
                   {/* --- Analytics & Visual Graphs --- */}
-                  <div className="feedback-analytics-grid">
-                    {/* Graph 1: Rating Breakdown */}
-                    <div className="feedback-analytics-card">
-                      <h3 className="analytics-card-title">⭐ Rating Breakdown</h3>
-                      <div className="analytics-bars-container">
-                        {[5, 4, 3, 2, 1].map((stars) => {
-                          const count = tournamentFeedback.filter((f) => Number(f.rating) === stars).length;
-                          const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
-                          return (
-                            <div key={stars} className="analytics-bar-row">
-                              <span className="analytics-bar-label">{stars} ★</span>
-                              <div className="analytics-bar-track">
-                                <div
-                                  className="analytics-bar-fill gold"
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                              <span className="analytics-bar-val">{count} ({pct.toFixed(0)}%)</span>
+                  {(() => {
+                    const displayedFeedback = feedbackTournamentFilter === "all"
+                      ? tournamentFeedback
+                      : tournamentFeedback.filter(f => (f.tournamentTitle || "Untitled Tournament") === feedbackTournamentFilter);
+
+                    if (displayedFeedback.length === 0) {
+                      return (
+                        <p className="empty-message" style={{ margin: "20px 0" }}>
+                          No responses found for "{feedbackTournamentFilter}".
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <div className="feedback-analytics-grid">
+                          {/* Graph 1: Rating Breakdown */}
+                          <div className="feedback-analytics-card">
+                            <h3 className="analytics-card-title">⭐ Rating Breakdown</h3>
+                            <div className="analytics-bars-container">
+                              {[5, 4, 3, 2, 1].map((stars) => {
+                                const count = displayedFeedback.filter((f) => Number(f.rating) === stars).length;
+                                const pct = displayedFeedback.length > 0 ? (count / displayedFeedback.length) * 100 : 0;
+                                return (
+                                  <div key={stars} className="analytics-bar-row">
+                                    <span className="analytics-bar-label">{stars} ★</span>
+                                    <div className="analytics-bar-track">
+                                      <div
+                                        className="analytics-bar-fill gold"
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <span className="analytics-bar-val">{count} ({pct.toFixed(0)}%)</span>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                          </div>
 
-                    {/* Graph 2: Top Impressions / Highlights */}
-                    <div className="feedback-analytics-card">
-                      <h3 className="analytics-card-title">🎯 Player Impressions</h3>
-                      <div className="analytics-bars-container">
-                        {(() => {
-                          const tagLabels = {
-                            smooth_pairings: "⚡ Punctual & Fair Pairings",
-                            great_atmosphere: "🎉 Great Atmosphere",
-                            friendly_arbiters: "🤝 Helpful Organizers",
-                            quality_boards: "♟️ Good Boards & Clocks",
-                            long_waiting: "⏳ Long Waiting Times",
-                            noisy_hall: "📢 Noisy Hall",
-                            clearer_rules: "📖 Unclear Tiebreaks",
-                            more_rounds: "⏱️ Longer Time Control"
-                          };
-                          const tagCounts = {};
-                          tournamentFeedback.forEach((f) => {
-                            (f.highlightTags || []).forEach((t) => {
-                              tagCounts[t] = (tagCounts[t] || 0) + 1;
-                            });
-                          });
-                          const sortedTags = Object.entries(tagLabels)
-                            .map(([key, label]) => ({ key, label, count: tagCounts[key] || 0 }))
-                            .sort((a, b) => b.count - a.count);
+                          {/* Graph 2: Top Impressions / Highlights */}
+                          <div className="feedback-analytics-card">
+                            <h3 className="analytics-card-title">🎯 Player Impressions</h3>
+                            <div className="analytics-bars-container">
+                              {(() => {
+                                const tagLabels = {
+                                  smooth_pairings: "⚡ Punctual & Fair",
+                                  great_atmosphere: "🎉 Great Atmosphere",
+                                  friendly_arbiters: "🤝 Helpful Organizers",
+                                  quality_boards: "♟️ Good Boards/Clocks",
+                                  long_waiting: "⏳ Long Waiting Times",
+                                  noisy_hall: "📢 Noisy Hall",
+                                  clearer_rules: "📖 Unclear Tiebreaks",
+                                  more_rounds: "⏱️ Longer Time Control"
+                                };
+                                const tagCounts = {};
+                                displayedFeedback.forEach((f) => {
+                                  (f.highlightTags || []).forEach((t) => {
+                                    tagCounts[t] = (tagCounts[t] || 0) + 1;
+                                  });
+                                });
+                                const sortedTags = Object.entries(tagLabels)
+                                  .map(([key, label]) => ({ key, label, count: tagCounts[key] || 0 }))
+                                  .sort((a, b) => b.count - a.count);
 
-                          return sortedTags.map(({ key, label, count }) => {
-                            const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
-                            return (
-                              <div key={key} className="analytics-bar-row">
-                                <span className="analytics-bar-label truncate" title={label}>{label}</span>
-                                <div className="analytics-bar-track">
-                                  <div
-                                    className="analytics-bar-fill blue"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                                <span className="analytics-bar-val">{count}</span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </div>
+                                return sortedTags.map(({ key, label, count }) => {
+                                  const pct = displayedFeedback.length > 0 ? (count / displayedFeedback.length) * 100 : 0;
+                                  return (
+                                    <div key={key} className="analytics-bar-row">
+                                      <span className="analytics-bar-label truncate" title={label}>{label}</span>
+                                      <div className="analytics-bar-track">
+                                        <div
+                                          className="analytics-bar-fill blue"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                      <span className="analytics-bar-val">{count}</span>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
 
-                    {/* Graph 3: Community Volunteering */}
-                    <div className="feedback-analytics-card">
-                      <h3 className="analytics-card-title">🤝 Community Involvement</h3>
-                      <div className="analytics-bars-container">
-                        {(() => {
-                          const contribLabels = {
-                            highboard: "👑 High Board Applicant",
-                            organizing: "⏱️ Arbiter / Organizing",
-                            media: "📸 Media & Content",
-                            equipment: "♟️ Brings Clocks/Boards",
-                            cannot_contribute: "🎮 Player Only",
-                            other: "✨ Other"
-                          };
-                          const contribCounts = {};
-                          tournamentFeedback.forEach((f) => {
-                            (f.contributions || []).forEach((c) => {
-                              contribCounts[c] = (contribCounts[c] || 0) + 1;
-                            });
-                          });
+                          {/* Graph 3: Community Volunteering */}
+                          <div className="feedback-analytics-card">
+                            <h3 className="analytics-card-title">🤝 Community Involvement</h3>
+                            <div className="analytics-bars-container">
+                              {(() => {
+                                const contribLabels = {
+                                  highboard: "👑 High Board Applicant",
+                                  organizing: "⏱️ Arbiter / Organizing",
+                                  media: "📸 Media & Content",
+                                  equipment: "♟️ Brings Clocks/Boards",
+                                  cannot_contribute: "🎮 Player Only",
+                                  other: "✨ Other"
+                                };
+                                const contribCounts = {};
+                                displayedFeedback.forEach((f) => {
+                                  (f.contributions || []).forEach((c) => {
+                                    contribCounts[c] = (contribCounts[c] || 0) + 1;
+                                  });
+                                });
 
-                          return Object.entries(contribLabels).map(([key, label]) => {
-                            const count = contribCounts[key] || 0;
-                            const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
-                            return (
-                              <div key={key} className="analytics-bar-row">
-                                <span className="analytics-bar-label truncate" title={label}>{label}</span>
-                                <div className="analytics-bar-track">
-                                  <div
-                                    className="analytics-bar-fill green"
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                                <span className="analytics-bar-val">{count}</span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </div>
-                  </div>
+                                return Object.entries(contribLabels).map(([key, label]) => {
+                                  const count = contribCounts[key] || 0;
+                                  const pct = displayedFeedback.length > 0 ? (count / displayedFeedback.length) * 100 : 0;
+                                  return (
+                                    <div key={key} className="analytics-bar-row">
+                                      <span className="analytics-bar-label truncate" title={label}>{label}</span>
+                                      <div className="analytics-bar-track">
+                                        <div
+                                          className="analytics-bar-fill green"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                      <span className="analytics-bar-val">{count}</span>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
 
-                  <div className="tournament-feedback-admin-list">
-                  {tournamentFeedback.map((item) => {
+                          {/* Graph 4: Participant Majors Bar Chart */}
+                          <div className="feedback-analytics-card">
+                            <h3 className="analytics-card-title">🎓 Participant Academic Majors</h3>
+                            <div className="analytics-bars-container">
+                              {(() => {
+                                // Match respondent emails to registered player majors or user profile majors
+                                const userMajorMap = {};
+                                users.forEach(u => {
+                                  if (u.email && u.major) userMajorMap[u.email.toLowerCase()] = u.major;
+                                });
+
+                                const majorCounts = {};
+                                displayedFeedback.forEach(f => {
+                                  const email = (f.email || "").toLowerCase();
+                                  let major = userMajorMap[email];
+                                  if (!major) {
+                                    // Check tournament playersList
+                                    const matchedTourney = tournaments.find(t => (t.title || "") === f.tournamentTitle);
+                                    if (matchedTourney && Array.isArray(matchedTourney.playersList)) {
+                                      const pObj = matchedTourney.playersList.find(p => p.name === f.playerName || (p.email && p.email.toLowerCase() === email));
+                                      if (pObj && pObj.major) major = pObj.major;
+                                    }
+                                  }
+                                  const finalMajor = major || "General / Undecided";
+                                  majorCounts[finalMajor] = (majorCounts[finalMajor] || 0) + 1;
+                                });
+
+                                const sortedMajors = Object.entries(majorCounts)
+                                  .sort((a, b) => b[1] - a[1]);
+
+                                if (sortedMajors.length === 0) {
+                                  return <p className="empty-message" style={{ margin: "10px 0" }}>No majors recorded yet.</p>;
+                                }
+
+                                return sortedMajors.map(([majorName, count]) => {
+                                  const pct = displayedFeedback.length > 0 ? (count / displayedFeedback.length) * 100 : 0;
+                                  return (
+                                    <div key={majorName} className="analytics-bar-row">
+                                      <span className="analytics-bar-label truncate" title={majorName}>{majorName}</span>
+                                      <div className="analytics-bar-track">
+                                        <div
+                                          className="analytics-bar-fill purple"
+                                          style={{ width: `${pct}%` }}
+                                        />
+                                      </div>
+                                      <span className="analytics-bar-val">{count} ({pct.toFixed(0)}%)</span>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="tournament-feedback-admin-list">
+                          {displayedFeedback.map((item) => {
                     const ratingNum = Number(item.rating) || 0;
                     const ratingLabel = ratingNum === 5 ? "Outstanding" : ratingNum === 4 ? "Great" : ratingNum === 3 ? "Good" : ratingNum === 2 ? "Fair" : "Poor";
                     const contributionLabels = {
@@ -2442,6 +2541,9 @@ const PrettyRoleData = ({ data }) => {
                   })}
                 </div>
               </>
+            );
+          })()}
+                </>
               )}
             </div>
           )}
