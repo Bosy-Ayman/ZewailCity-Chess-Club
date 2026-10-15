@@ -1321,22 +1321,27 @@ const formatSwissResult = (result) => {
       for (let idx = 0; idx < total; idx++) {
         const p = targetPlayers[idx];
         const pName = typeof p === "string" ? p : p.name;
+        const normalizedName = pName?.trim().toLocaleLowerCase();
         let pEmail = typeof p === "object" ? (p.email || "") : "";
         if (!pEmail && tournament?.playersList) {
           const matchedPlayer = tournament.playersList.find(pl => typeof pl === "object" && pl.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
           if (matchedPlayer && matchedPlayer.email) pEmail = matchedPlayer.email;
         }
 
-        // Accurately determine the rank index based on standings
-        let rankIdx = idx;
-        if (standingsMap && standingsMap[pName] && standingsMap[pName].rank != null) {
-          rankIdx = standingsMap[pName].rank;
-        } else if (isSwissFormat && swissStandings.length > 0) {
-          const foundSwissIdx = swissStandings.findIndex(sp => sp.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
-          if (foundSwissIdx !== -1) rankIdx = foundSwissIdx;
-        } else if (p.rank != null && typeof p.rank === "number") {
-          rankIdx = p.rank - 1;
-        }
+        // Swiss certificates must use the same sorted standings order shown in the table.
+        // Resolve by normalized name so casing/extra spaces cannot silently assign the
+        // recipient their position in the email list instead.
+        const swissRankIdx = isSwissFormat
+          ? swissStandings.findIndex(sp => sp.name?.trim().toLocaleLowerCase() === normalizedName)
+          : -1;
+        const mappedStanding = standingsMap && Object.entries(standingsMap).find(([name]) =>
+          name?.trim().toLocaleLowerCase() === normalizedName
+        )?.[1];
+        let rankIdx = swissRankIdx !== -1
+          ? swissRankIdx
+          : mappedStanding?.rank != null
+            ? mappedStanding.rank
+            : (p.rank != null && typeof p.rank === "number" ? p.rank - 1 : idx);
 
         const rankStr = rankIdx === 0
           ? "Grand Champion • First Place"
@@ -1347,11 +1352,10 @@ const formatSwissResult = (result) => {
           : `#${rankIdx + 1} Rank Competitor`;
 
         let pointsStr = p.points != null ? `${p.points} pts` : "";
-        if (!pointsStr && standingsMap && standingsMap[pName] && standingsMap[pName].points != null) {
-          pointsStr = `${standingsMap[pName].points} pts`;
-        } else if (!pointsStr && isSwissFormat && swissStandings.length > 0) {
-          const foundSwiss = swissStandings.find(sp => sp.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
-          if (foundSwiss && foundSwiss.points != null) pointsStr = `${foundSwiss.points} pts`;
+        if (!pointsStr && mappedStanding?.points != null) {
+          pointsStr = `${mappedStanding.points} pts`;
+        } else if (!pointsStr && swissRankIdx !== -1 && swissStandings[swissRankIdx].points != null) {
+          pointsStr = `${swissStandings[swissRankIdx].points} pts`;
         }
 
         setCertStatusMsg(`Generating & emailing official certificate (${idx + 1}/${total}) to ${pName}...`);

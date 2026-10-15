@@ -375,9 +375,9 @@ export async function generateWinnerCertificate({
 
   // ─── 4. Certificate Title ────────────────────────────────────────────────────
   const rankStr = (rank || "").toString().toLowerCase();
-  const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1" || rankStr === "#1";
-  const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2" || rankStr === "#2";
-  const isThird = rankStr.includes("3rd") || rankStr === "3" || rankStr === "#3";
+  const isChamp = rankStr.includes("champ") || rankStr.includes("1st") || rankStr.includes("first") || rankStr === "1" || rankStr === "#1";
+  const isRunnerUp = rankStr.includes("runner") || rankStr.includes("2nd") || rankStr.includes("second") || rankStr === "2" || rankStr === "#2";
+  const isThird = rankStr.includes("3rd") || rankStr.includes("third") || rankStr === "3" || rankStr === "#3";
   const isPodium = isChamp || isRunnerUp || isThird;
   const isPuzzle = (tournamentType || "").toLowerCase().includes("puzzle") || (tournamentType || "").toLowerCase().includes("tactic");
 
@@ -442,8 +442,11 @@ export async function generateWinnerCertificate({
     honorDistinction = "RUNNER-UP FINALIST • SECOND PLACE";
   } else if (isThird) {
     honorDistinction = "THIRD PLACE PODIUM MASTER";
-  } else if (rankStr.includes("#")) {
-    honorDistinction = `DISTINGUISHED TACTICIAN • ${rank.toUpperCase()}`;
+  } else if (rankStr.includes("#") || /\b\d+(?:st|nd|rd|th)?\b/i.test(rankStr)) {
+    const cleanRank = rank.replace(/^[^\w#]+/, "").trim();
+    honorDistinction = isPuzzle
+      ? `DISTINGUISHED TACTICIAN • ${cleanRank.toUpperCase()}`
+      : `DISTINGUISHED COMPETITOR • ${cleanRank.toUpperCase()}`;
   } else {
     honorDistinction = isPuzzle ? "HONORED TACTICAL COMPETITOR" : "HONORED TOURNAMENT COMPETITOR";
   }
