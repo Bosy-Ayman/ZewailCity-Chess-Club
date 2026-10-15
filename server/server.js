@@ -3204,10 +3204,28 @@ app.get('/api/tournaments/:id', async (req, res) => {
     }
 
     const nameArray = Array.from(playerNames);
+    const registrationEmails = new Set();
+    const registrationNamesByEmail = new Map();
+    (obj.registrations || []).forEach(registration => {
+      const email = registration.email?.trim().toLowerCase();
+      const name = registration.name?.trim();
+      if (!email) return;
+      registrationEmails.add(email);
+      if (name) {
+        const names = registrationNamesByEmail.get(email) || [];
+        names.push(name);
+        registrationNamesByEmail.set(email, names);
+      }
+    });
+    (obj.playersList || []).forEach(player => {
+      const email = player.email?.trim().toLowerCase();
+      if (email) registrationEmails.add(email);
+    });
     const users = await User.find({
       $or: [
         { name: { $in: nameArray } },
-        { email: { $in: nameArray } }
+        { email: { $in: nameArray } },
+        { email: { $in: Array.from(registrationEmails) } }
       ]
     }).select('name email profileImage major batch fideRating fideId chessComRating lichessRating rating chessTitle favOpening bio cheers availability');
 
@@ -3215,9 +3233,12 @@ app.get('/api/tournaments/:id', async (req, res) => {
     const playerProfiles = {};
     const playersAvailability = {};
     users.forEach(u => {
+      const email = u.email?.trim().toLowerCase();
+      const registrationAliases = email ? (registrationNamesByEmail.get(email) || []) : [];
       if (u.profileImage) {
         if (u.name) playerAvatars[u.name.trim()] = u.profileImage;
         if (u.email) playerAvatars[u.email.trim()] = u.profileImage;
+        registrationAliases.forEach(name => { playerAvatars[name] = u.profileImage; });
       }
       const effectiveRating = (u.chessComRating > 0 && u.chessComRating) ||
                               (u.fideRating > 0 && u.fideRating) ||
@@ -3246,6 +3267,11 @@ app.get('/api/tournaments/:id', async (req, res) => {
         playersAvailability[u.name.trim()] = u.availability || [];
         playersAvailability[u.name.trim().toLowerCase()] = u.availability || [];
       }
+      registrationAliases.forEach(name => {
+        playerProfiles[name] = profileData;
+        playersAvailability[name] = u.availability || [];
+        playersAvailability[name.toLowerCase()] = u.availability || [];
+      });
       if (u.email) {
         playerProfiles[u.email.trim().toLowerCase()] = profileData;
         playersAvailability[u.email.trim().toLowerCase()] = u.availability || [];
