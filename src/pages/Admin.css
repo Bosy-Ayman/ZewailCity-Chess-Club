@@ -2582,3 +2582,79 @@
 }
 .tournament-feedback-admin-card > p { line-height: 1.55; }
 .tournament-feedback-admin-card > small { color: #928b7c; }
+
+/* Feedback Analytics & Graphs */
+.feedback-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 16px 0 24px;
+}
+.feedback-analytics-card {
+  background: rgba(22, 19, 13, 0.85);
+  border: 1px solid rgba(243, 193, 68, 0.22);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+.analytics-card-title {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #f3c144;
+  letter-spacing: 0.02em;
+}
+.analytics-bars-container {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.analytics-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+.analytics-bar-label {
+  width: 95px;
+  flex-shrink: 0;
+  color: #dfd7c5;
+  font-weight: 600;
+}
+.analytics-bar-label.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.analytics-bar-track {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+.analytics-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.analytics-bar-fill.gold {
+  background: linear-gradient(90deg, #d4a32a, #f3c144);
+  box-shadow: 0 0 8px rgba(243, 193, 68, 0.35);
+}
+.analytics-bar-fill.blue {
+  background: linear-gradient(90deg, #3182ce, #63b3ed);
+  box-shadow: 0 0 8px rgba(99, 179, 237, 0.35);
+}
+.analytics-bar-fill.green {
+  background: linear-gradient(90deg, #38a169, #68d391);
+  box-shadow: 0 0 8px rgba(104, 211, 145, 0.35);
+}
+.analytics-bar-val {
+  min-width: 48px;
+  text-align: right;
+  color: #a89f91;
+  font-weight: 700;
+  font-size: 0.76rem;
+}

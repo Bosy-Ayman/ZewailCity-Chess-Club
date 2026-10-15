@@ -2222,7 +2222,118 @@ const PrettyRoleData = ({ data }) => {
                   <p className="empty-message">No tournament feedback responses submitted yet.</p>
                 </div>
               ) : (
-                <div className="tournament-feedback-admin-list">
+                <>
+                  {/* --- Analytics & Visual Graphs --- */}
+                  <div className="feedback-analytics-grid">
+                    {/* Graph 1: Rating Breakdown */}
+                    <div className="feedback-analytics-card">
+                      <h3 className="analytics-card-title">⭐ Rating Breakdown</h3>
+                      <div className="analytics-bars-container">
+                        {[5, 4, 3, 2, 1].map((stars) => {
+                          const count = tournamentFeedback.filter((f) => Number(f.rating) === stars).length;
+                          const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
+                          return (
+                            <div key={stars} className="analytics-bar-row">
+                              <span className="analytics-bar-label">{stars} ★</span>
+                              <div className="analytics-bar-track">
+                                <div
+                                  className="analytics-bar-fill gold"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="analytics-bar-val">{count} ({pct.toFixed(0)}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Graph 2: Top Impressions / Highlights */}
+                    <div className="feedback-analytics-card">
+                      <h3 className="analytics-card-title">🎯 Player Impressions</h3>
+                      <div className="analytics-bars-container">
+                        {(() => {
+                          const tagLabels = {
+                            smooth_pairings: "⚡ Punctual & Fair Pairings",
+                            great_atmosphere: "🎉 Great Atmosphere",
+                            friendly_arbiters: "🤝 Helpful Organizers",
+                            quality_boards: "♟️ Good Boards & Clocks",
+                            long_waiting: "⏳ Long Waiting Times",
+                            noisy_hall: "📢 Noisy Hall",
+                            clearer_rules: "📖 Unclear Tiebreaks",
+                            more_rounds: "⏱️ Longer Time Control"
+                          };
+                          const tagCounts = {};
+                          tournamentFeedback.forEach((f) => {
+                            (f.highlightTags || []).forEach((t) => {
+                              tagCounts[t] = (tagCounts[t] || 0) + 1;
+                            });
+                          });
+                          const sortedTags = Object.entries(tagLabels)
+                            .map(([key, label]) => ({ key, label, count: tagCounts[key] || 0 }))
+                            .sort((a, b) => b.count - a.count);
+
+                          return sortedTags.map(({ key, label, count }) => {
+                            const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
+                            return (
+                              <div key={key} className="analytics-bar-row">
+                                <span className="analytics-bar-label truncate" title={label}>{label}</span>
+                                <div className="analytics-bar-track">
+                                  <div
+                                    className="analytics-bar-fill blue"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="analytics-bar-val">{count}</span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Graph 3: Community Volunteering */}
+                    <div className="feedback-analytics-card">
+                      <h3 className="analytics-card-title">🤝 Community Involvement</h3>
+                      <div className="analytics-bars-container">
+                        {(() => {
+                          const contribLabels = {
+                            highboard: "👑 High Board Applicant",
+                            organizing: "⏱️ Arbiter / Organizing",
+                            media: "📸 Media & Content",
+                            equipment: "♟️ Brings Clocks/Boards",
+                            cannot_contribute: "🎮 Player Only",
+                            other: "✨ Other"
+                          };
+                          const contribCounts = {};
+                          tournamentFeedback.forEach((f) => {
+                            (f.contributions || []).forEach((c) => {
+                              contribCounts[c] = (contribCounts[c] || 0) + 1;
+                            });
+                          });
+
+                          return Object.entries(contribLabels).map(([key, label]) => {
+                            const count = contribCounts[key] || 0;
+                            const pct = tournamentFeedback.length > 0 ? (count / tournamentFeedback.length) * 100 : 0;
+                            return (
+                              <div key={key} className="analytics-bar-row">
+                                <span className="analytics-bar-label truncate" title={label}>{label}</span>
+                                <div className="analytics-bar-track">
+                                  <div
+                                    className="analytics-bar-fill green"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="analytics-bar-val">{count}</span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="tournament-feedback-admin-list">
                   {tournamentFeedback.map((item) => {
                     const ratingNum = Number(item.rating) || 0;
                     const ratingLabel = ratingNum === 5 ? "Outstanding" : ratingNum === 4 ? "Great" : ratingNum === 3 ? "Good" : ratingNum === 2 ? "Fair" : "Poor";
@@ -2330,6 +2441,7 @@ const PrettyRoleData = ({ data }) => {
                     );
                   })}
                 </div>
+              </>
               )}
             </div>
           )}
