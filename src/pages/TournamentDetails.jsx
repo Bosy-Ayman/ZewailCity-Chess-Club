@@ -1316,6 +1316,7 @@ const formatSwissResult = (result) => {
     try {
       setCertActionLoading(true);
       let successCount = 0;
+      let skippedEmailCount = 0;
       const total = targetPlayers.length;
 
       for (let idx = 0; idx < total; idx++) {
@@ -1326,6 +1327,13 @@ const formatSwissResult = (result) => {
         if (!pEmail && tournament?.playersList) {
           const matchedPlayer = tournament.playersList.find(pl => typeof pl === "object" && pl.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
           if (matchedPlayer && matchedPlayer.email) pEmail = matchedPlayer.email;
+        }
+        pEmail = typeof pEmail === "string" ? pEmail.trim() : "";
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pEmail)) {
+          skippedEmailCount++;
+          console.warn(`Skipping certificate for ${pName}: missing or invalid email address.`);
+          setCertStatusMsg(`Skipping ${idx + 1}/${total}: missing or invalid email for ${pName}.`);
+          continue;
         }
 
         // Swiss certificates must use the same sorted standings order shown in the table.
@@ -1394,7 +1402,10 @@ const formatSwissResult = (result) => {
         }
       }
 
-      setCertStatusMsg(`🎉 All ${successCount} of ${total} tournament certificates successfully generated & emailed with PDF attached!`);
+      const skippedMessage = skippedEmailCount > 0
+        ? ` Skipped ${skippedEmailCount} participant(s) with missing or invalid email addresses.`
+        : "";
+      setCertStatusMsg(`🎉 Emailed ${successCount} of ${total} tournament certificates.${skippedMessage}`);
       setTimeout(() => setCertStatusMsg(""), 7000);
     } catch (err) {
       setCertStatusMsg(`❌ Error: ${err.message}`);
