@@ -19,6 +19,7 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
+  const [standingsViewMode, setStandingsViewMode] = useState("points"); // "points" or "results"
   const [activeSection, setActiveSectionState] = useState("");
   const [activeTournamentTab, setActiveTournamentTab] = useState("tournament-rules");
   const [activePairingRound, setActivePairingRound] = useState(null);
@@ -78,10 +79,10 @@ export default function TournamentDetails() {
   const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
 
 const isWhiteWinner = (result) => {
-  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2") return false;
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0-0" || result === "0 - 0") return false;
   const r = String(result).toLowerCase().trim();
   return (
-    r === "1-0" || r === "1 - 0" ||
+    r === "1-0" || r === "1 - 0" || r === "1-0f" || r === "1 - 0f" ||
     r.startsWith("1.5 - 0.5") || r.startsWith("1.5-0.5") ||
     r.startsWith("2 - 0") || r.startsWith("2-0") ||
     r.includes("white wins") || r.includes("white won") ||
@@ -90,15 +91,50 @@ const isWhiteWinner = (result) => {
 };
 
 const isBlackWinner = (result) => {
-  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2") return false;
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0-0" || result === "0 - 0") return false;
   const r = String(result).toLowerCase().trim();
   return (
-    r === "0-1" || r === "0 - 1" ||
+    r === "0-1" || r === "0 - 1" || r === "0-1f" || r === "0 - 1f" ||
     r.startsWith("0.5 - 1.5") || r.startsWith("0.5-1.5") ||
     r.startsWith("0 - 2") || r.startsWith("0-2") ||
     r.includes("black wins") || r.includes("black won") ||
     r.includes("armageddon: black")
   );
+};
+
+const SWISS_RESULT_OPTIONS = [
+  { value: "Pending", label: "Pending" },
+  { value: "1-0", label: "1 - 0 (White wins over the board)" },
+  { value: "0-1", label: "0 - 1 (Black wins over the board)" },
+  { value: "1-0F", label: "1 - 0F (White wins by forfeit)" },
+  { value: "0-1F", label: "0 - 1F (Black wins by forfeit)" },
+  { value: "1/2-1/2", label: "½ - ½ (Draw)" },
+  { value: "0-0", label: "0 - 0 (Double forfeit)" },
+];
+const SWISS_TIEBREAK_LABELS = {
+  DE: "Direct Encounter",
+  "BH-C1": "Buchholz Cut-1",
+  BH: "Buchholz",
+  SB: "Sonneborn-Berger",
+  WIN: "Number of Wins",
+  TPN: "Tournament Pairing Number",
+};
+
+const normalizeSwissResult = (result) => {
+  if (!result) return "Pending";
+  const r = String(result).trim();
+  if (r === "1 - 0") return "1-0";
+  if (r === "0 - 1") return "0-1";
+  if (["1-0f", "1 - 0f", "1-0 (forfeit)"].includes(r.toLowerCase())) return "1-0F";
+  if (["0-1f", "0 - 1f", "0-1 (forfeit)"].includes(r.toLowerCase())) return "0-1F";
+  if (r === "½ - ½" || r === "Draw" || r === "1/2 - 1/2" || r === "0.5-0.5") return "1/2-1/2";
+  if (r === "0 - 0") return "0-0";
+  return r;
+};
+
+const formatSwissResult = (result) => {
+  const norm = normalizeSwissResult(result);
+  return norm === "1/2-1/2" ? "½ - ½" : norm === "0-0" ? "0 - 0 (Double forfeit)" : norm;
 };
 
   const fetchTournamentDetails = async () => {
@@ -308,6 +344,7 @@ const isBlackWinner = (result) => {
     time: "",
     location: "",
     rounds: 5,
+    tieBreakOrder: ["DE", "BH-C1", "SB"],
     description: "",
     image: ""
   });
@@ -340,6 +377,7 @@ const isBlackWinner = (result) => {
       time: tournament.time || "",
       location: tournament.location || "Zewail Chess Club",
       rounds: tournament.rounds || 5,
+      tieBreakOrder: Array.isArray(tournament.tieBreakOrder) ? tournament.tieBreakOrder : ["DE", "BH-C1", "SB"],
       description: tournament.description || "",
       image: tournament.image || ""
     });
@@ -726,6 +764,11 @@ const isBlackWinner = (result) => {
 
   // eslint-disable-next-line no-unused-vars
   const handleDispatchCertificates = async () => {
+    if (isSwissFormat && swissStandings.length > 0) {
+      const sMap = {};
+      swissStandings.forEach((p, i) => { sMap[p.name] = { rank: i, points: p.points }; });
+      return handleMassEmailCertificates(swissStandings, sMap);
+    }
     return handleMassEmailCertificates();
   };
 
@@ -1259,7 +1302,11 @@ const isBlackWinner = (result) => {
 
   const handleMassEmailCertificates = async (playersList = [], standingsMap = {}) => {
     if (!tournamentId) return;
-    const targetPlayers = (playersList && playersList.length > 0) ? playersList : (tournament?.players || []);
+    const targetPlayers = (playersList && playersList.length > 0)
+      ? playersList
+      : (isSwissFormat && swissStandings.length > 0)
+        ? swissStandings
+        : (tournament?.players || []);
     if (!targetPlayers || targetPlayers.length === 0) {
       notify("No players found in this tournament.", "warning");
       return;
@@ -1274,9 +1321,38 @@ const isBlackWinner = (result) => {
       for (let idx = 0; idx < total; idx++) {
         const p = targetPlayers[idx];
         const pName = typeof p === "string" ? p : p.name;
-        const pEmail = typeof p === "object" ? p.email : "";
-        const rankStr = idx === 0 ? "Grand Champion • First Place" : idx === 1 ? "Runner-Up Finalist • Second Place" : idx === 2 ? "Third Place Podium Master" : `#${idx + 1} Rank Competitor`;
-        const pointsStr = p.points != null ? `${p.points} pts` : "";
+        let pEmail = typeof p === "object" ? (p.email || "") : "";
+        if (!pEmail && tournament?.playersList) {
+          const matchedPlayer = tournament.playersList.find(pl => typeof pl === "object" && pl.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
+          if (matchedPlayer && matchedPlayer.email) pEmail = matchedPlayer.email;
+        }
+
+        // Accurately determine the rank index based on standings
+        let rankIdx = idx;
+        if (standingsMap && standingsMap[pName] && standingsMap[pName].rank != null) {
+          rankIdx = standingsMap[pName].rank;
+        } else if (isSwissFormat && swissStandings.length > 0) {
+          const foundSwissIdx = swissStandings.findIndex(sp => sp.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
+          if (foundSwissIdx !== -1) rankIdx = foundSwissIdx;
+        } else if (p.rank != null && typeof p.rank === "number") {
+          rankIdx = p.rank - 1;
+        }
+
+        const rankStr = rankIdx === 0
+          ? "Grand Champion • First Place"
+          : rankIdx === 1
+          ? "Runner-Up Finalist • Second Place"
+          : rankIdx === 2
+          ? "Third Place Podium Master"
+          : `#${rankIdx + 1} Rank Competitor`;
+
+        let pointsStr = p.points != null ? `${p.points} pts` : "";
+        if (!pointsStr && standingsMap && standingsMap[pName] && standingsMap[pName].points != null) {
+          pointsStr = `${standingsMap[pName].points} pts`;
+        } else if (!pointsStr && isSwissFormat && swissStandings.length > 0) {
+          const foundSwiss = swissStandings.find(sp => sp.name?.toLowerCase().trim() === pName?.toLowerCase().trim());
+          if (foundSwiss && foundSwiss.points != null) pointsStr = `${foundSwiss.points} pts`;
+        }
 
         setCertStatusMsg(`Generating & emailing official certificate (${idx + 1}/${total}) to ${pName}...`);
 
@@ -1341,6 +1417,7 @@ const isBlackWinner = (result) => {
       statsMap[p.name] = {
         name: p.name,
         rating: effectiveRating > 0 ? effectiveRating : "Unrated",
+        fideTitle: profile?.fideTitle || p.fideTitle || "",
         major: (profile && profile.major) || p.major || "-",
         played: 0,
         wins: 0,
@@ -1352,6 +1429,18 @@ const isBlackWinner = (result) => {
       };
     });
 
+    const titleOrder = ["GM", "IM", "WGM", "FM", "WIM", "CM", "WFM", "WCM"];
+    Object.values(statsMap)
+      .sort((a, b) => {
+        const ratingDifference = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        if (ratingDifference) return ratingDifference;
+        const titleDifference = (titleOrder.indexOf(a.fideTitle) < 0 ? titleOrder.length : titleOrder.indexOf(a.fideTitle)) -
+          (titleOrder.indexOf(b.fideTitle) < 0 ? titleOrder.length : titleOrder.indexOf(b.fideTitle));
+        if (titleDifference) return titleDifference;
+        return a.name.localeCompare(b.name);
+      })
+      .forEach((player, index) => { player.tpn = index + 1; });
+
     matches.forEach((m) => {
       const white = m.white;
       const black = m.black;
@@ -1361,21 +1450,26 @@ const isBlackWinner = (result) => {
       if (statsMap[white]) {
         if (isWhiteBye) {
           statsMap[white].byes += 1;
+          statsMap[white].wins += 1;
           statsMap[white].points += 1;
           statsMap[white].roundResults[m.round || 1] = { value: "1", label: "BYE", tone: "win" };
         } else {
-          statsMap[white].played += 1;
-          if (m.result === "1-0" || m.result === "1 - 0") {
+          if (!["1-0F", "0-1F", "0-0"].includes(normalizeSwissResult(m.result))) statsMap[white].played += 1;
+          if (["1-0", "1-0F"].includes(normalizeSwissResult(m.result))) {
             statsMap[white].wins += 1;
             statsMap[white].points += 1;
-            statsMap[white].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
-          } else if (m.result === "0-1" || m.result === "0 - 1") {
+            statsMap[white].roundResults[m.round || 1] = { value: "1", label: normalizeSwissResult(m.result) === "1-0F" ? "F-W" : "W", tone: "win" };
+          } else if (["0-1", "0-1F"].includes(normalizeSwissResult(m.result))) {
             statsMap[white].losses += 1;
-            statsMap[white].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
-          } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+            statsMap[white].roundResults[m.round || 1] = { value: "0", label: normalizeSwissResult(m.result) === "0-1F" ? "F-L" : "L", tone: "loss" };
+          } else if (normalizeSwissResult(m.result) === "1/2-1/2") {
             statsMap[white].draws += 1;
             statsMap[white].points += 0.5;
             statsMap[white].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+          } else if (normalizeSwissResult(m.result) === "0-0") {
+            // Double forfeit — both players absent, neither receives points
+            statsMap[white].losses += 1;
+            statsMap[white].roundResults[m.round || 1] = { value: "0", label: "F", tone: "loss" };
           } else {
             statsMap[white].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
           }
@@ -1383,18 +1477,22 @@ const isBlackWinner = (result) => {
       }
 
       if (!isWhiteBye && statsMap[black]) {
-        statsMap[black].played += 1;
-        if (m.result === "0-1" || m.result === "0 - 1") {
+        if (!["1-0F", "0-1F", "0-0"].includes(normalizeSwissResult(m.result))) statsMap[black].played += 1;
+        if (["0-1", "0-1F"].includes(normalizeSwissResult(m.result))) {
           statsMap[black].wins += 1;
           statsMap[black].points += 1;
-          statsMap[black].roundResults[m.round || 1] = { value: "1", label: "W", tone: "win" };
-        } else if (m.result === "1-0" || m.result === "1 - 0") {
+            statsMap[black].roundResults[m.round || 1] = { value: "1", label: normalizeSwissResult(m.result) === "0-1F" ? "F-W" : "W", tone: "win" };
+        } else if (["1-0", "1-0F"].includes(normalizeSwissResult(m.result))) {
           statsMap[black].losses += 1;
-          statsMap[black].roundResults[m.round || 1] = { value: "0", label: "L", tone: "loss" };
-        } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+          statsMap[black].roundResults[m.round || 1] = { value: "0", label: normalizeSwissResult(m.result) === "1-0F" ? "F-L" : "L", tone: "loss" };
+        } else if (normalizeSwissResult(m.result) === "1/2-1/2") {
           statsMap[black].draws += 1;
           statsMap[black].points += 0.5;
           statsMap[black].roundResults[m.round || 1] = { value: "0.5", label: "D", tone: "draw" };
+        } else if (normalizeSwissResult(m.result) === "0-0") {
+          // Double forfeit — both players absent, neither receives points
+          statsMap[black].losses += 1;
+          statsMap[black].roundResults[m.round || 1] = { value: "0", label: "F", tone: "loss" };
         } else {
           statsMap[black].roundResults[m.round || 1] = { value: "—", label: "Pending", tone: "pending" };
         }
@@ -1411,13 +1509,13 @@ const isBlackWinner = (result) => {
       if (!directScores[white]) directScores[white] = {};
       if (!directScores[black]) directScores[black] = {};
 
-      if (m.result === "1-0" || m.result === "1 - 0") {
+      if (normalizeSwissResult(m.result) === "1-0") {
         directScores[white][black] = (directScores[white][black] || 0) + 1;
         directScores[black][white] = (directScores[black][white] || 0) + 0;
-      } else if (m.result === "0-1" || m.result === "0 - 1") {
+      } else if (normalizeSwissResult(m.result) === "0-1") {
         directScores[white][black] = (directScores[white][black] || 0) + 0;
         directScores[black][white] = (directScores[black][white] || 0) + 1;
-      } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
+      } else if (normalizeSwissResult(m.result) === "1/2-1/2") {
         directScores[white][black] = (directScores[white][black] || 0) + 0.5;
         directScores[black][white] = (directScores[black][white] || 0) + 0.5;
       }
@@ -1427,6 +1525,7 @@ const isBlackWinner = (result) => {
     Object.keys(statsMap).forEach((name) => {
       const player = statsMap[name];
       const opponentScores = [];
+      const virtualRoundScores = [];
       let sbScore = 0;
 
       matches.forEach((m) => {
@@ -1434,64 +1533,86 @@ const isBlackWinner = (result) => {
         let opponentName = null;
         let myScore = null;
 
-        if (m.white === name && m.black && m.black !== "BYE") {
-          opponentName = m.black;
-          if (m.result === "1-0" || m.result === "1 - 0") myScore = 1;
-          else if (m.result === "0-1" || m.result === "0 - 1") myScore = 0;
-          else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") myScore = 0.5;
-        } else if (m.black === name && m.white) {
-          opponentName = m.white;
-          if (m.result === "0-1" || m.result === "0 - 1") myScore = 1;
-          else if (m.result === "1-0" || m.result === "1 - 0") myScore = 0;
-          else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") myScore = 0.5;
+        if (m.white === name && m.black === "BYE") {
+          const virtualScore = Math.min(player.points, (Number(tournament?.rounds) || 0) * 0.5);
+          opponentScores.push(virtualScore);
+          virtualRoundScores.push({ buchholz: virtualScore });
+          sbScore += virtualScore;
+          return;
         }
 
-        if (opponentName && statsMap[opponentName]) {
+        if (m.white === name && m.black && m.black !== "BYE") {
+          opponentName = m.black;
+          if (["1-0", "1-0F"].includes(normalizeSwissResult(m.result))) myScore = 1;
+          else if (["0-1", "0-1F"].includes(normalizeSwissResult(m.result))) myScore = 0;
+          else if (normalizeSwissResult(m.result) === "1/2-1/2") myScore = 0.5;
+          else if (normalizeSwissResult(m.result) === "0-0") myScore = 0; // Double forfeit — both get 0
+        } else if (m.black === name && m.white) {
+          opponentName = m.white;
+          if (["0-1", "0-1F"].includes(normalizeSwissResult(m.result))) myScore = 1;
+          else if (["1-0", "1-0F"].includes(normalizeSwissResult(m.result))) myScore = 0;
+          else if (normalizeSwissResult(m.result) === "1/2-1/2") myScore = 0.5;
+          else if (normalizeSwissResult(m.result) === "0-0") myScore = 0; // Double forfeit — both get 0
+        }
+
+        const normalizedResult = normalizeSwissResult(m.result);
+        const isForfeit = normalizedResult === "1-0F" || normalizedResult === "0-1F" || normalizedResult === "0-0";
+        if (opponentName && statsMap[opponentName] && isForfeit) {
+          const virtualScore = Math.min(player.points, statsMap[opponentName].points || 0);
+          opponentScores.push(virtualScore);
+          virtualRoundScores.push({ buchholz: virtualScore });
+          if (myScore === 1) sbScore += virtualScore;
+          else if (myScore === 0.5) sbScore += virtualScore * 0.5;
+        } else if (opponentName && statsMap[opponentName]) {
           const oppPts = statsMap[opponentName].points || 0;
           opponentScores.push(oppPts);
           if (myScore === 1) sbScore += oppPts;
           else if (myScore === 0.5) sbScore += oppPts * 0.5;
+          // For myScore === 0 (including 0-0 forfeit), add nothing to SB
         }
       });
 
       const totalBuchholz = opponentScores.reduce((sum, val) => sum + val, 0);
       const minOpponentScore = opponentScores.length > 0 ? Math.min(...opponentScores) : 0;
-      const buchholzCut1 = opponentScores.length > 1 ? totalBuchholz - minOpponentScore : totalBuchholz;
+      let buchholzCut1 = totalBuchholz;
+      if (opponentScores.length > 1) {
+        const lowestVirtual = virtualRoundScores.reduce((lowest, round) => round.buchholz < (lowest?.buchholz ?? Infinity) ? round : lowest, null);
+        const cutValue = lowestVirtual && lowestVirtual.buchholz >= minOpponentScore ? lowestVirtual.buchholz : minOpponentScore;
+        buchholzCut1 = totalBuchholz - cutValue;
+      }
 
       player.buchholz = Math.round(totalBuchholz * 10) / 10;
       player.buchholzCut1 = Math.round(buchholzCut1 * 10) / 10;
       player.sonnebornBerger = Math.round(sbScore * 100) / 100;
     });
 
-    // ── FIDE Swiss Standings Hierarchy ───────────────────────────────────────
-    // Priority: Points → Direct Encounter → Buchholz Cut-1 → Sonneborn-Berger → Most Wins → Rating
+    // Tie-break order must come from the event regulations; FIDE does not prescribe
+    // one universal order for all Swiss tournaments.
+    const tieBreakOrder = Array.isArray(tournament?.tieBreakOrder)
+      ? tournament.tieBreakOrder.filter((criterion, index, all) => all.indexOf(criterion) === index)
+      : ["DE", "BH-C1", "SB"];
     return Object.values(statsMap).sort((a, b) => {
-      // 1. Points
       if (b.points !== a.points) return b.points - a.points;
-
-      // 2. Direct Encounter (Head-to-Head)
-      const aVsB = directScores[a.name]?.[b.name];
-      const bVsA = directScores[b.name]?.[a.name];
-      if (aVsB != null && bVsA != null && aVsB !== bVsA) {
-        return bVsA - aVsB;
+      for (const criterion of tieBreakOrder) {
+        let difference = 0;
+        if (criterion === "DE") {
+          const tiedPlayers = Object.values(statsMap).filter((player) => player.points === a.points);
+          const completeDirectEncounter = tiedPlayers.every((player, index) => tiedPlayers.slice(index + 1).every((opponent) => (
+            directScores[player.name]?.[opponent.name] != null && directScores[opponent.name]?.[player.name] != null
+          )));
+          if (completeDirectEncounter) {
+            const aScore = tiedPlayers.reduce((score, opponent) => score + (directScores[a.name]?.[opponent.name] || 0), 0);
+            const bScore = tiedPlayers.reduce((score, opponent) => score + (directScores[b.name]?.[opponent.name] || 0), 0);
+            difference = bScore - aScore;
+          }
+        } else if (criterion === "BH-C1") difference = b.buchholzCut1 - a.buchholzCut1;
+        else if (criterion === "BH") difference = b.buchholz - a.buchholz;
+        else if (criterion === "SB") difference = b.sonnebornBerger - a.sonnebornBerger;
+        else if (criterion === "WIN") difference = b.wins - a.wins;
+        else if (criterion === "TPN") difference = (a.tpn || 0) - (b.tpn || 0);
+        if (difference) return difference;
       }
-
-      // 3. Buchholz Cut-1 (Strength of schedule minus lowest opponent)
-      if (b.buchholzCut1 !== a.buchholzCut1) return b.buchholzCut1 - a.buchholzCut1;
-
-      // 4. Full Buchholz
-      if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
-
-      // 5. Sonneborn-Berger Score
-      if (b.sonnebornBerger !== a.sonnebornBerger) return b.sonnebornBerger - a.sonnebornBerger;
-
-      // 6. Total Wins
-      if (b.wins !== a.wins) return b.wins - a.wins;
-
-      // 7. Rating fallback
-      const rA = Number(a.rating) || 0;
-      const rB = Number(b.rating) || 0;
-      return rB - rA;
+      return 0;
     });
   };
 
@@ -2518,8 +2639,45 @@ const isBlackWinner = (result) => {
                             ? "Standings will populate here once the first round begins."
                             : isStaff
                             ? "Staff View: All certificates unlocked. Mass-dispatch or email individual certificates."
-                            : "Sorted by points → wins → rating. Click a name to view the player's profile."}
+                            : `Ranked by points, then the published tie-break order: ${(tournament?.tieBreakOrder || ["DE", "BH-C1", "SB"]).map((criterion) => SWISS_TIEBREAK_LABELS[criterion] || criterion).join(" → ")}. Click a name to view the player's profile.`}
                         </p>
+                      </div>
+                      {/* View Mode Toggle for Standings */}
+                      <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b" }}>
+                        <button
+                          onClick={() => setStandingsViewMode("points")}
+                          style={{
+                            background: standingsViewMode === "points" ? "#f3c144" : "transparent",
+                            color: standingsViewMode === "points" ? "#15120c" : "#b5afa1",
+                            border: "none",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            fontWeight: "700",
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease"
+                          }}
+                          title="Points Summary View (Rank, Points, Tiebreaks)"
+                        >
+                          🏆 Points
+                        </button>
+                        <button
+                          onClick={() => setStandingsViewMode("results")}
+                          style={{
+                            background: standingsViewMode === "results" ? "#f3c144" : "transparent",
+                            color: standingsViewMode === "results" ? "#15120c" : "#b5afa1",
+                            border: "none",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            fontWeight: "700",
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease"
+                          }}
+                          title="Round-by-Round Results View"
+                        >
+                          📋 Results
+                        </button>
                       </div>
                       {isStaff && certificatesAvailable && (
                         <button
@@ -2528,7 +2686,7 @@ const isBlackWinner = (result) => {
                           onClick={() => {
                             const sMap = {};
                             swissStandings.forEach((p, i) => { sMap[p.name] = { rank: i, points: p.points }; });
-                            handleMassEmailCertificates(tournament?.playersList || [], sMap);
+                            handleMassEmailCertificates(swissStandings, sMap);
                           }}
                           style={{
                             background: "linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%)",
@@ -2565,16 +2723,26 @@ const isBlackWinner = (result) => {
                           <tr>
                             <th>Rank</th>
                             <th>Player Name</th>
-                            <th>Points</th>
-                            {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
-                              <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
-                            ))}
-                            <th>Record (W-D-L)</th>
-                            <th>Played</th>
-                            <th>Byes</th>
-                            <th title="Buchholz Cut-1: Sum of opponents' scores excluding lowest (FIDE official tiebreak)">BH-1</th>
-                            <th title="Sonneborn-Berger: Sum of defeated opponents' scores + half drawn opponents' scores (FIDE official tiebreak)">SB</th>
-                            <th>Rating</th>
+                            {standingsViewMode === "points" ? (
+                              <>
+                                <th>Points</th>
+                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
+                                  <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
+                                ))}
+                                <th>Record (W-D-L)</th>
+                                <th>Played</th>
+                                <th>Byes</th>
+                                <th title="Buchholz Cut-1: FIDE-defined tie-break; included in the standings only when selected in the event tie-break order">BH-1</th>
+                                <th title="Sonneborn-Berger: FIDE-defined tie-break; included in the standings only when selected in the event tie-break order">SB</th>
+                                <th>Rating</th>
+                              </>
+                            ) : (
+                              <>
+                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
+                                  <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
+                                ))}
+                              </>
+                            )}
                             {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
                             {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
                           </tr>
@@ -2611,22 +2779,38 @@ const isBlackWinner = (result) => {
                                     {isMe && <span style={{ marginLeft: "6px", fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "linear-gradient(135deg,#f7ce68,#f3c144)", color: "#12100d", fontWeight: "900" }}>YOU</span>}
                                   </div>
                                 </td>
-                                <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
-                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
-                                  const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
-                                  return (
-                                    <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
-                                      <strong>{result.value}</strong>
-                                      <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
-                                    </td>
-                                  );
-                                })}
-                                <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
-                                <td>{p.played}</td>
-                                <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
-                                <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
-                                <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
-                                <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
+                                {standingsViewMode === "points" ? (
+                                  <>
+                                    <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
+                                    {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
+                                      const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
+                                      return (
+                                        <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
+                                          <strong>{result.value}</strong>
+                                          <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
+                                        </td>
+                                      );
+                                    })}
+                                    <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
+                                    <td>{p.played}</td>
+                                    <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                                    <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
+                                    <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
+                                    <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
+                                      const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
+                                      return (
+                                        <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
+                                          <strong>{result.value}</strong>
+                                          <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
+                                        </td>
+                                      );
+                                    })}
+                                  </>
+                                )}
                                 {certificatesAvailable && (
                                   <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                     {canViewCert ? (
@@ -2666,7 +2850,46 @@ const isBlackWinner = (result) => {
                         <span style={{ fontSize: "0.8rem" }}>Rankings will appear here once Round 1 pairings are generated.</span>
                       </div>
                     ) : (
-                    <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
+                    <>
+                      {/* Mobile View Mode Toggle for Standings */}
+                      <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b", marginBottom: "16px", justifyContent: "center" }}>
+                        <button
+                          onClick={() => setStandingsViewMode("points")}
+                          style={{
+                            background: standingsViewMode === "points" ? "#f3c144" : "transparent",
+                            color: standingsViewMode === "points" ? "#15120c" : "#b5afa1",
+                            border: "none",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            fontWeight: "700",
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease"
+                          }}
+                          title="Points Summary View (Rank, Points, Tiebreaks)"
+                        >
+                          🏆 Points
+                        </button>
+                        <button
+                          onClick={() => setStandingsViewMode("results")}
+                          style={{
+                            background: standingsViewMode === "results" ? "#f3c144" : "transparent",
+                            color: standingsViewMode === "results" ? "#15120c" : "#b5afa1",
+                            border: "none",
+                            padding: "6px 14px",
+                            borderRadius: "6px",
+                            fontWeight: "700",
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease"
+                          }}
+                          title="Round-by-Round Results View"
+                        >
+                          📋 Results
+                        </button>
+                      </div>
+
+                      <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
                       {swissStandings.map((p, idx) => {
                         const isMe = Boolean(
                           (p.name && loggedInUserName && p.name.trim().toLowerCase() === loggedInUserName.toLowerCase()) ||
@@ -2697,7 +2920,7 @@ const isBlackWinner = (result) => {
                             </div>
 
                             {/* Round-by-Round Breakdown (R1, R2, R3, ...) */}
-                            {standingsRoundCount > 0 && (
+                            {standingsViewMode === "results" && standingsRoundCount > 0 && (
                               <div className="mobile-standings-rounds-row" style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
                                 <span className="detail-label" style={{ letterSpacing: "0.04em" }}>Rounds Breakdown:</span>
                                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
@@ -2757,6 +2980,7 @@ const isBlackWinner = (result) => {
                         );
                       })}
                     </div>
+                    </>
                     )}
                   </div>
 
@@ -2894,17 +3118,16 @@ const isBlackWinner = (result) => {
                                         </span>
                                       ) : isStaff && m._id ? (
                                         <select
-                                          value={m.result}
+                                          value={normalizeSwissResult(m.result)}
                                           onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
                                           style={{ background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "4px 10px", borderRadius: "6px", fontWeight: "800", fontSize: "0.88rem", cursor: "pointer" }}
                                         >
-                                          <option value="1-0">1 - 0 (White Wins)</option>
-                                          <option value="0-1">0 - 1 (Black Wins)</option>
-                                          <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                          <option value="Pending">Pending</option>
+                                          {SWISS_RESULT_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                          ))}
                                         </select>
                                       ) : (
-                                        <span style={{ color: "#f4c653", fontWeight: "bold", fontSize: "1rem" }}>{m.result}</span>
+                                        <span style={{ color: "#f4c653", fontWeight: "bold", fontSize: "1rem" }}>{formatSwissResult(m.result)}</span>
                                       )}
                                     </td>
                                     <td style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : isByeRow ? "#888" : "#fff" }}>
@@ -2945,7 +3168,7 @@ const isBlackWinner = (result) => {
                                         BYE (+1 pt)
                                       </span>
                                     ) : (
-                                      <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{m.result}</span>
+                                      <span style={{ color: "#f3c144", fontWeight: "bold", fontSize: "0.85rem" }}>{formatSwissResult(m.result)}</span>
                                     )}
                                   </div>
                                 </div>
@@ -2988,14 +3211,13 @@ const isBlackWinner = (result) => {
 
                                 {isStaff && !isByeRow && m._id && (
                                   <select
-                                    value={m.result}
+                                    value={normalizeSwissResult(m.result)}
                                     onChange={(e) => handleUpdateMatch(m._id, { result: e.target.value })}
                                     style={{ width: "100%", marginTop: "8px", background: "#15120c", color: "#f3c144", border: "1px solid #f3c144", padding: "8px 12px", borderRadius: "8px", fontWeight: "800", fontSize: "0.85rem", cursor: "pointer" }}
                                   >
-                                    <option value="1-0">1 - 0 (White Wins)</option>
-                                    <option value="0-1">0 - 1 (Black Wins)</option>
-                                    <option value="1/2-1/2">½ - ½ (Draw)</option>
-                                    <option value="Pending">Pending</option>
+                                    {SWISS_RESULT_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
                                   </select>
                                 )}
                               </div>
@@ -4150,9 +4372,15 @@ const isBlackWinner = (result) => {
                   value={matchForm.result} 
                   onChange={(e) => setMatchForm({ ...matchForm, result: e.target.value })}
                 >
-                  <option value="1-0">1 - 0 (White Wins)</option>
-                  <option value="0-1">0 - 1 (Black Wins)</option>
-                  <option value="1/2-1/2">½ - ½ (Draw)</option>
+                  {isSwissFormat ? SWISS_RESULT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  )) : (
+                    <>
+                      <option value="1-0">1 - 0 (White Wins)</option>
+                      <option value="0-1">0 - 1 (Black Wins)</option>
+                      <option value="1/2-1/2">½ - ½ (Draw)</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div>
@@ -4315,6 +4543,42 @@ const isBlackWinner = (result) => {
                   />
                 </div>
               </div>
+
+              {editForm.type?.toLowerCase().includes("swiss") && (
+                <div style={{ marginTop: "14px" }}>
+                  <label style={{ display: "block", marginBottom: "6px" }}>Swiss tie-break order (publish before Round 1)</label>
+                  <p style={{ margin: "0 0 8px", color: "#a89f91", fontSize: "0.78rem" }}>
+                    FIDE requires the event regulations to state the order. Unselected criteria are skipped; unresolved ties remain tied for the arbiter to resolve under the published rules.
+                  </p>
+                  {[0, 1, 2, 3, 4].map((position) => {
+                    const choices = [
+                      ["DE", "Direct Encounter"], ["BH-C1", "Buchholz Cut-1"], ["BH", "Buchholz"],
+                      ["SB", "Sonneborn-Berger"], ["WIN", "Number of Wins"], ["TPN", "Tournament Pairing Number"]
+                    ];
+                    const currentOrder = editForm.tieBreakOrder || [];
+                    return (
+                      <div key={`tiebreak-${position}`} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{ minWidth: "52px", color: "#c8bda8", fontSize: "0.82rem" }}>{position + 1}.</span>
+                        <select
+                          aria-label={`Tie-break criterion ${position + 1}`}
+                          value={currentOrder[position] || ""}
+                          onChange={(event) => {
+                            const next = [...currentOrder];
+                            next[position] = event.target.value;
+                            setEditForm({ ...editForm, tieBreakOrder: next.filter(Boolean).filter((value, index, all) => all.indexOf(value) === index) });
+                          }}
+                          style={{ background: "#15120c", color: "#fff", border: "1px solid #36332b", padding: "7px", borderRadius: "7px", flex: 1 }}
+                        >
+                          <option value="">No further tie-break</option>
+                          {choices.filter(([value]) => !currentOrder.includes(value) || currentOrder[position] === value).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div>
                 <label>Description &amp; Rules</label>

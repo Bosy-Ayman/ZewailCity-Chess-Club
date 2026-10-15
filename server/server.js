@@ -165,6 +165,7 @@ const TournamentSchema = new mongoose.Schema({
     reminderSent15Min: { type: Boolean, default: false }
   }],
   rounds: { type: Number, default: 0 }, // Total planned rounds
+  tieBreakOrder: { type: [String], default: ['DE', 'BH-C1', 'SB'] },
   winner: { type: String, default: '' },
   podium: [{
     place: { type: Number },
@@ -196,6 +197,7 @@ class MockTournamentDoc {
     this.players = data.players || (data.playersList ? data.playersList.length : 0);
     this.detailsUrl = data.detailsUrl || '';
     this.rounds = data.rounds || 0;
+    this.tieBreakOrder = Array.isArray(data.tieBreakOrder) ? [...data.tieBreakOrder] : ['DE', 'BH-C1', 'SB'];
     this.winner = data.winner || '';
     this.podium = data.podium || [];
     this.playersList = Array.isArray(data.playersList) ? [...data.playersList] : [];
@@ -249,6 +251,7 @@ class MockTournamentDoc {
       players: this.players,
       detailsUrl: this.detailsUrl,
       rounds: this.rounds,
+      tieBreakOrder: this.tieBreakOrder,
       winner: this.winner,
       podium: this.podium,
       playersList: this.playersList,
@@ -3435,7 +3438,7 @@ app.put('/api/tournaments/:id/matches', async (req, res) => {
 
 // Helper to determine match winner across single-game, 2-game match, and Armageddon results
 const getMatchWinner = (result, white, black) => {
-  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0.5-0.5") return null;
+  if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0.5-0.5" || result === "0-0" || result === "0 - 0") return null;
   const res = String(result).toLowerCase().trim();
   // White wins
   if (
@@ -3778,20 +3781,30 @@ app.post('/api/tournaments/:id/generate-swiss-round', async (req, res) => {
         return; // Don't record color or opponent for BYE
       }
 
-      // Normal match: record history for active players
-      if (whiteKey) {
-        statsMap[whiteKey].opponents.push(m.black);
-        statsMap[whiteKey].colorsPlayed.push('w');
-      }
-      if (blackKey) {
-        statsMap[blackKey].opponents.push(m.white);
-        statsMap[blackKey].colorsPlayed.push('b');
+      const result = String(m.result || '').trim().toLowerCase();
+      const whiteForfeitWin = result === '1-0f' || result === '1 - 0f';
+      const blackForfeitWin = result === '0-1f' || result === '0 - 1f';
+      const doubleForfeit = result === '0-0' || result === '0 - 0';
+      const playedOverTheBoard = !whiteForfeitWin && !blackForfeitWin && !doubleForfeit && result !== 'pending' && result !== '';
+
+      // FIDE treats unplayed rounds as having no opponent or colour history.
+      if (playedOverTheBoard) {
+        if (whiteKey) {
+          statsMap[whiteKey].opponents.push(m.black);
+          statsMap[whiteKey].colorsPlayed.push('w');
+        }
+        if (blackKey) {
+          statsMap[blackKey].opponents.push(m.white);
+          statsMap[blackKey].colorsPlayed.push('b');
+        }
       }
 
-      if (m.result === "1-0" || m.result === "1 - 0") {
+      if (m.result === "1-0" || m.result === "1 - 0" || whiteForfeitWin) {
         if (whiteKey) statsMap[whiteKey].points += 1;
-      } else if (m.result === "0-1" || m.result === "0 - 1") {
+        if (whiteKey && whiteForfeitWin) statsMap[whiteKey].byeReceived = true;
+      } else if (m.result === "0-1" || m.result === "0 - 1" || blackForfeitWin) {
         if (blackKey) statsMap[blackKey].points += 1;
+        if (blackKey && blackForfeitWin) statsMap[blackKey].byeReceived = true;
       } else if (m.result === "1/2-1/2" || m.result === "½ - ½" || m.result === "Draw") {
         if (whiteKey) statsMap[whiteKey].points += 0.5;
         if (blackKey) statsMap[blackKey].points += 0.5;
@@ -4552,7 +4565,7 @@ app.put('/api/applications/:id/status', async (req, res) => {
 // POST: create a new tournament
 app.post('/api/tournaments', async (req, res) => {
   try {
-    const { title, type, status, startDate, endDate, time, location, description, image, players, detailsUrl, rounds, isMock, _id } = req.body;
+    const { title, type, status, startDate, endDate, time, location, description, image, players, detailsUrl, rounds, tieBreakOrder, isMock, _id } = req.body;
     
     if (isMock || isMockId(_id)) {
       const mockDoc = new MockTournamentDoc({
@@ -4568,7 +4581,8 @@ app.post('/api/tournaments', async (req, res) => {
         image: image || '',
         players: players || 0,
         detailsUrl: detailsUrl || '',
-        rounds: rounds ? Number(rounds) : 0
+        rounds: rounds ? Number(rounds) : 0,
+        tieBreakOrder
       });
       await mockDoc.save();
       return res.status(201).json({ message: 'In-Memory Mock Tournament created successfully! (Zero MongoDB touch)', data: mockDoc });
@@ -4586,7 +4600,8 @@ app.post('/api/tournaments', async (req, res) => {
       image: image || '',
       players: players || 0,
       detailsUrl: detailsUrl || '',
-      rounds: rounds ? Number(rounds) : 0
+      rounds: rounds ? Number(rounds) : 0,
+      tieBreakOrder
     });
 
     const savedTournament = await newTournament.save();
@@ -4728,24 +4743,32 @@ async function generateVectorCertificatePdfBuffer({
   const cleanTitle = sanitize(tournamentTitle);
   const cleanType = sanitize(tournamentType);
   const rankStr = (rank || "").toString().toLowerCase();
-  const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1" || rankStr === "#1";
-  const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2" || rankStr === "#2";
-  const isThird = rankStr.includes("3rd") || rankStr === "3" || rankStr === "#3";
+  const isChamp = rankStr.includes("champ") || rankStr.includes("1st") || rankStr.includes("first") || rankStr === "1" || rankStr === "#1";
+  const isRunnerUp = rankStr.includes("runner") || rankStr.includes("2nd") || rankStr.includes("second") || rankStr === "2" || rankStr === "#2";
+  const isThird = rankStr.includes("3rd") || rankStr.includes("third") || rankStr === "3" || rankStr === "#3";
   const isPodium = isChamp || isRunnerUp || isThird;
 
   const mainHeader = isPodium
     ? "CERTIFICATE OF EXCELLENCE & MERIT"
     : "CERTIFICATE OF PARTICIPATION & APPRECIATION";
 
-  const honorDistinction = isChamp
-    ? "GRAND CHAMPION  -  FIRST PLACE"
-    : isRunnerUp
-    ? "RUNNER-UP FINALIST  -  SECOND PLACE"
-    : isThird
-    ? "THIRD PLACE PODIUM DISTINCTION"
-    : isPuzzle
-    ? "HONORED TACTICAL COMPETITOR"
-    : "HONORED TOURNAMENT COMPETITOR";
+  let honorDistinction = "";
+  if (isChamp) {
+    honorDistinction = "GRAND CHAMPION  -  FIRST PLACE";
+  } else if (isRunnerUp) {
+    honorDistinction = "RUNNER-UP FINALIST  -  SECOND PLACE";
+  } else if (isThird) {
+    honorDistinction = "THIRD PLACE PODIUM DISTINCTION";
+  } else if (rankStr.includes("#") || /\b\d+(?:st|nd|rd|th)?\b/i.test(rankStr)) {
+    const cleanRank = sanitize(rank).replace(/^[^\w#]+/, "").trim();
+    honorDistinction = isPuzzle
+      ? `DISTINGUISHED TACTICIAN  -  ${cleanRank.toUpperCase()}`
+      : `DISTINGUISHED COMPETITOR  -  ${cleanRank.toUpperCase()}`;
+  } else {
+    honorDistinction = isPuzzle
+      ? "HONORED TACTICAL COMPETITOR"
+      : "HONORED TOURNAMENT COMPETITOR";
+  }
 
   const scoreText = pointsOrScore ? " (" + sanitize(pointsOrScore) + ")" : "";
 
@@ -5114,9 +5137,9 @@ app.post('/api/certificates/send-email', async (req, res) => {
 
     const isPuzzle = (tournamentType || "").toLowerCase().includes("puzzle") || (tournamentType || "").toLowerCase().includes("tactic");
     const rankStr = (rank || "").toString().toLowerCase();
-    const isChamp = rankStr.includes("champ") || rankStr === "1st place" || rankStr === "1";
-    const isRunnerUp = rankStr.includes("runner") || rankStr === "2nd place" || rankStr === "2";
-    const isThird = rankStr.includes("3rd") || rankStr === "3";
+    const isChamp = rankStr.includes("champ") || rankStr.includes("1st") || rankStr.includes("first") || rankStr === "1" || rankStr === "#1";
+    const isRunnerUp = rankStr.includes("runner") || rankStr.includes("2nd") || rankStr.includes("second") || rankStr === "2" || rankStr === "#2";
+    const isThird = rankStr.includes("3rd") || rankStr.includes("third") || rankStr === "3" || rankStr === "#3";
     const isPodium = isChamp || isRunnerUp || isThird;
 
     const certTitle = isPodium 
