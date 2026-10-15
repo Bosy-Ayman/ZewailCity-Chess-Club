@@ -20,7 +20,6 @@ export default function TournamentDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("bracket"); // "bracket" or "table"
-  const [standingsViewMode, setStandingsViewMode] = useState("points"); // "points" or "results"
   const [activeSection, setActiveSectionState] = useState("");
   const [activeTournamentTab, setActiveTournamentTab] = useState("tournament-rules");
   const [activePairingRound, setActivePairingRound] = useState(null);
@@ -2873,43 +2872,6 @@ const formatSwissResult = (result) => {
                             : `Ranked by points, then the published tie-break order: ${(tournament?.tieBreakOrder || ["DE", "BH-C1", "SB"]).map((criterion) => SWISS_TIEBREAK_LABELS[criterion] || criterion).join(" → ")}. Click a name to view the player's profile.`}
                         </p>
                       </div>
-                      {/* View Mode Toggle for Standings */}
-                      <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b" }}>
-                        <button
-                          onClick={() => setStandingsViewMode("points")}
-                          style={{
-                            background: standingsViewMode === "points" ? "#f3c144" : "transparent",
-                            color: standingsViewMode === "points" ? "#15120c" : "#b5afa1",
-                            border: "none",
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontWeight: "700",
-                            fontSize: "0.82rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease"
-                          }}
-                          title="Points Summary View (Rank, Points, Tiebreaks)"
-                        >
-                          🏆 Points
-                        </button>
-                        <button
-                          onClick={() => setStandingsViewMode("results")}
-                          style={{
-                            background: standingsViewMode === "results" ? "#f3c144" : "transparent",
-                            color: standingsViewMode === "results" ? "#15120c" : "#b5afa1",
-                            border: "none",
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontWeight: "700",
-                            fontSize: "0.82rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease"
-                          }}
-                          title="Round-by-Round Results View"
-                        >
-                          📋 Results
-                        </button>
-                      </div>
                       {isStaff && certificatesAvailable && (
                         <button
                           type="button"
@@ -2956,24 +2918,14 @@ const formatSwissResult = (result) => {
                             <th>Player Name</th>
                             <th title="Buchholz Cut-1: FIDE-defined tie-break">BH-1</th>
                             <th title="Sonneborn-Berger: FIDE-defined tie-break">SB</th>
-                            {standingsViewMode === "points" ? (
-                              <>
-                                <th>Points</th>
-                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
-                                  <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
-                                ))}
-                                <th>Record (W-D-L)</th>
-                                <th>Played</th>
-                                <th>Byes</th>
-                                <th>Rating</th>
-                              </>
-                            ) : (
-                              <>
-                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
-                                  <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
-                                ))}
-                              </>
-                            )}
+                            <th>Points</th>
+                            {Array.from({ length: standingsRoundCount }, (_, roundIndex) => (
+                              <th key={`round-header-${roundIndex + 1}`} className="standing-round-column">R{roundIndex + 1}</th>
+                            ))}
+                            <th>Record (W-D-L)</th>
+                            <th>Played</th>
+                            <th>Byes</th>
+                            <th>Rating</th>
                             {certificatesAvailable && <th style={{ textAlign: "center" }}>Honors Certificate</th>}
                             {isStaff && certificatesAvailable && <th style={{ textAlign: "center" }}>Email PDF</th>}
                           </tr>
@@ -3012,36 +2964,20 @@ const formatSwissResult = (result) => {
                                 </td>
                                 <td style={{ color: "#e2d9cc", fontWeight: "700" }} title="Buchholz Cut-1">{p.buchholzCut1 != null ? p.buchholzCut1 : "—"}</td>
                                 <td style={{ color: "#f3c144", fontWeight: "700" }} title="Sonneborn-Berger">{p.sonnebornBerger != null ? p.sonnebornBerger : "—"}</td>
-                                {standingsViewMode === "points" ? (
-                                  <>
-                                    <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
-                                    {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
-                                      const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
-                                      return (
-                                        <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
-                                          <strong>{result.value}</strong>
-                                          <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
-                                        </td>
-                                      );
-                                    })}
-                                    <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
-                                    <td>{p.played}</td>
-                                    <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
-                                    <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
-                                  </>
-                                ) : (
-                                  <>
-                                    {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
-                                      const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
-                                      return (
-                                        <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
-                                          <strong>{result.value}</strong>
-                                          <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
-                                        </td>
-                                      );
-                                    })}
-                                  </>
-                                )}
+                                <td style={{ color: "#f3c144", fontWeight: "800", fontSize: "1.05rem" }}>{p.points} pts</td>
+                                {Array.from({ length: standingsRoundCount }, (_, roundIndex) => {
+                                  const result = p.roundResults?.[roundIndex + 1] || { value: "—", label: "Not played", tone: "pending" };
+                                  return (
+                                    <td key={`round-${p.name}-${roundIndex + 1}`} className={`standing-round-result standing-round-${result.tone}`} title={result.label}>
+                                      <strong>{result.value}</strong>
+                                      <small>{result.label === "Pending" || result.label === "Not played" ? "" : result.label}</small>
+                                    </td>
+                                  );
+                                })}
+                                <td style={{ color: "#bab19c" }}>{p.wins}W - {p.draws}D - {p.losses}L</td>
+                                <td>{p.played}</td>
+                                <td>{p.byes > 0 ? <span style={{ color: "#f3c144", fontWeight: "bold" }}>{p.byes} BYE</span> : "—"}</td>
+                                <td>{(!p.rating || p.rating === "Unrated" || p.rating === 0) ? <span style={{ color: "#8e8677", fontStyle: "italic" }}>Unrated</span> : p.rating}</td>
                                 {certificatesAvailable && (
                                   <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                                     {canViewCert ? (
@@ -3081,45 +3017,6 @@ const formatSwissResult = (result) => {
                         <span style={{ fontSize: "0.8rem" }}>Rankings will appear here once Round 1 pairings are generated.</span>
                       </div>
                     ) : (
-                    <>
-                      {/* Mobile View Mode Toggle for Standings */}
-                      <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b", marginBottom: "16px", justifyContent: "center" }}>
-                        <button
-                          onClick={() => setStandingsViewMode("points")}
-                          style={{
-                            background: standingsViewMode === "points" ? "#f3c144" : "transparent",
-                            color: standingsViewMode === "points" ? "#15120c" : "#b5afa1",
-                            border: "none",
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontWeight: "700",
-                            fontSize: "0.82rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease"
-                          }}
-                          title="Points Summary View (Rank, Points, Tiebreaks)"
-                        >
-                          🏆 Points
-                        </button>
-                        <button
-                          onClick={() => setStandingsViewMode("results")}
-                          style={{
-                            background: standingsViewMode === "results" ? "#f3c144" : "transparent",
-                            color: standingsViewMode === "results" ? "#15120c" : "#b5afa1",
-                            border: "none",
-                            padding: "6px 14px",
-                            borderRadius: "6px",
-                            fontWeight: "700",
-                            fontSize: "0.82rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease"
-                          }}
-                          title="Round-by-Round Results View"
-                        >
-                          📋 Results
-                        </button>
-                      </div>
-
                       <div className="tournaments-mobile-cards" style={{ marginBottom: "40px" }}>
                       {swissStandings.map((p, idx) => {
                         const isMe = Boolean(
@@ -3151,7 +3048,7 @@ const formatSwissResult = (result) => {
                             </div>
 
                             {/* Round-by-Round Breakdown (R1, R2, R3, ...) */}
-                            {standingsViewMode === "results" && standingsRoundCount > 0 && (
+                            {standingsRoundCount > 0 && (
                               <div className="mobile-standings-rounds-row" style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "5px" }}>
                                 <span className="detail-label" style={{ letterSpacing: "0.04em" }}>Rounds Breakdown:</span>
                                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
@@ -3211,7 +3108,6 @@ const formatSwissResult = (result) => {
                         );
                       })}
                     </div>
-                    </>
                     )}
                   </div>
 
