@@ -193,6 +193,7 @@ export default function AdminDashboard() {
   // Broadcast Notification & Email Dispatch states
   const [broadcastRecipientType, setBroadcastRecipientType] = useState("all"); // 'all' | 'specific'
   const [broadcastTargetEmail, setBroadcastTargetEmail] = useState("");
+  const [broadcastTournamentId, setBroadcastTournamentId] = useState("");
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastLink, setBroadcastLink] = useState("");
@@ -554,6 +555,13 @@ export default function AdminDashboard() {
     }
   };
 
+  const applyFeedbackEmailTemplate = (tournament) => {
+    if (!tournament) return;
+    setBroadcastTitle(`💬 Tell us about ${tournament.title}`);
+    setBroadcastMessage(`Dear Players,\n\nThank you for taking part in ${tournament.title}. We would love to hear what you thought of the tournament day and how we can improve the chess experience at Zewail.\n\nPlease share your feedback and ideas for future tournaments using the link below. Your responses will be reviewed by the organizing team and considered when planning upcoming events.\n\nThank you,\nZC Chess Club`);
+    setBroadcastLink(`/tournamentdetails?id=${tournament._id}#tournament-standings`);
+  };
+
   // Quick Templates for Broadcasts
   const handleApplyTemplate = (templateKey) => {
     switch (templateKey) {
@@ -597,6 +605,22 @@ export default function AdminDashboard() {
         setBroadcastMessage("Dear Club Members,\n\nWe are hosting an in-person blitz practice and club strategy assembly this week. Come meet fellow players, analyze historic Grandmaster games, and participate in casual matches!");
         setBroadcastLink("/community");
         break;
+      case "feedback_request": {
+        const completed = tournaments.filter(t => String(t.status || "").toLowerCase() === "completed");
+        const selected = completed.find(t => String(t._id) === String(broadcastTournamentId)) || completed[0];
+        if (!selected) {
+          setErrorMessage("Complete a tournament first to prepare a feedback request for its players.");
+          return;
+        }
+        setErrorMessage("");
+        setBroadcastTournamentId(String(selected._id));
+        setBroadcastRecipientType("tournament");
+        setBroadcastTargetEmail("");
+        applyFeedbackEmailTemplate(selected);
+        setSendInApp(false);
+        setSendEmailFlag(true);
+        break;
+      }
       default:
         break;
     }
@@ -619,6 +643,11 @@ export default function AdminDashboard() {
       return;
     }
 
+    if (broadcastRecipientType === "tournament" && !broadcastTournamentId) {
+      setErrorMessage("Please select a completed tournament for this player feedback request.");
+      return;
+    }
+
     if (!sendInApp && !sendEmailFlag) {
       setErrorMessage("Please select at least one delivery channel (In-App Notification or Real Email).");
       return;
@@ -635,6 +664,7 @@ export default function AdminDashboard() {
           adminEmail,
           recipientType: broadcastRecipientType,
           targetEmail: broadcastRecipientType === "specific" ? broadcastTargetEmail.trim() : undefined,
+          targetTournamentId: broadcastRecipientType === "tournament" ? broadcastTournamentId : undefined,
           title: broadcastTitle.trim(),
           message: broadcastMessage.trim(),
           link: broadcastLink.trim() || "/",
@@ -669,6 +699,7 @@ export default function AdminDashboard() {
     setBroadcastMessage(log.message || "");
     setBroadcastLink(log.link || "");
     setBroadcastRecipientType(log.recipientType || "all");
+    setBroadcastTournamentId(log.tournamentId || "");
     if (log.recipientType === "specific" && log.targetEmail) {
       setBroadcastTargetEmail(log.targetEmail);
     }
@@ -3539,6 +3570,13 @@ const PrettyRoleData = ({ data }) => {
                     >
                       📢 General Assembly / News
                     </button>
+                    <button
+                      type="button"
+                      className="admin-template-pill feedback-email-template"
+                      onClick={() => handleApplyTemplate("feedback_request")}
+                    >
+                      💬 Player Feedback Request Email
+                    </button>
                   </div>
                 </div>
 
@@ -3577,8 +3615,41 @@ const PrettyRoleData = ({ data }) => {
                             <span className="radio-card-meta">Send directly to one specific student or member</span>
                           </div>
                         </label>
+
+                        <label className={`admin-recipient-radio-card ${broadcastRecipientType === 'tournament' ? 'selected' : ''}`}>
+                          <input
+                            type="radio"
+                            name="recipientType"
+                            value="tournament"
+                            checked={broadcastRecipientType === 'tournament'}
+                            onChange={() => setBroadcastRecipientType('tournament')}
+                          />
+                          <div className="radio-card-body">
+                            <span className="radio-card-title">♟️ Tournament Players</span>
+                            <span className="radio-card-meta">Send to registered players of one completed tournament</span>
+                          </div>
+                        </label>
                       </div>
                     </div>
+
+                    {broadcastRecipientType === "tournament" && (
+                      <div className="form-group">
+                        <label htmlFor="broadcastTournamentId">Completed Tournament *</label>
+                        <select id="broadcastTournamentId" value={broadcastTournamentId} onChange={(event) => {
+                          const tournament = tournaments.find(item => String(item._id) === event.target.value);
+                          setBroadcastTournamentId(event.target.value);
+                          applyFeedbackEmailTemplate(tournament);
+                        }} required>
+                          <option value="">-- Select a completed tournament --</option>
+                          {tournaments.filter(t => String(t.status || "").toLowerCase() === "completed").map(t => (
+                            <option key={t._id} value={t._id}>{t.title}</option>
+                          ))}
+                        </select>
+                        <small style={{ color: "#8e8677", fontSize: "0.78rem", marginTop: "4px", display: "block" }}>
+                          Only this tournament’s registered participants will receive the message.
+                        </small>
+                      </div>
+                    )}
 
                     {/* Specific Recipient Selector */}
                     {broadcastRecipientType === "specific" && (
@@ -3690,12 +3761,12 @@ const PrettyRoleData = ({ data }) => {
                       className="admin-broadcast-submit-btn"
                     >
                       {isSendingBroadcast ? (
-                        <span>🔄 Dispatching to {broadcastRecipientType === 'all' ? `All ${users.length} Members` : 'Recipient'}...</span>
+                        <span>🔄 Dispatching to {broadcastRecipientType === 'all' ? `All ${users.length} Members` : broadcastRecipientType === 'tournament' ? 'Tournament Players' : 'Recipient'}...</span>
                       ) : (
                         <span>
                           <Send size={18} />
                           <span>
-                            Dispatch Announcement {broadcastRecipientType === 'all' ? `to All Members (${users.length})` : 'to Selected Player'}
+                            Dispatch Announcement {broadcastRecipientType === 'all' ? `to All Members (${users.length})` : broadcastRecipientType === 'tournament' ? 'to Tournament Players' : 'to Selected Player'}
                           </span>
                         </span>
                       )}
@@ -3756,7 +3827,7 @@ const PrettyRoleData = ({ data }) => {
                           </h3>
                           
                           <p className="mockup-salutation">
-                            Dear {broadcastRecipientType === 'specific' && broadcastTargetEmail ? (users.find(u => u.email === broadcastTargetEmail)?.name || broadcastTargetEmail.split('@')[0]) : 'Tactician'},
+                            Dear {broadcastRecipientType === 'tournament' ? 'Players' : broadcastRecipientType === 'specific' && broadcastTargetEmail ? (users.find(u => u.email === broadcastTargetEmail)?.name || broadcastTargetEmail.split('@')[0]) : 'Tactician'},
                           </p>
 
                           <div className="mockup-message-box">

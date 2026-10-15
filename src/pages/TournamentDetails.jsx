@@ -79,6 +79,7 @@ export default function TournamentDetails() {
     userRole.includes("board") ||
     userRole.includes("officer")
   );
+  const isAdminOrTournamentOC = isLoggedIn && ["admin", "president", "vice_president", "oc", "member_oc"].includes(userRole);
   const loggedInUserName = (localStorage.getItem("userName") || "").trim();
   const loggedInUserEmail = (localStorage.getItem("userEmail") || localStorage.getItem("adminEmail") || "").trim().toLowerCase();
 
@@ -276,10 +277,10 @@ const formatSwissResult = (result) => {
     const dayIndexMap = { 'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4 };
     const targetDay = dayIndexMap[dayName];
     if (targetDay === undefined) return baseDateStr || new Date().toISOString().split('T')[0];
-    
+
     const base = baseDateStr ? new Date(baseDateStr) : new Date();
     if (isNaN(base.getTime())) return new Date().toISOString().split('T')[0];
-    
+
     const currentDay = base.getDay();
     let diff = targetDay - currentDay;
     if (diff < 0) diff += 7;
@@ -430,7 +431,7 @@ const formatSwissResult = (result) => {
 
       // Check if tournament is a Knockout tournament: availability is required!
       const isKnockout = tournament?.type && (
-        tournament.type.toLowerCase().includes("knockout") || 
+        tournament.type.toLowerCase().includes("knockout") ||
         tournament.type.toLowerCase().includes("elimination") ||
         tournament.type === "Single Elimination" ||
         tournament.type === "Double Elimination"
@@ -937,7 +938,7 @@ const formatSwissResult = (result) => {
 
     podiumCards.forEach((c, idx) => {
       const cx = startX + idx * (cardW + gap);
-      
+
       // Card background
       ctx.fillStyle = c.bg;
       ctx.beginPath();
@@ -1276,7 +1277,7 @@ const formatSwissResult = (result) => {
     try {
       setCertActionLoading(true);
       setCertStatusMsg(`Generating & emailing official PDF certificate to ${playerName}...`);
-      
+
       const certResult = await generateWinnerCertificate({
         playerName: playerName,
         rank: rankStr,
@@ -1327,7 +1328,7 @@ const formatSwissResult = (result) => {
       return;
     }
     if (!window.confirm(`Email official certificates with PDF to ALL ${targetPlayers.length} participants in "${tournament?.title}"?`)) return;
-    
+
     try {
       setCertActionLoading(true);
       let successCount = 0;
@@ -1448,15 +1449,15 @@ const formatSwissResult = (result) => {
   const calculateSwissStandings = (players = [], matches = []) => {
     const statsMap = {};
     players.forEach((p) => {
-      const profile = tournament?.playerProfiles?.[p.name] || 
-                      tournament?.playerProfiles?.[p.name?.trim()] || 
+      const profile = tournament?.playerProfiles?.[p.name] ||
+                      tournament?.playerProfiles?.[p.name?.trim()] ||
                       tournament?.playerProfiles?.[p.name?.trim()?.toLowerCase()];
-      const effectiveRating = profile?.effectiveRating || 
-                              (profile?.chessComRating > 0 && profile.chessComRating) || 
-                              (profile?.fideRating > 0 && profile.fideRating) || 
-                              (profile?.lichessRating > 0 && profile.lichessRating) || 
-                              (p.rating && p.rating > 0 && p.rating !== 1500 ? p.rating : null) || 
-                              (profile?.rating > 0 && profile.rating) || 
+      const effectiveRating = profile?.effectiveRating ||
+                              (profile?.chessComRating > 0 && profile.chessComRating) ||
+                              (profile?.fideRating > 0 && profile.fideRating) ||
+                              (profile?.lichessRating > 0 && profile.lichessRating) ||
+                              (p.rating && p.rating > 0 && p.rating !== 1500 ? p.rating : null) ||
+                              (profile?.rating > 0 && profile.rating) ||
                               0;
       statsMap[p.name] = {
         name: p.name,
@@ -1972,10 +1973,10 @@ const formatSwissResult = (result) => {
     const clean = playerName.trim();
     const profileFromDb = tournament?.playerProfiles?.[clean] || tournament?.playerProfiles?.[clean.toLowerCase()] || {};
     const avatarUrl = getPlayerAvatarUrl(clean, tournament?.playerAvatars);
-    
+
     // Find swiss standing if exists
     const standing = swissStandings.find(s => s.name.toLowerCase() === clean.toLowerCase());
-    
+
     const dbCheers = typeof profileFromDb.cheers === "number" ? profileFromDb.cheers : 0;
 
     setSelectedPlayerModal({
@@ -1984,12 +1985,12 @@ const formatSwissResult = (result) => {
       avatar: avatarUrl,
       major: profileFromDb.major || extra.major || standing?.major || "Zewail City Tactician",
       batch: profileFromDb.batch || "ZC '25",
-      rating: profileFromDb.effectiveRating || 
-              (profileFromDb.chessComRating > 0 && profileFromDb.chessComRating) || 
-              (profileFromDb.fideRating > 0 && profileFromDb.fideRating) || 
-              (profileFromDb.lichessRating > 0 && profileFromDb.lichessRating) || 
-              (extra.rating && extra.rating !== 1500 && extra.rating !== 0 ? extra.rating : null) || 
-              (standing?.rating && standing?.rating !== 1500 && standing?.rating !== 0 ? standing?.rating : null) || 
+      rating: profileFromDb.effectiveRating ||
+              (profileFromDb.chessComRating > 0 && profileFromDb.chessComRating) ||
+              (profileFromDb.fideRating > 0 && profileFromDb.fideRating) ||
+              (profileFromDb.lichessRating > 0 && profileFromDb.lichessRating) ||
+              (extra.rating && extra.rating !== 1500 && extra.rating !== 0 ? extra.rating : null) ||
+              (standing?.rating && standing?.rating !== 1500 && standing?.rating !== 0 ? standing?.rating : null) ||
               "Unrated",
       chessTitle: profileFromDb.chessTitle || "",
       favOpening: profileFromDb.favOpening || "",
@@ -2003,7 +2004,7 @@ const formatSwissResult = (result) => {
     // Fetch fresh profile from database to ensure up-to-date cheer count, email, and favOpening
     const fetchFreshProfile = async () => {
       try {
-        const queryUrl = profileFromDb.email 
+        const queryUrl = profileFromDb.email
           ? `${API_BASE}/api/profile?email=${encodeURIComponent(profileFromDb.email)}`
           : `${API_BASE}/api/profile?name=${encodeURIComponent(clean)}`;
         const res = await fetch(queryUrl);
@@ -2021,10 +2022,10 @@ const formatSwissResult = (result) => {
           if (prof) {
             setSelectedPlayerModal(prev => {
               if (!prev || prev.name !== clean) return prev;
-              const freshRating = (prof.chessComRating > 0 && prof.chessComRating) || 
-                                  (prof.fideRating > 0 && prof.fideRating) || 
-                                  (prof.lichessRating > 0 && prof.lichessRating) || 
-                                  (prof.rating > 0 && prof.rating ? prof.rating : null) || 
+              const freshRating = (prof.chessComRating > 0 && prof.chessComRating) ||
+                                  (prof.fideRating > 0 && prof.fideRating) ||
+                                  (prof.lichessRating > 0 && prof.lichessRating) ||
+                                  (prof.rating > 0 && prof.rating ? prof.rating : null) ||
                                   "Unrated";
               return {
                 ...prev,
@@ -2049,7 +2050,7 @@ const formatSwissResult = (result) => {
     const newCount = cheerCount + 1;
     setCheerCount(newCount);
     setCheered(true);
-    
+
     const playerName = selectedPlayerModal.name;
     const playerEmail = selectedPlayerModal.email;
     const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
@@ -2100,7 +2101,7 @@ const formatSwissResult = (result) => {
     if (allMatchesCompleted) {
       const maxRound = Math.max(...matches.map(m => m.round || 1));
       const roundMatches = matches.filter(m => (m.round || 1) === maxRound);
-      const isKnockout = (tournament.type || "").toLowerCase().includes("knockout") || 
+      const isKnockout = (tournament.type || "").toLowerCase().includes("knockout") ||
                          (tournament.type || "").toLowerCase().includes("elimination");
 
       if (isKnockout && roundMatches.length === 1 && (maxRound > 1 || (tournament.playersList && tournament.playersList.length <= 2))) {
@@ -2174,7 +2175,7 @@ const formatSwissResult = (result) => {
                 </div>
 
                 <h1 className="tournament-hero-title">{tournament.title}</h1>
-                
+
                 <div className="tournament-hero-meta-grid">
                   <div className="hero-meta-item">
                     <span className="meta-icon">📅</span>
@@ -2296,9 +2297,9 @@ const formatSwissResult = (result) => {
                         <span className="hero-progress-percent" style={{ color: badgeColor }}>{progressPct}% Completed</span>
                       </div>
                       <div className="hero-progress-track">
-                        <div 
-                          className="hero-progress-fill" 
-                          style={{ 
+                        <div
+                          className="hero-progress-fill"
+                          style={{
                             width: `${progressPct}%`,
                             background: badgeColor === "#2ecc71" ? "#2ecc71" : badgeColor === "#f3c144" ? "linear-gradient(90deg, #f3c144, #e2b033)" : "#3498db"
                           }}
@@ -2310,7 +2311,7 @@ const formatSwissResult = (result) => {
 
                 <div className="tournament-export-actions">
                   {tournament.status === "Completed" && (
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setCelebrationModalOpen(true)}
                       className="export-tournament-btn celebration-trigger-btn"
@@ -2325,6 +2326,11 @@ const formatSwissResult = (result) => {
                     >
                       <span>🏆</span>
                       <span>Championship Podium</span>
+                    </button>
+                  )}
+                  {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (
+                    <button type="button" className="export-tournament-btn feedback-podium-btn" onClick={() => setFeedbackModalOpen(true)}>
+                      <span>💬</span><span>{tournamentFeedback ? "Update tournament feedback" : "Give tournament feedback"}</span>
                     </button>
                   )}
                   {/* Certificate download is available in the player standings table below */}
@@ -2358,7 +2364,7 @@ const formatSwissResult = (result) => {
                     )
                   )}
                   {isStaff && (
-                    <button 
+                    <button
                       type="button"
                       onClick={handleOpenEditModal}
                       className="export-tournament-btn edit-btn"
@@ -2368,8 +2374,8 @@ const formatSwissResult = (result) => {
                       <span>Manage / Edit Info</span>
                     </button>
                   )}
-                  {tournament.status === "Completed" && (
-                    <button 
+                  {isAdminOrTournamentOC && tournament.status === "Completed" && (
+                    <button
                       type="button"
                       onClick={handleExportPNG}
                       className="export-tournament-btn png-btn"
@@ -2379,8 +2385,8 @@ const formatSwissResult = (result) => {
                       <span>Download PNG (Image)</span>
                     </button>
                   )}
-                  {isSwissFormat && (
-                    <button 
+                  {isAdminOrTournamentOC && isSwissFormat && (
+                    <button
                       type="button"
                       onClick={handleExportStandingsPDF}
                       className="export-tournament-btn pdf-btn"
@@ -2395,7 +2401,7 @@ const formatSwissResult = (result) => {
                       <span>Export Standings PDF</span>
                     </button>
                   )}
-                  <button 
+                  {isAdminOrTournamentOC && <button
                     type="button"
                     onClick={handleExportCSV}
                     className="export-tournament-btn csv-btn"
@@ -2403,7 +2409,7 @@ const formatSwissResult = (result) => {
                   >
                     <span>📊</span>
                     <span>Export CSV Report</span>
-                  </button>
+                  </button>}
                 </div>
               </div>
 
@@ -2584,8 +2590,8 @@ const formatSwissResult = (result) => {
 
                     {/* Bracket Generation buttons for Knockout */}
                     {!isSwissFormat && isTournamentOngoing && (!tournament.matches || tournament.matches.length === 0) && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={() => handleGenerateKnockoutBracket(false)}
                         style={{ background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800" }}
                       >
@@ -2593,8 +2599,8 @@ const formatSwissResult = (result) => {
                       </button>
                     )}
                     {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={() => handleGenerateKnockoutBracket(true)}
                         style={{ background: "linear-gradient(135deg, #bab19c, #8c8575)", color: "#15120c", fontWeight: "800" }}
                       >
@@ -2604,8 +2610,8 @@ const formatSwissResult = (result) => {
 
                     {/* Advance to next round for Knockout */}
                     {!isSwissFormat && isTournamentOngoing && tournament.matches && tournament.matches.length > 0 && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={handleGenerateNextKnockoutRound}
                         style={{ background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800" }}
                       >
@@ -2615,8 +2621,8 @@ const formatSwissResult = (result) => {
 
                     {/* Swiss pairings generation */}
                     {isSwissFormat && isTournamentOngoing && (!tournament.rounds || sortedRounds.length < tournament.rounds) && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={handleGenerateNextRound}
                         style={{ background: "linear-gradient(135deg, #f3c144, #d4a32a)", color: "#15120c", fontWeight: "800" }}
                       >
@@ -2626,8 +2632,8 @@ const formatSwissResult = (result) => {
 
                     {/* Rollback Last Round button (only visible if tournament has matches and tournament is NOT completed) */}
                     {tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={handleRollbackLastRound}
                         style={{ background: "linear-gradient(135deg, #d9534f, #c9302c)", color: "#fff", fontWeight: "800" }}
                       >
@@ -2637,8 +2643,8 @@ const formatSwissResult = (result) => {
 
                     {/* Reset Tournament Bracket (Knockout only, if not completed) */}
                     {!isSwissFormat && tournament.status !== "Completed" && tournament.matches && tournament.matches.length > 0 && (
-                      <button 
-                        className="add-btn" 
+                      <button
+                        className="add-btn"
                         onClick={handleResetBracket}
                         style={{ background: "linear-gradient(135deg, #e67e22, #d35400)", color: "#fff", fontWeight: "800" }}
                         title="Reset bracket and clear all matches to re-seed"
@@ -2855,7 +2861,7 @@ const formatSwissResult = (result) => {
 
                   {/* ── STANDINGS TAB ── Always visible; empty state shown before tournament starts */}
                   <div style={{ display: activeTournamentTab === "tournament-standings" ? undefined : "none" }}>
-                    {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (<button type="button" className="tournament-feedback-open-btn" onClick={() => setFeedbackModalOpen(true)}>{tournamentFeedback ? "✏️ Update tournament feedback" : "💬 Give tournament feedback"}</button>)}
+
                     <div id="tournament-standings" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
                       <div>
                         <h2 className="section-title" style={{ margin: 0 }}>🏆 Swiss System Standings &amp; Honors</h2>
@@ -3230,7 +3236,7 @@ const formatSwissResult = (result) => {
                       )}
                     </div>
                     {isStaff && isTournamentOngoing && (!tournament?.rounds || sortedRounds.length < tournament.rounds) && (
-                      <button 
+                      <button
                         onClick={handleGenerateNextRound}
                         style={{
                           background: "linear-gradient(135deg, #f3c144, #d4a32a)",
@@ -3322,7 +3328,7 @@ const formatSwissResult = (result) => {
                                   <tr key={m._id || idx} style={{ background: isByeRow ? "rgba(243,193,68,0.05)" : "transparent", opacity: isByeRow ? 0.8 : 1 }}>
                                     <td style={{ color: "#888" }}>Board {idx + 1}</td>
                                     <td style={{ fontWeight: (m.result === "1-0" || m.result === "1 - 0") ? "bold" : "normal", color: (m.result === "1-0" || m.result === "1 - 0") ? "#f3c144" : "#fff" }}>
-                                      <div 
+                                      <div
                                         className="pairing-player-cell"
                                         onClick={() => openPlayerPreview(m.white)}
                                         title={`Click to view ${m.white}'s Profile Card`}
@@ -3357,7 +3363,7 @@ const formatSwissResult = (result) => {
                                     </td>
                                     <td style={{ fontWeight: (m.result === "0-1" || m.result === "0 - 1") ? "bold" : "normal", color: (m.result === "0-1" || m.result === "0 - 1") ? "#f3c144" : isByeRow ? "#888" : "#fff" }}>
                                       {isByeRow ? <em>— BYE —</em> : (
-                                        <div 
+                                        <div
                                           className="pairing-player-cell"
                                           onClick={() => openPlayerPreview(m.black)}
                                           title={`Click to view ${m.black}'s Profile Card`}
@@ -3399,8 +3405,8 @@ const formatSwissResult = (result) => {
                                 </div>
 
                                 <div className="mobile-match-pairing-row">
-                                  <div 
-                                    className="mobile-match-player" 
+                                  <div
+                                    className="mobile-match-player"
                                     onClick={() => openPlayerPreview(m.white)}
                                     title={`Click to view ${m.white}'s Profile Card`}
                                   >
@@ -3415,8 +3421,8 @@ const formatSwissResult = (result) => {
                                     </span>
                                   </div>
                                   <span style={{ color: "#888", fontSize: "0.75rem", fontWeight: "bold" }}>VS</span>
-                                  <div 
-                                    className="mobile-match-player" 
+                                  <div
+                                    className="mobile-match-player"
                                     onClick={() => !isByeRow && openPlayerPreview(m.black)}
                                     title={!isByeRow ? `Click to view ${m.black}'s Profile Card` : ""}
                                   >
@@ -3463,19 +3469,19 @@ const formatSwissResult = (result) => {
                         <span className="format-rules-icon">{isDoubleElimination ? "⚡" : "⚔️"}</span>
                         <div>
                           <h3 className="format-rules-main-title">
-                            {isDoubleElimination 
-                              ? "Official Double Elimination (Double Knockout) Format & Rules" 
+                            {isDoubleElimination
+                              ? "Official Double Elimination (Double Knockout) Format & Rules"
                               : "Official Knockout Match Format & Armageddon Rules"}
                           </h3>
                           <span className="format-rules-subtitle">
-                            {isDoubleElimination 
+                            {isDoubleElimination
                               ? "Winners & Losers Brackets (Two Lives) • 2-Game Mini-Matches • Armageddon Sudden-Death • Grand Finals Reset"
                               : "2-Game Mini-Matches with Color Reversal • Decisive Armageddon Sudden-Death"}
                           </span>
                         </div>
                       </div>
 
-                      <a 
+                      <a
                         href="https://www.youtube.com/watch?v=JAYrNhOG-OM"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -3561,7 +3567,7 @@ const formatSwissResult = (result) => {
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", margin: "30px 0 15px" }}>
                     <h2 id="tournament-bracket" className="section-title tournament-section-anchor" style={{ margin: 0 }}>Knockout Matches & Bracket</h2>
-                    
+
                     {/* View Mode Toggle Buttons */}
                     <div style={{ display: "flex", gap: "8px", background: "#15120c", padding: "4px", borderRadius: "8px", border: "1px solid #36332b" }}>
                       <button
@@ -3601,23 +3607,23 @@ const formatSwissResult = (result) => {
 
                   {viewMode === "bracket" ? (
                     <>
-                      <ChallongeBracket 
+                      <ChallongeBracket
                         tournamentId={tournamentId}
                         tournamentType={tournament.type}
                         tournamentWinner={tournament.winner}
                         tournamentStatus={tournament.status}
-                        matchesData={tournament.matches} 
+                        matchesData={tournament.matches}
                         playersData={tournament.playersList}
                         playerAvatars={tournament?.playerAvatars}
                         playersAvailability={tournament?.playersAvailability}
                         tournamentStartDate={tournament?.startDate}
-                        tournamentTitle={`${tournament.title} (${tournament.type || "Knockout Bracket"})`} 
+                        tournamentTitle={`${tournament.title} (${tournament.type || "Knockout Bracket"})`}
                         isStaff={isStaff}
                         onUpdateMatch={handleUpdateMatch}
                         onSelectPlayer={(pName) => openPlayerPreview(pName)}
                         onScheduleMatch={(matchId, matchTime, white, black) => handleSetMatchSchedule(matchId, matchTime, white, black)}
                       />
-                      
+
                       {!isSwissFormat && (!tournament.matches || tournament.matches.length === 0) && (
                         <div style={{ marginTop: "40px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
@@ -3898,7 +3904,7 @@ const formatSwissResult = (result) => {
 
                     return (
                       <div style={{ marginTop: "40px" }}>
-                        {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (<button type="button" className="tournament-feedback-open-btn" onClick={() => setFeedbackModalOpen(true)}>{tournamentFeedback ? "✏️ Update tournament feedback" : "💬 Give tournament feedback"}</button>)}
+
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
                           <div>
                             <h2 className="section-title" style={{ margin: 0 }}>🏆 Knockout Tournament Standings & Honors</h2>
@@ -4228,16 +4234,16 @@ const formatSwissResult = (result) => {
       {/* --- ADD PLAYER MODAL --- */}
       {playerModalOpen && (
         <div className="modal-overlay" role="presentation" onClick={() => setPlayerModalOpen(false)}>
-          <div 
-            className="modal-card add-participant-modal" 
-            role="dialog" 
-            aria-modal="true" 
-            aria-labelledby="add-participant-title" 
+          <div
+            className="modal-card add-participant-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-participant-title"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: "600px", width: "95%" }}
           >
-            <button 
-              className="modal-close-btn" 
+            <button
+              className="modal-close-btn"
               onClick={() => setPlayerModalOpen(false)}
               aria-label="Close add participant modal"
             >
@@ -4341,7 +4347,7 @@ const formatSwissResult = (result) => {
                 </div>
 
                 {/* Users List Box */}
-                <div 
+                <div
                   className="db-users-picker-list"
                   style={{
                     maxHeight: "220px",
@@ -4386,13 +4392,13 @@ const formatSwissResult = (result) => {
                             padding: "8px 12px",
                             borderRadius: "8px",
                             cursor: isAlreadyInTournament ? "not-allowed" : "pointer",
-                            background: isSelected 
-                              ? "rgba(244, 198, 83, 0.18)" 
-                              : isAlreadyInTournament 
-                                ? "rgba(255, 255, 255, 0.02)" 
+                            background: isSelected
+                              ? "rgba(244, 198, 83, 0.18)"
+                              : isAlreadyInTournament
+                                ? "rgba(255, 255, 255, 0.02)"
                                 : "#1b1812",
-                            border: isSelected 
-                              ? "1px solid #f4c653" 
+                            border: isSelected
+                              ? "1px solid #f4c653"
                               : "1px solid rgba(255, 255, 255, 0.05)",
                             opacity: isAlreadyInTournament ? 0.55 : 1
                           }}
@@ -4408,7 +4414,7 @@ const formatSwissResult = (result) => {
                                 </span>
                               )}
                             </div>
-                            
+
                             {/* User Info */}
                             <div style={{ minWidth: 0, overflow: "hidden" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
@@ -4501,12 +4507,12 @@ const formatSwissResult = (result) => {
             <form onSubmit={handleAddPlayerSubmit} className="modal-form">
               <div>
                 <label>Player Name *</label>
-                <input 
-                  type="text" 
-                  value={playerForm.name} 
-                  onChange={(e) => setPlayerForm({ ...playerForm, name: e.target.value })} 
+                <input
+                  type="text"
+                  value={playerForm.name}
+                  onChange={(e) => setPlayerForm({ ...playerForm, name: e.target.value })}
                   placeholder="e.g. Magnus Carlsen"
-                  required 
+                  required
                 />
               </div>
 
@@ -4518,25 +4524,25 @@ const formatSwissResult = (result) => {
                       <span style={{ fontSize: "0.72rem", color: "#f4c653", marginLeft: "6px" }}>(FIDE Rating)</span>
                     )}
                   </label>
-                  <input 
-                    type="number" 
-                    value={playerForm.rating} 
-                    onChange={(e) => setPlayerForm({ ...playerForm, rating: e.target.value })} 
+                  <input
+                    type="number"
+                    value={playerForm.rating}
+                    onChange={(e) => setPlayerForm({ ...playerForm, rating: e.target.value })}
                     placeholder="e.g. 1500"
-                    required 
+                    required
                   />
                 </div>
 
                 <div>
                   <label>Major / Program *</label>
-                  <select 
-                    value={playerForm.major || ""} 
-                    onChange={(e) => setPlayerForm({ ...playerForm, major: e.target.value })} 
-                    required 
+                  <select
+                    value={playerForm.major || ""}
+                    onChange={(e) => setPlayerForm({ ...playerForm, major: e.target.value })}
+                    required
                     style={{ width: "100%", padding: "10px 12px", background: "#1c1914", border: "1px solid rgba(243, 193, 68, 0.3)", borderRadius: "8px", color: "#fff", fontSize: "14px" }}
                   >
                     <option value="" disabled>-- Select ZC Major / Program --</option>
-                    
+
                     <optgroup label="🏛️ School of Engineering">
                       <option value="Aerospace Engineering">Aerospace Engineering</option>
                       <option value="Chemical and Environmental Engineering">Chemical and Environmental Engineering</option>
@@ -4583,8 +4589,8 @@ const formatSwissResult = (result) => {
                 <button type="button" className="btn-secondary" onClick={() => setPlayerModalOpen(false)}>
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn-primary"
                   disabled={addParticipantMode === "database" && !selectedDbUser && !playerForm.name}
                 >
@@ -4600,8 +4606,8 @@ const formatSwissResult = (result) => {
       {matchModalOpen && (
         <div className="modal-overlay" role="presentation" onClick={() => setMatchModalOpen(false)}>
           <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="record-match-title" onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="modal-close-btn" 
+            <button
+              className="modal-close-btn"
               onClick={() => setMatchModalOpen(false)}
               aria-label="Close match result modal"
             >
@@ -4611,12 +4617,12 @@ const formatSwissResult = (result) => {
             <form onSubmit={handleAddMatchSubmit} className="modal-form">
               <div>
                 <label>Round *</label>
-                <input 
-                  type="number" 
-                  value={matchForm.round} 
-                  onChange={(e) => setMatchForm({ ...matchForm, round: e.target.value })} 
+                <input
+                  type="number"
+                  value={matchForm.round}
+                  onChange={(e) => setMatchForm({ ...matchForm, round: e.target.value })}
                   min="1"
-                  required 
+                  required
                 />
               </div>
               <div>
@@ -4650,8 +4656,8 @@ const formatSwissResult = (result) => {
               </div>
               <div>
                 <label>Result *</label>
-                <select 
-                  value={matchForm.result} 
+                <select
+                  value={matchForm.result}
                   onChange={(e) => setMatchForm({ ...matchForm, result: e.target.value })}
                 >
                   {isSwissFormat ? SWISS_RESULT_OPTIONS.map((option) => (
@@ -4692,8 +4698,8 @@ const formatSwissResult = (result) => {
       {editModalOpen && (
         <div className="modal-overlay" role="presentation" onClick={() => setEditModalOpen(false)}>
           <div className="modal-card edit-tournament-modal" role="dialog" aria-modal="true" aria-labelledby="edit-tournament-title" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
-            <button 
-              className="modal-close-btn" 
+            <button
+              className="modal-close-btn"
               onClick={() => setEditModalOpen(false)}
               aria-label="Close edit tournament modal"
             >
@@ -4879,10 +4885,10 @@ const formatSwissResult = (result) => {
                 </label>
                 {editForm.image ? (
                   <div style={{ position: "relative", marginBottom: "10px" }}>
-                    <img 
-                      src={editForm.image} 
-                      alt="Tournament Cover" 
-                      style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", border: "1.5px solid #f3c144" }} 
+                    <img
+                      src={editForm.image}
+                      alt="Tournament Cover"
+                      style={{ width: "100%", maxHeight: "180px", objectFit: "cover", borderRadius: "10px", border: "1.5px solid #f3c144" }}
                     />
                     <button
                       type="button"
@@ -4899,10 +4905,10 @@ const formatSwissResult = (result) => {
                     </p>
                     <label style={{ display: "inline-block", background: "rgba(243, 193, 68, 0.15)", color: "#f3c144", border: "1px solid rgba(243, 193, 68, 0.4)", borderRadius: "8px", padding: "6px 16px", cursor: "pointer", fontSize: "0.85rem", fontWeight: "800" }}>
                       Choose Photo File
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        style={{ display: "none" }} 
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
@@ -4988,8 +4994,8 @@ const formatSwissResult = (result) => {
                       🤝 Mutual Free Hours ({whiteKey.split(" ")[0]} &amp; {blackKey.split(" ")[0]}):
                     </span>
                     <span style={{ fontSize: "0.72rem", color: commonSlots.length > 0 ? "#2ecc71" : (nearSlots.length > 0 ? "#5dade2" : "#888"), fontWeight: "700", background: "rgba(0,0,0,0.3)", padding: "2px 8px", borderRadius: "10px" }}>
-                      {commonSlots.length > 0 
-                        ? `✓ ${commonSlots.length} Direct Window${commonSlots.length === 1 ? "" : "s"}` 
+                      {commonSlots.length > 0
+                        ? `✓ ${commonSlots.length} Direct Window${commonSlots.length === 1 ? "" : "s"}`
                         : (nearSlots.length > 0 ? `⚡ ${nearSlots.length} Adjacent / Near Slots` : "No Overlap Registered")}
                     </span>
                   </div>
@@ -5385,12 +5391,12 @@ const formatSwissResult = (result) => {
             <button className="modal-close-btn" onClick={() => setSelectedPlayerModal(null)} aria-label="Close player profile modal">
               <X size={18} />
             </button>
-            
+
             <div className="player-modal-header">
               <h2 id="player-profile-title" className="sr-only">Player profile</h2>
               <div className="player-modal-avatar-box">
-                <img 
-                  src={selectedPlayerModal.avatar} 
+                <img
+                  src={selectedPlayerModal.avatar}
                   alt={selectedPlayerModal.name}
                   className="player-modal-avatar"
                   onError={(e) => { e.target.onerror = null; e.target.src = "/Icons/unknown.png"; }}
@@ -5463,7 +5469,7 @@ const formatSwissResult = (result) => {
 
             {/* Interactive Social Actions */}
             <div className="player-modal-actions">
-              <button 
+              <button
                 className={`player-cheer-btn ${cheered ? "cheered" : ""}`}
                 onClick={handleSendCheer}
               >
@@ -5482,8 +5488,8 @@ const formatSwissResult = (result) => {
                 <form onSubmit={handleSendChallenge} className="challenge-form">
                   <div className="challenge-form-row">
                     <label>Challenge Game:</label>
-                    <select 
-                      value={challengeTimeControl} 
+                    <select
+                      value={challengeTimeControl}
                       onChange={(e) => setChallengeTimeControl(e.target.value)}
                     >
                       <option value="3+2 Blitz">⚡ 3+2 Blitz</option>

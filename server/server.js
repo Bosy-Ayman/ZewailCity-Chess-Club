@@ -444,8 +444,9 @@ const Notification = mongoose.model('Notification', NotificationSchema, 'notific
 // --- Broadcast & Email Log Schema & Model ---
 const BroadcastLogSchema = new mongoose.Schema({
   adminEmail: { type: String, required: true },
-  recipientType: { type: String, default: 'all' }, // 'all' | 'specific'
+  recipientType: { type: String, default: 'all' }, // 'all' | 'specific' | 'tournament'
   targetEmail: { type: String, default: '' },
+  tournamentId: { type: String, default: '' },
   recipientCount: { type: Number, default: 0 },
   title: { type: String, required: true },
   message: { type: String, required: true },
@@ -5751,6 +5752,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
       adminEmail, 
       recipientType, 
       targetEmail, 
+      targetTournamentId,
       title, 
       message, 
       link, 
@@ -5790,6 +5792,26 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
       } else {
         recipients = [{ email: targetEmail.toLowerCase().trim(), name: targetEmail.split('@')[0] }];
       }
+    } else if (recipientType === 'tournament') {
+      if (!targetTournamentId) return res.status(400).json({ error: 'Completed tournament is required for tournament-player broadcasts.' });
+      const tournament = await Tournament.findById(targetTournamentId);
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found.' });
+      if (String(tournament.status || '').toLowerCase() !== 'completed') {
+        return res.status(400).json({ error: 'Feedback requests can only be sent for completed tournaments.' });
+      }
+      const registrationsByEmail = new Map();
+      (tournament.registrations || []).forEach(registration => {
+        const email = registration.email?.trim().toLowerCase();
+        if (!email || String(registration.status || '').toLowerCase() === 'rejected') return;
+        if (!registrationsByEmail.has(email)) registrationsByEmail.set(email, registration.name || email.split('@')[0]);
+      });
+      const emails = Array.from(registrationsByEmail.keys());
+      const users = emails.length ? await User.find({ email: { $in: emails } }, 'name email profileImage').lean() : [];
+      const usersByEmail = new Map(users.map(user => [user.email?.trim().toLowerCase(), user]));
+      recipients = emails.map(email => {
+        const user = usersByEmail.get(email);
+        return user || { email, name: registrationsByEmail.get(email), profileImage: '' };
+      });
     }
 
     if (recipients.length === 0) {
@@ -5850,6 +5872,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
         adminEmail,
         recipientType,
         targetEmail: recipientType === 'specific' ? targetEmail : '',
+        tournamentId: recipientType === 'tournament' ? targetTournamentId : '',
         recipientCount: recipients.length,
         title,
         message,
@@ -5868,7 +5891,7 @@ app.post('/api/admin/broadcast-notification', express.json(), async (req, res) =
 
     res.json({
       success: true,
-      message: `Dispatched successfully to ${recipients.length} tactician(s)! (${inAppCount} in-app notification(s), ${emailSuccessCount} email(s) sent)`,
+      message: `Dispatched successfully to ${recipients.length} ${recipientType === 'tournament' ? 'tournament player(s)' : 'tactician(s)'}! (${inAppCount} in-app notification(s), ${emailSuccessCount} email(s) sent)`,
       inAppCount,
       emailSuccessCount,
       totalRecipients: recipients.length
