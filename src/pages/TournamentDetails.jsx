@@ -37,6 +37,7 @@ export default function TournamentDetails() {
   const [feedbackNotice, setFeedbackNotice] = useState(null);
   const feedbackTimerRef = useRef(null);
   const [tournamentFeedback, setTournamentFeedback] = useState(null);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -86,6 +87,9 @@ export default function TournamentDetails() {
   const tournamentId = queryParams.get("id");
 
   const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+  const feedbackDismissalKey = tournamentId && loggedInUserEmail
+    ? `zc-tournament-feedback-dismissed:${tournamentId}:${loggedInUserEmail}`
+    : "";
 
 const isWhiteWinner = (result) => {
   if (!result || result === "Pending" || result === "1/2-1/2" || result === "1/2 - 1/2" || result === "0-0" || result === "0 - 0") return false;
@@ -1817,7 +1821,11 @@ const formatSwissResult = (result) => {
         return data;
       })
       .then((data) => {
-        if (cancelled || !data) return;
+        if (cancelled) return;
+        if (!data) {
+          if (feedbackDismissalKey && localStorage.getItem(feedbackDismissalKey) !== "1") setFeedbackModalOpen(true);
+          return;
+        }
         setTournamentFeedback(data);
         setFeedbackRating(Number(data.rating) || 0);
         setFeedbackContributions(Array.isArray(data.contributions) ? data.contributions : []);
@@ -1827,7 +1835,7 @@ const formatSwissResult = (result) => {
       .catch((err) => { if (!cancelled) setFeedbackError(err.message); })
       .finally(() => { if (!cancelled) setFeedbackLoading(false); });
     return () => { cancelled = true; };
-  }, [API_BASE, certificatesAvailable, currentUserHasRegisteredEmail, tournamentId]);
+  }, [API_BASE, certificatesAvailable, currentUserHasRegisteredEmail, feedbackDismissalKey, tournamentId]);
 
   const submitTournamentFeedback = async (event) => {
     event.preventDefault();
@@ -1846,6 +1854,7 @@ const formatSwissResult = (result) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save feedback.");
       setTournamentFeedback(data.feedback);
+      setFeedbackModalOpen(false);
       notify("Thank you! Your feedback has been saved.", "success");
     } catch (err) {
       setFeedbackError(err.message);
@@ -1858,6 +1867,11 @@ const formatSwissResult = (result) => {
     setFeedbackContributions((current) => value === "cannot_contribute"
       ? (current.includes(value) ? [] : [value])
       : current.includes(value) ? current.filter(item => item !== value && item !== "cannot_contribute") : [...current.filter(item => item !== "cannot_contribute"), value]);
+  };
+
+  const dismissFeedbackModal = () => {
+    setFeedbackModalOpen(false);
+    if (feedbackDismissalKey) localStorage.setItem(feedbackDismissalKey, "1");
   };
 
   const navigateToSection = (sectionId) => {
@@ -2841,58 +2855,7 @@ const formatSwissResult = (result) => {
 
                   {/* ── STANDINGS TAB ── Always visible; empty state shown before tournament starts */}
                   <div style={{ display: activeTournamentTab === "tournament-standings" ? undefined : "none" }}>
-                    {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (
-                      <form className="tournament-feedback-card" onSubmit={submitTournamentFeedback}>
-                        <div className="tournament-feedback-heading">
-                          <span className="tournament-feedback-icon" aria-hidden="true">💬</span>
-                          <div>
-                            <h2>Share your tournament feedback</h2>
-                            <p lang="ar" dir="rtl">عايزين نعرف رأيكم في المسابقة وإيه اللي حابين نضيفه، وهنحاول نراعي آرائكم في المسابقات الجاية.</p>
-                          </div>
-                        </div>
-                        {feedbackLoading ? <p className="tournament-feedback-muted">Loading your feedback…</p> : (
-                          <>
-                            <fieldset className="tournament-feedback-fieldset">
-                              <legend>Is there a way you can help us improve the chess experience in Zewail?</legend>
-                              {[
-                                ["highboard", "Would like to apply as a member in the High Board"],
-                                ["equipment", "Would like to bring my chess board or chess clock to upcoming tournaments"],
-                                ["cannot_contribute", "Can’t contribute"],
-                                ["other", "Other"]
-                              ].map(([value, label]) => (
-                                <label className="tournament-feedback-choice" key={value}>
-                                  <input type="checkbox" checked={feedbackContributions.includes(value)} onChange={() => toggleFeedbackContribution(value)} />
-                                  <span>{label}</span>
-                                </label>
-                              ))}
-                              {feedbackContributions.includes("other") && (
-                                <input className="tournament-feedback-input" value={feedbackOtherText} onChange={(event) => setFeedbackOtherText(event.target.value)} maxLength={500} placeholder="Tell us how you’d like to contribute" aria-label="Other contribution" />
-                              )}
-                            </fieldset>
-                            <fieldset className="tournament-feedback-fieldset">
-                              <legend>How would you rate the day? <span aria-hidden="true">*</span></legend>
-                              <div className="tournament-feedback-rating" role="radiogroup" aria-label="Rate the tournament day from 1 to 5">
-                                {[1, 2, 3, 4, 5].map((rating) => (
-                                  <label key={rating} className={feedbackRating === rating ? "selected" : ""}>
-                                    <input type="radio" name="tournament-feedback-rating" value={rating} checked={feedbackRating === rating} onChange={() => setFeedbackRating(rating)} required />
-                                    <span>{rating}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-                            <label className="tournament-feedback-field">
-                              <span>What do you think can be improved?</span>
-                              <textarea value={feedbackImprovements} onChange={(event) => setFeedbackImprovements(event.target.value)} maxLength={3000} rows={3} placeholder="Share any ideas or suggestions…" />
-                            </label>
-                            {feedbackError && <p className="tournament-feedback-error" role="alert">{feedbackError}</p>}
-                            <div className="tournament-feedback-actions">
-                              {tournamentFeedback && <span className="tournament-feedback-muted">Your response is saved. You can update it anytime.</span>}
-                              <button type="submit" disabled={feedbackSaving || feedbackLoading}>{feedbackSaving ? "Saving…" : tournamentFeedback ? "Update feedback" : "Send feedback"}</button>
-                            </div>
-                          </>
-                        )}
-                      </form>
-                    )}
+                    {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (<button type="button" className="tournament-feedback-open-btn" onClick={() => setFeedbackModalOpen(true)}>{tournamentFeedback ? "✏️ Update tournament feedback" : "💬 Give tournament feedback"}</button>)}
                     <div id="tournament-standings" className="tournament-section-anchor" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
                       <div>
                         <h2 className="section-title" style={{ margin: 0 }}>🏆 Swiss System Standings &amp; Honors</h2>
@@ -3935,21 +3898,7 @@ const formatSwissResult = (result) => {
 
                     return (
                       <div style={{ marginTop: "40px" }}>
-                        {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (
-                          <form className="tournament-feedback-card" onSubmit={submitTournamentFeedback}>
-                            <div className="tournament-feedback-heading"><span className="tournament-feedback-icon" aria-hidden="true">💬</span><div><h2>Share your tournament feedback</h2><p lang="ar" dir="rtl">عايزين نعرف رأيكم في المسابقة وإيه اللي حابين نضيفه، وهنحاول نراعي آرائكم في المسابقات الجاية.</p></div></div>
-                            {feedbackLoading ? <p className="tournament-feedback-muted">Loading your feedback…</p> : <>
-                              <fieldset className="tournament-feedback-fieldset"><legend>Is there a way you can help us improve the chess experience in Zewail?</legend>
-                                {[["highboard", "Would like to apply as a member in the High Board"], ["equipment", "Would like to bring my chess board or chess clock to upcoming tournaments"], ["cannot_contribute", "Can’t contribute"], ["other", "Other"]].map(([value, label]) => <label className="tournament-feedback-choice" key={value}><input type="checkbox" checked={feedbackContributions.includes(value)} onChange={() => toggleFeedbackContribution(value)} /><span>{label}</span></label>)}
-                                {feedbackContributions.includes("other") && <input className="tournament-feedback-input" value={feedbackOtherText} onChange={(event) => setFeedbackOtherText(event.target.value)} maxLength={500} placeholder="Tell us how you’d like to contribute" aria-label="Other contribution" />}
-                              </fieldset>
-                              <fieldset className="tournament-feedback-fieldset"><legend>How would you rate the day? <span aria-hidden="true">*</span></legend><div className="tournament-feedback-rating" role="radiogroup" aria-label="Rate the tournament day from 1 to 5">{[1, 2, 3, 4, 5].map((rating) => <label key={rating} className={feedbackRating === rating ? "selected" : ""}><input type="radio" name="knockout-tournament-feedback-rating" value={rating} checked={feedbackRating === rating} onChange={() => setFeedbackRating(rating)} required /><span>{rating}</span></label>)}</div></fieldset>
-                              <label className="tournament-feedback-field"><span>What do you think can be improved?</span><textarea value={feedbackImprovements} onChange={(event) => setFeedbackImprovements(event.target.value)} maxLength={3000} rows={3} placeholder="Share any ideas or suggestions…" /></label>
-                              {feedbackError && <p className="tournament-feedback-error" role="alert">{feedbackError}</p>}
-                              <div className="tournament-feedback-actions">{tournamentFeedback && <span className="tournament-feedback-muted">Your response is saved. You can update it anytime.</span>}<button type="submit" disabled={feedbackSaving || feedbackLoading}>{feedbackSaving ? "Saving…" : tournamentFeedback ? "Update feedback" : "Send feedback"}</button></div>
-                            </>}
-                          </form>
-                        )}
+                        {certificatesAvailable && currentUserHasRegisteredEmail && localStorage.getItem("adminToken") && (<button type="button" className="tournament-feedback-open-btn" onClick={() => setFeedbackModalOpen(true)}>{tournamentFeedback ? "✏️ Update tournament feedback" : "💬 Give tournament feedback"}</button>)}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
                           <div>
                             <h2 className="section-title" style={{ margin: 0 }}>🏆 Knockout Tournament Standings & Honors</h2>
@@ -4216,6 +4165,62 @@ const formatSwissResult = (result) => {
           )}
         </div>
       </div>
+
+      {feedbackModalOpen && certificatesAvailable && currentUserHasRegisteredEmail && (
+        <div className="tournament-feedback-modal-backdrop" role="presentation" onClick={dismissFeedbackModal}>
+          <section className="tournament-feedback-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-feedback-title" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="tournament-feedback-modal-close" onClick={dismissFeedbackModal} aria-label="Close feedback survey"><X size={20} /></button>
+            <form className="tournament-feedback-form" onSubmit={submitTournamentFeedback}>
+              <div className="tournament-feedback-heading">
+                <span className="tournament-feedback-icon" aria-hidden="true">💬</span>
+                <div>
+                  <h2 id="tournament-feedback-title">Share your tournament feedback</h2>
+                  <p lang="ar" dir="rtl">عايزين نعرف رأيكم في المسابقة وإيه اللي حابين نضيفه، وهنحاول نراعي آرائكم في المسابقات الجاية.</p>
+                </div>
+              </div>
+              {feedbackLoading ? <p className="tournament-feedback-muted">Loading your feedback…</p> : (
+                <>
+                  <fieldset className="tournament-feedback-fieldset">
+                    <legend>Is there a way you can help us improve the chess experience in Zewail?</legend>
+                    {[
+                      ["highboard", "Would like to apply as a member in the High Board"],
+                      ["equipment", "Would like to bring my chess board or chess clock to upcoming tournaments"],
+                      ["cannot_contribute", "Can’t contribute"],
+                      ["other", "Other"]
+                    ].map(([value, label]) => (
+                      <label className="tournament-feedback-choice" key={value}>
+                        <input type="checkbox" checked={feedbackContributions.includes(value)} onChange={() => toggleFeedbackContribution(value)} />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                    {feedbackContributions.includes("other") && <input className="tournament-feedback-input" value={feedbackOtherText} onChange={(event) => setFeedbackOtherText(event.target.value)} maxLength={500} placeholder="Tell us how you’d like to contribute" aria-label="Other contribution" />}
+                  </fieldset>
+                  <fieldset className="tournament-feedback-fieldset">
+                    <legend>How would you rate the day? <span aria-hidden="true">*</span></legend>
+                    <div className="tournament-feedback-rating" role="radiogroup" aria-label="Rate the tournament day from 1 to 5">
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <label key={rating} className={feedbackRating === rating ? "selected" : ""}>
+                          <input type="radio" name="tournament-feedback-rating" value={rating} checked={feedbackRating === rating} onChange={() => setFeedbackRating(rating)} required />
+                          <span>{rating}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="tournament-feedback-field">
+                    <span>What do you think can be improved?</span>
+                    <textarea value={feedbackImprovements} onChange={(event) => setFeedbackImprovements(event.target.value)} maxLength={3000} rows={3} placeholder="Share any ideas or suggestions…" />
+                  </label>
+                  {feedbackError && <p className="tournament-feedback-error" role="alert">{feedbackError}</p>}
+                  <div className="tournament-feedback-modal-actions">
+                    <button type="button" className="tournament-feedback-later" onClick={dismissFeedbackModal}>Not now</button>
+                    <button type="submit" disabled={feedbackSaving || feedbackLoading}>{feedbackSaving ? "Saving…" : tournamentFeedback ? "Save changes" : "Send feedback"}</button>
+                  </div>
+                </>
+              )}
+            </form>
+          </section>
+        </div>
+      )}
 
       {/* Footer */}
       <Footer />
