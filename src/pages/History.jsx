@@ -7,7 +7,7 @@ import { compressImage, safeFetchJson } from "../utils/api";
 import { HISTORICAL_TOURNAMENT_COUNT } from "../utils/historicalTournamentCount";
 import "./History.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 // A helper component for scroll-reveal animations using Intersection Observer
 const ScrollReveal = ({ children, className = "" }) => {
@@ -150,6 +150,9 @@ export default function EventHistory() {
     "Noureldin Newer": "/Winners/NourEldinNewer.png",
     "Nour Eldin Newer": "/Winners/NourEldinNewer.png",
     "NourEldin Newer": "/Winners/NourEldinNewer.png",
+    "GM Adham Fawzy": "/Images/Tournaments/2018-2019/adham-fawzy-profile.png",
+    "IM Adham Fawzy": "/Images/Tournaments/2018-2019/adham-fawzy-profile.png",
+    "WGM Shahenda Wafa": "/Images/Tournaments/2018-2019/shahenda-wafa-profile.png",
     "Knights": "/Teams/25/Knights.png",
     "Gambling": "/Teams/25/Gambling.png",
     "Epsilon": "/Teams/25/Epsilon.png",
@@ -173,6 +176,12 @@ export default function EventHistory() {
     "Aml Ali": "/Images/highboard/24-25/Aml.png",
     "Aml": "/Images/highboard/24-25/Aml.png",
     "Rana Ahmed": "/Images/highboard/24-25/Rana.jpg"
+  };
+
+  const fideProfileMap = {
+    "GM Adham Fawzy": "https://ratings.fide.com/profile/10613129",
+    "IM Adham Fawzy": "https://ratings.fide.com/profile/10613129",
+    "WGM Shahenda Wafa": "https://ratings.fide.com/profile/10609962"
   };
 
   // Highboard history data containing current and past leadership structures
@@ -537,10 +546,10 @@ export default function EventHistory() {
       startDate: "2019-11-15",
       location: "Service Building",
       image: "/Images/Tournaments/2018-2019/shahenda.jpg",
-      description: "Historic simultaneous exhibition match hosting African Champions GM Adham Fawzy and WGM Shahinda Wafa playing against 20 Zewail City students simultaneously.",
+      description: "Historic simultaneous exhibition match hosting African Champion GM Adham Fawzy and WGM Shahenda Wafa, playing against 20 Zewail City students simultaneously.",
       playersList: [
-        { name: "👑 GM Adham Fawzy" },
-        { name: "👑 WGM Shahinda Wafa" },
+        { name: "GM Adham Fawzy" },
+        { name: "WGM Shahenda Wafa" },
         { name: "👥 20 ZC Challengers" }
       ]
     },
@@ -554,7 +563,7 @@ export default function EventHistory() {
       image: "/Images/Tournaments/2018-2019/adhamfawzy.jpg",
       description: "First landmark grand exhibition where International Master Adham Fawzy took on 16 ZC Chess Club players simultaneously in a marathon masterclass.",
       playersList: [
-        { name: "👑 IM Adham Fawzy" },
+        { name: "IM Adham Fawzy" },
         { name: "♟️ 16 ZC Players" }
       ]
     }
@@ -1343,7 +1352,7 @@ export default function EventHistory() {
                                 <div className="dot-inner"></div>
                               </div>
                               <article
-                                className="timeline-card glass-panel"
+                                className={`timeline-card glass-panel ${(event.category || event.type || "").toLowerCase().includes("exhibition") ? "timeline-exhibition-card" : ""}`}
                                 onClick={() => setSelectedEventModal(event)}
                                 role="button"
                                 tabIndex={0}
@@ -1390,10 +1399,14 @@ export default function EventHistory() {
                                   {/* Highlight Winners Chips with Photos */}
                                   {event.playersList && event.playersList.length > 0 && (
                                     <div className="card-highlights-section">
-                                      <span className="highlights-title">TOP PODIUM & HIGHLIGHTS</span>
+                                    <span className="highlights-title">{(event.category || event.type || "").toLowerCase().includes("exhibition") ? "FEATURED GUESTS" : "TOP PODIUM & HIGHLIGHTS"}</span>
                                       <div className="highlights-tags-list">
                                         {event.playersList.slice(0, 4).map((p, i) => {
                                           const h = parseHighlight(p.name);
+                                          if (
+                                            (event.category || event.type || "").toLowerCase().includes("exhibition") &&
+                                            /(Adham Fawzy|Shahenda Wafa)/i.test(h.name)
+                                          ) h.emoji = "";
                                           const playerAvatar = getHistoricalPlayerAvatar(h.name, p.email);
                                           
                                           const names = h.name ? h.name.split(',').map(n => n.trim().replace(/\(.*\)/, "").trim()) : [];
@@ -1859,7 +1872,11 @@ export default function EventHistory() {
                   rawList.forEach((p) => {
                     if (!p || !p.name) return;
                     const h = { ...parseHighlight(p.name), email: p.email };
-                    if (h.emoji.match(/(🥇|🥈|🥉|🏅|🏆|👑)/) || h.isPlacement) {
+                    const isExhibitionGuest =
+                      (selectedEventModal.category || selectedEventModal.type || "").toLowerCase().includes("exhibition") &&
+                      /(Adham Fawzy|Shahenda Wafa)/i.test(h.name);
+                    h.isFeaturedGuest = isExhibitionGuest;
+                    if (isExhibitionGuest || h.emoji.match(/(🥇|🥈|🥉|🏅|🏆|👑)/) || h.isPlacement) {
                       placements.push(h);
                     } else {
                       participants.push(h);
@@ -1910,8 +1927,8 @@ export default function EventHistory() {
                     <>
                       {placements.length > 0 && (
                         <div className="modal-winners-section">
-                          <h4>🏆 Tournament Winners & Podium</h4>
-                          <div className="modal-winners-grid">
+                          <h4>{(selectedEventModal.category || selectedEventModal.type || "").toLowerCase().includes("exhibition") ? "Featured guests" : "🏆 Tournament Winners & Podium"}</h4>
+                          <div className={`modal-winners-grid ${(selectedEventModal.category || selectedEventModal.type || "").toLowerCase().includes("exhibition") ? "modal-featured-guests-grid" : ""}`}>
                             {placements.map((h, pIdx) => {
                               const medalClass =
                                 h.emoji === "🥇"
@@ -1934,7 +1951,7 @@ export default function EventHistory() {
                               const isTeam = isTeamEvent || (names.length > 1 && Boolean(teamName));
 
                               return (
-                                <div key={pIdx} className={`modal-winner-card ${medalClass} ${isTeam ? "modal-winner-team-card" : ""}`}>
+                                <div key={pIdx} className={`modal-winner-card ${medalClass} ${isTeam ? "modal-winner-team-card" : ""} ${h.isFeaturedGuest ? "modal-featured-guest-card" : ""}`}>
                                   <div className="modal-winner-avatar-wrapper">
                                     <img
                                       src={isTeam && teamLogo ? teamLogo : singleAvatar || "/Icons/unknown.png"}
@@ -1943,12 +1960,22 @@ export default function EventHistory() {
                                       onError={handleImageError}
                                       style={isTeam ? { borderRadius: "8px" } : {}}
                                     />
-                                    <span className="modal-winner-medal-badge">{h.emoji}</span>
+                                    {!h.isFeaturedGuest && <span className="modal-winner-medal-badge">{h.emoji}</span>}
                                   </div>
                                   <div className="modal-winner-info">
                                     {h.role && <span className="modal-winner-role">{h.role}</span>}
                                     {isTeam && teamName && <h4 className="modal-winner-name">{teamName}</h4>}
                                     {!isTeam && <h4 className="modal-winner-name">{h.name}</h4>}
+                                    {!isTeam && fideProfileMap[h.name] && (
+                                      <a
+                                        className="modal-guest-fide-link"
+                                        href={fideProfileMap[h.name]}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        FIDE profile <span aria-hidden="true">↗</span>
+                                      </a>
+                                    )}
 
                                     {isTeam && names.length > 0 && (
                                       <div

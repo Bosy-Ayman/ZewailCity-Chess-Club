@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { 
-  Users, Search, Swords, UserPlus, UserCheck, ExternalLink, 
+  Users, Search, Swords, UserPlus, UserCheck, 
   Crown, Heart, Send, X, CheckCircle2, Copy, Check, 
   Mail, Sparkles, User
 } from "lucide-react";
@@ -11,7 +11,7 @@ import { safeFetchJson } from "../utils/api";
 import "./Community.css";
 import "./HomePage.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 const DEFAULT_AVATARS = {
   "Bosy Ayman": "/Icons/bosy.png",
@@ -43,17 +43,11 @@ const Community = () => {
   const [myProfile, setMyProfile] = useState(null);
   const [followingMap, setFollowingMap] = useState({});
   const [cheersMap, setCheersMap] = useState({});
-  const [cheerBursts, setCheerBursts] = useState({});
   const [copiedEmail, setCopiedEmail] = useState(null);
 
   // Challenge Modal State
-  const [challengeModalOpen, setChallengeModalOpen] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
   const [challengeLocation, setChallengeLocation] = useState("Academic Building Lounge");
-  const [challengeMessage, setChallengeMessage] = useState("");
-  const [challengeSuccess, setChallengeSuccess] = useState("");
-  const [isDispatching, setIsDispatching] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Profile Preview Modal
@@ -229,8 +223,6 @@ const Community = () => {
       ...(cleanEmail ? { [cleanEmail]: (prev[cleanEmail] || 0) + 1 } : {})
     }));
     if (name) {
-      setCheerBursts(prev => ({ ...prev, [name]: true }));
-      setTimeout(() => { setCheerBursts(prev => ({ ...prev, [name]: false })); }, 1200);
     }
     // Persist to server
     if (email || name) {
@@ -316,50 +308,6 @@ const Community = () => {
     navigator.clipboard.writeText(email);
     setCopiedEmail(email);
     setTimeout(() => setCopiedEmail(null), 2500);
-  };
-
-  const handleOpenChallengeModal = (player, e) => {
-    if (e) e.stopPropagation();
-    if (!loggedInEmail) {
-      alert("Please log in with your Zewail City Google account to challenge members!");
-      window.location.href = "/?login=true";
-      return;
-    }
-    setSelectedPlayer(player);
-    setChallengeSuccess("");
-    setChallengeMessage("");
-    setChallengeModalOpen(true);
-  };
-
-  const handleSendChallenge = async (e) => {
-    e.preventDefault();
-    if (!selectedPlayer || !loggedInEmail) return;
-
-    setIsDispatching(true);
-    try {
-      const res = await safeFetchJson(`${API_BASE}/api/challenges`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromEmail: loggedInEmail,
-          fromName: localStorage.getItem("userName") || loggedInEmail.split("@")[0],
-          targetEmail: selectedPlayer.email,
-          timeControl: challengeTimeControl,
-          location: challengeLocation,
-          message: challengeMessage || `Challenge for a ${challengeTimeControl} match at ${challengeLocation}.`
-        })
-      });
-
-      setChallengeSuccess(res.message || "Duel challenge dispatched successfully!");
-      setTimeout(() => {
-        setChallengeModalOpen(false);
-        setChallengeSuccess("");
-      }, 2000);
-    } catch (err) {
-      alert("Error sending challenge: " + err.message);
-    } finally {
-      setIsDispatching(false);
-    }
   };
 
   const handleCopyInviteText = (targetPlayer) => {
@@ -848,65 +796,15 @@ const Community = () => {
                     </div>
 
                     {/* Member Card Footer Actions */}
-                    <div className="member-card-footer">
-                      {isSelf ? (
-                        /* Self Actions: No follow or duel yourself! */
-                        <div className="self-actions-container">
+                    {isSelf && (
+                        <div className="member-card-footer self-actions-container" onClick={(e) => e.stopPropagation()}>
                           <Link to="/profile" className="btn-member-self-profile">
                             <User size={14} />
                             <span>Manage My Profile</span>
                           </Link>
                         </div>
-                      ) : (
-                        /* Peer Actions: Cheer, Follow, Duel, Profile */
-                        <>
-                          <button 
-                            className={`btn-member-cheer ${cheerBursts[member.name] ? "bursting" : ""}`}
-                            onClick={(e) => handleQuickCheer(member, e)}
-                            title="Send cheer"
-                          >
-                            <Heart size={14} />
-                            <span>{(member.email && cheersMap[member.email.toLowerCase()] !== undefined) ? cheersMap[member.email.toLowerCase()] : (cheersMap[member.name] ?? member.cheers ?? 0)}</span>
-                          </button>
-
-                          <button 
-                            className={`btn-member-follow ${isFollowing ? "following" : "primary"}`}
-                            onClick={(e) => handleFollowToggle(member.email, member.name, e)}
-                            title={isFollowing ? "Unfollow" : (memberFollowsMe ? "Follow back" : "Follow")}
-                          >
-                            {isFollowing ? (
-                              <>
-                                <UserCheck size={14} />
-                                <span>Following</span>
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus size={14} />
-                                <span>{memberFollowsMe ? "Follow Back" : "Follow"}</span>
-                              </>
-                            )}
-                          </button>
-
-                          <button 
-                            className="btn-member-duel"
-                            onClick={(e) => handleOpenChallengeModal(member, e)}
-                            title={`Challenge ${member.name} to a 1-on-1 match`}
-                          >
-                            <Swords size={13} />
-                            <span>Duel</span>
-                          </button>
-
-                          <Link 
-                            to={`/profile?email=${encodeURIComponent(member.email)}`}
-                            className="btn-member-profile"
-                            title="View Full Profile"
-                          >
-                            <span>Profile</span>
-                            <ExternalLink size={12} />
-                          </Link>
-                        </>
-                      )}
-                    </div>
+                    )}
+                    {!isSelf && <div className="member-card-tap-hint">Tap card to see player actions</div>}
                   </div>
                 );
               })}
@@ -929,101 +827,6 @@ const Community = () => {
           )}
         </div>
       </section>
-
-
-        {/* Direct Challenge Modal Popup */}
-        {challengeModalOpen && selectedPlayer && (
-          <div className="modal-overlay-backdrop" onClick={() => setChallengeModalOpen(false)}>
-            <div className="challenge-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
-              <button 
-                className="modal-close-btn" 
-                onClick={() => setChallengeModalOpen(false)}
-                title="Close"
-              >
-                <X size={20} />
-              </button>
-
-              <div className="modal-header-area">
-                <div className="modal-icon-glow">
-                  <Swords size={28} />
-                </div>
-                <h3>Challenge {selectedPlayer.name}</h3>
-                <p>Send an official 1-on-1 campus chess challenge</p>
-              </div>
-
-              {challengeSuccess ? (
-                <div className="modal-success-state">
-                  <CheckCircle2 size={40} className="success-icon" />
-                  <h4>Challenge Dispatched!</h4>
-                  <p>{challengeSuccess}</p>
-                </div>
-              ) : (
-                <form onSubmit={handleSendChallenge} className="challenge-modal-form">
-                  <div className="form-group">
-                    <label>⚡ Time Control</label>
-                    <select 
-                      value={challengeTimeControl}
-                      onChange={(e) => setChallengeTimeControl(e.target.value)}
-                      className="modal-select"
-                    >
-                      <option value="3+2 Blitz">3+2 Blitz (Campus Standard)</option>
-                      <option value="5+3 Blitz">5+3 Blitz (Tactical Precision)</option>
-                      <option value="10+0 Rapid">10+0 Rapid (Strategic Combat)</option>
-                      <option value="15+10 Rapid">15+10 Rapid (Championship Clock)</option>
-                      <option value="Casual Over-the-Board">Casual Over-the-Board (Campus Meet)</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>📍 Campus Location</label>
-                    <select 
-                      value={challengeLocation}
-                      onChange={(e) => setChallengeLocation(e.target.value)}
-                      className="modal-select"
-                    >
-                      <option value="Academic Building Lounge">Academic Building Lounge</option>
-                      <option value="Zone E Chess Corner">Zone E Chess Corner</option>
-                      <option value="Student Union Hall">Student Union Hall</option>
-                      <option value="ZC Library Study Area">ZC Library Study Area</option>
-                      <option value="Online (Chess.com / Lichess)">Online (Chess.com / Lichess)</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>💬 Custom Note (Optional)</label>
-                    <input 
-                      type="text" 
-                      value={challengeMessage}
-                      onChange={(e) => setChallengeMessage(e.target.value)}
-                      placeholder="e.g. Ready for blitz after physics lecture? White or Black?"
-                      className="modal-input"
-                    />
-                  </div>
-
-                  <div className="modal-actions-row">
-                    <button 
-                      type="button" 
-                      className="btn-modal-cancel"
-                      onClick={() => handleCopyInviteText(selectedPlayer)}
-                      title="Copy invite text for WhatsApp or chat"
-                      style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                    >
-                      {copiedInvite ? <Check size={15} style={{ color: "#2ecc71" }} /> : <Copy size={15} />}
-                      <span>{copiedInvite ? "Copied Invite! 📋" : "Copy Invite Text"}</span>
-                    </button>
-                    <button type="button" className="btn-modal-cancel" onClick={() => setChallengeModalOpen(false)}>
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn-modal-submit" disabled={isDispatching}>
-                      <Send size={16} />
-                      <span>{isDispatching ? "Dispatching..." : "Dispatch Challenge ⚔️"}</span>
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* ===================== PROFILE PREVIEW MODAL (Synced with HomePage) ===================== */}
         {profileModalOpen && profileModalUser && (() => {

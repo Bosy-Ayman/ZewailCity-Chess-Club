@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import {
-  Award, Bell, Images, Sparkles, ChevronDown, Pin, ExternalLink,
+  Bell, Images, Sparkles, Pin, ExternalLink,
   Calendar, MapPin, Users, Swords, Heart,
   CheckCircle2, Send,
-  Mail, Copy, Check, Crown, UserPlus, UserCheck, User, X
+  Mail, Copy, Check, Crown, UserPlus, UserCheck, User, X,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import Confetti from "react-confetti";
 import { useWindowSize } from "react-use";
@@ -90,13 +91,10 @@ const HomePage = () => {
     "/Images/Tournaments/2018-2019/adhamfawzy.jpg",
     "/Images/Tournaments/2025-2026/AASTUni.jpg",
   ];
-
   const [heroIndex, setHeroIndex] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % heroSlides.length);
-    }, 5000);
+    const interval = setInterval(() => setHeroIndex((prev) => (prev + 1) % heroSlides.length), 6500);
     return () => clearInterval(interval);
   }, [heroSlides.length]);
 
@@ -145,16 +143,14 @@ const HomePage = () => {
   const pinnedAnnouncement = announcements.find((a) => a.pinned);
   const otherAnnouncements = announcements.filter((a) => !a.pinned);
 
-  const [activeTournamentIndex, setActiveTournamentIndex] = useState(0);
   // eslint-disable-next-line no-unused-vars
   const [winnersMenuOpen, setWinnersMenuOpen] = useState(false);
   const [activeLightboxIndex, setActiveLightboxIndex] = useState(null);
 
   const galleryImages = [
-    "/Images/Tournaments/2024-2025/KingQuest1_1.jpg",
-    "/Images/Tournaments/2025-2026/TeamsTournament.jpg",
-    "/Images/Tournaments/2018-2019/adhamfawzy.jpg",
-    "/Images/Tournaments/2025-2026/AASTUni.jpg",
+    { src: "/Images/Tournaments/2020-2021/WomanTournament.jpg", title: "Women's Tournament", detail: "2020–21 season" },
+    { src: "/Images/Tournaments/2024-2025/CareerFair.jpg", title: "Meet the chess club", detail: "ZC Career Fair · 2024–25" },
+    { src: "/Images/Tournaments/2023-2024/Knockout24.jpg", title: "Knockout Championship", detail: "2023–24 season" },
   ];
 
   const handleNextLightbox = useCallback(() => {
@@ -229,11 +225,9 @@ const HomePage = () => {
   ]);
 
   // Campus Tacticians Community Network State
-  const [tacticiansFilter, setTacticiansFilter] = useState("all");
   const [selectedTactician, setSelectedTactician] = useState(null);
   const [tacticianModalOpen, setTacticianModalOpen] = useState(false);
   const [tacticianCheers, setTacticianCheers] = useState({});
-  const [cheerBursts, setCheerBursts] = useState({});
   const [challengeTimeControl, setChallengeTimeControl] = useState("3+2 Blitz");
   const [challengeLocation, setChallengeLocation] = useState("Academic Building Lounge");
   const [challengeSent, setChallengeSent] = useState(false);
@@ -242,18 +236,25 @@ const HomePage = () => {
 
   // Social & Admin State
   const loggedInEmail = localStorage.getItem("adminEmail") || localStorage.getItem("userEmail") || "";
+  const isSignedIn = Boolean(localStorage.getItem("adminToken") && loggedInEmail);
+  const memberName = localStorage.getItem("userName") || loggedInEmail.split("@")[0] || "Tactician";
   const userRole = localStorage.getItem("userRole") || "member";
   const isAdmin = userRole === "admin" || (loggedInEmail && loggedInEmail.toLowerCase() === "chesszc@zewailcity.edu.eg");
   const [followingState, setFollowingState] = useState({});
   const [copiedEmail, setCopiedEmail] = useState(null);
-  const [clubActivity, setClubActivity] = useState([]);
+  const [communityPosts, setCommunityPosts] = useState([]);
+  const [postDraft, setPostDraft] = useState("");
+  const [postError, setPostError] = useState("");
+  const [xpPoints, setXpPoints] = useState(0);
+  const [postBusy, setPostBusy] = useState(false);
 
 
-  const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+  const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
   useEffect(() => {
     const fetchLiveAndAvatars = async () => {
       try {
+        const cleanLoggedIn = (loggedInEmail || "").trim().toLowerCase();
         const tRes = await fetch(`${API_BASE}/api/tournaments`);
         if (tRes.ok) {
           const tList = await tRes.json();
@@ -349,7 +350,6 @@ const HomePage = () => {
               setTacticianCheers(prev => ({ ...prev, ...cheerMap }));
 
               // Initialize follow state for logged-in user
-              const cleanLoggedIn = (loggedInEmail || "").trim().toLowerCase();
               if (cleanLoggedIn) {
                 const followMap = {};
                 valid.forEach(u => {
@@ -383,11 +383,16 @@ const HomePage = () => {
           }
         }
 
-        const actRes = await fetch(`${API_BASE}/api/activity`);
-        if (actRes.ok) {
-          const actData = await actRes.json();
-          if (Array.isArray(actData)) {
-            setClubActivity(actData);
+        const postsRes = await fetch(`${API_BASE}/api/community/posts?viewerEmail=${encodeURIComponent(loggedInEmail)}`);
+        if (postsRes.ok) {
+          const postsData = await postsRes.json();
+          if (Array.isArray(postsData)) setCommunityPosts(postsData);
+        } else setPostError("Posts are unavailable while the club database is offline.");
+        if (cleanLoggedIn) {
+          const ownProfile = await fetch(`${API_BASE}/api/profile?email=${encodeURIComponent(cleanLoggedIn)}&viewerEmail=${encodeURIComponent(cleanLoggedIn)}`);
+          if (ownProfile.ok) {
+            const ownData = await ownProfile.json();
+            setXpPoints(Number(ownData.xpPoints) || 0);
           }
         }
       } catch (err) {
@@ -396,6 +401,43 @@ const HomePage = () => {
     };
     fetchLiveAndAvatars();
   }, [API_BASE, loggedInEmail]);
+
+  const publishCommunityPost = async (event) => {
+    event.preventDefault();
+    if (!loggedInEmail) { setPostError("Sign in to share with the club."); return; }
+    const content = postDraft.trim();
+    if (!content || postBusy) return;
+    setPostBusy(true);
+    setPostError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/community/posts`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorEmail: loggedInEmail, content })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not publish your post.");
+      setCommunityPosts(current => [data, ...current].slice(0, 20));
+      setPostDraft("");
+      setXpPoints(Number(data.xpPoints) || xpPoints + 5);
+    } catch (error) { setPostError(error.message); }
+    finally { setPostBusy(false); }
+  };
+
+  const togglePostLike = async (post) => {
+    if (!loggedInEmail) { setPostError("Sign in to react to posts."); return; }
+    try {
+      const response = await fetch(`${API_BASE}/api/community/posts/${post._id}/like`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loggedInEmail })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not update reaction.");
+      setCommunityPosts(current => current.map(item => item._id === post._id
+        ? { ...item, likedByViewer: data.liked, likes: data.liked ? [...(item.likes || []), loggedInEmail] : (item.likes || []).filter(email => email.toLowerCase() !== loggedInEmail.toLowerCase()) }
+        : item).sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)));
+      setXpPoints(Number(data.xpPoints) || xpPoints);
+    } catch (error) { setPostError(error.message); }
+  };
 
   const handleCopyEmail = (email, e) => {
     if (e) e.stopPropagation();
@@ -425,6 +467,7 @@ const HomePage = () => {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.isFollowing && typeof data.xpPoints === "number") setXpPoints(data.xpPoints);
         if (typeof data.isFollowing === "boolean") {
           setFollowingState(prev => ({ ...prev, [cleanTarget]: data.isFollowing }));
           setRegisteredUsers(prev => prev.map(u => {
@@ -442,52 +485,6 @@ const HomePage = () => {
     } catch (err) {
       console.warn("Follow toggle warning:", err.message);
       setFollowingState(prev => ({ ...prev, [cleanTarget]: current }));
-    }
-  };
-
-  const handleQuickCheer = async (name, email, e) => {
-    e.stopPropagation();
-    const cleanEmail = email ? email.toLowerCase() : "";
-    // Optimistic update
-    setTacticianCheers((prev) => ({
-      ...prev,
-      ...(name ? { [name]: (prev[name] || 0) + 1 } : {}),
-      ...(cleanEmail ? { [cleanEmail]: (prev[cleanEmail] || 0) + 1 } : {})
-    }));
-    if (name) {
-      setCheerBursts((prev) => ({ ...prev, [name]: true }));
-      setTimeout(() => {
-        setCheerBursts((prev) => ({ ...prev, [name]: false }));
-      }, 1200);
-    }
-
-    // Persist to server
-    if (email || name) {
-      try {
-        const res = await fetch(`${API_BASE}/api/users/cheer`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            targetEmail: email || '',
-            targetName: name || '',
-            cheererEmail: loggedInEmail || '',
-            cheererName: localStorage.getItem('userName') || ''
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          // Update with confirmed server count
-          if (typeof data.cheers === 'number') {
-            setTacticianCheers(prev => ({
-              ...prev,
-              ...(name ? { [name]: data.cheers } : {}),
-              ...(cleanEmail ? { [cleanEmail]: data.cheers } : {})
-            }));
-          }
-        }
-      } catch (err) {
-        console.warn('Cheer sync failed:', err.message);
-      }
     }
   };
 
@@ -660,200 +657,9 @@ const HomePage = () => {
     };
   });
 
-  const filteredTacticians = campusTacticians.filter((t) => {
-    if (tacticiansFilter === "champions") return t.isChampion;
-    if (tacticiansFilter === "leaders") return t.isLeader;
-    if (tacticiansFilter === "competitors") return t.isActivePlayer;
-    return true;
-  });
+  // Keep the homepage preview short; the full directory has the member filters.
+  const displayedTacticians = campusTacticians.slice(0, 4);
 
-  // Limit preview showcase on homepage to 6 members (allowing users to explore full directory in Community page)
-  const displayedTacticians = filteredTacticians.slice(0, 6);
-
-
-  const recentTournaments = [
-    {
-      id: "kq4-2026",
-      name: "King's Quest IV Championship",
-      season: "Spring 2026",
-      date: "May 15, 2026",
-      location: "Academic Building",
-      badge: "Swiss Championship",
-      icon: "👑",
-      winners: [
-        {
-          name: "Abdelrahman Mohamed",
-          place: "🥇 Champion",
-          medal: "gold",
-          image: "/Winners/AbdelrahmanMohamed.png",
-          detail: "Undefeated 5-Round Run"
-        },
-        {
-          name: "Abdelwahab Hamdi",
-          place: "🥈 2nd Place",
-          medal: "silver",
-          image: "/Winners/AbdelwahabHamdi.jpg",
-          detail: "Podium Master"
-        },
-        {
-          name: "Mohamed Eslam",
-          place: "🥉 3rd Place",
-          medal: "bronze",
-          image: "/Winners/MohamedEslam.png",
-          detail: "Tiebreak Finalist"
-        }
-      ]
-    },
-    {
-      id: "aast-2026",
-      name: "AAST Inter-University Championship",
-      season: "Spring 2026",
-      date: "May 14, 2026",
-      location: "AAST University",
-      badge: "Inter-University",
-      icon: "🏆",
-      winners: [
-        {
-          name: "Bosy Ayman",
-          place: "🥇 1st Place (Girls)",
-          medal: "gold",
-          image: "/Winners/BosyAyman.png",
-          detail: "Inter-Uni Gold Medalist"
-        },
-        {
-          name: "Salma Ashraf",
-          place: "🏅 4th Place (Girls)",
-          medal: "silver",
-          image: "/Winners/SalmaAshraf.jpg",
-          detail: "Inter-Uni Finalist"
-        },
-        {
-          name: "Haneen Yasser",
-          place: "🏅 6th Place (Girls)",
-          medal: "bronze",
-          image: "/Winners/HaneenYasser.png",
-          detail: "Inter-Uni Double Finalist"
-        }
-      ]
-    },
-    {
-      id: "esports-2026",
-      name: "Esports Blitz Tournament",
-      season: "Spring 2026",
-      date: "Feb 15, 2026",
-      location: "Zone E Arena",
-      badge: "Fast Clock Blitz",
-      icon: "⚡",
-      winners: [
-        {
-          name: "Abdelrahman Mohamed",
-          place: "🥇 Champion",
-          medal: "gold",
-          image: "/Winners/AbdelrahmanMohamed.png",
-          detail: "Blitz Arena Champion"
-        },
-        {
-          name: "Mazen Ayman",
-          place: "🥈 Runner-up",
-          medal: "silver",
-          image: "/Winners/MazenAyman.jpg",
-          detail: "Silver Medalist"
-        },
-        {
-          name: "Omar Hafez",
-          place: "🥉 3rd Place",
-          medal: "bronze",
-          image: "/Winners/OmarHafez.jpeg",
-          detail: "Tactics Specialist"
-        }
-      ]
-    },
-    {
-      id: "ramadan-2026",
-      name: "Ramadan Knockout Tournament",
-      season: "Spring 2026",
-      date: "Mar 25, 2026",
-      location: "Academic Building",
-      badge: "Night Knockout",
-      icon: "🌙",
-      winners: [
-        {
-          name: "Omar Ezz",
-          place: "🥇 Champion",
-          medal: "gold",
-          image: "/Winners/OmarEzz.jpg",
-          detail: "Knockout Champion"
-        },
-        {
-          name: "Omar Hafez",
-          place: "🥈 Runner-up",
-          medal: "silver",
-          image: "/Winners/OmarHafez.jpeg",
-          detail: "Silver Finalist"
-        },
-        {
-          name: "Abdelwahab Hamdi",
-          place: "🥉 3rd Place",
-          medal: "bronze",
-          image: "/Winners/AbdelwahabHamdi.jpg",
-          detail: "Bronze Medalist"
-        }
-      ]
-    },
-    {
-      id: "teams-2025",
-      name: "Teams Championship 2025",
-      season: "Fall 2025",
-      date: "Nov 8, 2025",
-      location: "Academic Palm Tree",
-      badge: "Squad Tournament",
-      icon: "🛡️",
-      isTeam: true,
-      winners: [
-        {
-          name: "Knights",
-          place: "🥇 Champions",
-          medal: "gold",
-          image: "/Teams/25/Knights.png",
-          logoBg: "#0d0b09",
-          detail: "Ahmed Elkodariy, Omar Hafez, Omar Ezz",
-          members: [
-            { name: "Ahmed Elkodariy", image: "/Winners/AhmedElkodariy.PNG", board: "Board 1" },
-            { name: "Omar Hafez", image: "/Winners/OmarHafez.jpeg", board: "Board 2" },
-            { name: "Omar Ezz", image: "/Winners/OmarEzz.jpg", board: "Board 3" }
-          ]
-        },
-        {
-          name: "Gambling",
-          place: "🥈 Runners-up",
-          medal: "silver",
-          image: "/Teams/25/Gambling.png",
-          logoBg: "#f8f9fa",
-          detail: "Abdelrahman Mohamed, Abdelrahman Mane3, Mohamed Eslam",
-          members: [
-            { name: "Abdelrahman Mohamed", image: "/Winners/AbdelrahmanMohamed.png", board: "Board 1" },
-            { name: "Abdelrahman Mane3", image: "/Winners/AbdelrahmanMane3.png", board: "Board 2" },
-            { name: "Mohamed Eslam", image: "/Winners/MohamedEslam.png", board: "Board 3" }
-          ]
-        },
-        {
-          name: "Epsilon",
-          place: "🥉 3rd Place",
-          medal: "bronze",
-          image: "/Teams/25/Epsilon.png",
-          logoBg: "#f8f9fa",
-          detail: "NourEldin Newer, Amr Khaled, Youssef Yasser",
-          members: [
-            { name: "NourEldin Newer", image: "/Winners/NourEldinNewer.png", board: "Board 1" },
-            { name: "Amr Khaled", image: "/Winners/AmrKhaled.jpg", board: "Board 2" },
-            { name: "Youssef Yasser", image: "/Winners/YoussefYasser.jpg", board: "Board 3" }
-          ]
-        }
-      ]
-    }
-  ];
-
-  const activeTournament = recentTournaments[activeTournamentIndex] || recentTournaments[0];
   const featuredAnnouncement = featuredLiveEvent
     ? {
       ...pinnedAnnouncement,
@@ -906,39 +712,28 @@ const HomePage = () => {
       <section className="hero-section" id="hero">
         <div className="hero-slideshow" aria-hidden="true">
           {heroSlides.map((src, i) => (
-            <div
-              key={src}
-              className={`hero-slide${i === heroIndex ? " active" : ""}`}
-              style={{ backgroundImage: `url('${src}')` }}
-            />
+            <div key={src} className={`hero-slide${i === heroIndex ? " active" : ""}`} style={{ backgroundImage: `url('${src}')` }} />
           ))}
         </div>
-        <div className="hero-overlay"></div>
+        <div className="hero-overlay" />
+        <div className="hero-layout">
+          <div className="hero-content">
+            <div className="hero-badge">
+              <Sparkles size={13} />
+              <span>ZC Chess Club · Tournament memories</span>
+            </div>
+            <h1>{isSignedIn ? `Welcome back, ${memberName}` : "Your next move starts here"}</h1>
+            <p>
+              {isSignedIn
+                ? "Find your next tournament, meet club players, and keep your chess journey moving."
+                : "Play, learn, and compete with the Zewail City chess community."}
+            </p>
 
-        <div className="hero-content">
-          <div className="hero-badge">
-            <Sparkles size={13} />
-            <span>Zewail City Chess Community</span>
-          </div>
-          <h1>Welcome to ZC Chess Club</h1>
-          <p>
-            Master tactics, participate in championship arenas, and represent Zewail City across national leagues!
-          </p>
-
-          <div className="hero-buttons">
-            <a href="/tournaments" className="btn-link">
-              <button className="explore-btn">
-                <span>Explore Tournaments</span>
-                <span className="btn-emoji">🏆</span>
-              </button>
-            </a>
-            <a href="/history?tab=halloffame" className="btn-link">
-              <button className="hero-secondary-btn">
-                <span>Hall of Fame &amp; Archives</span>
-                <span className="btn-emoji">👑</span>
-              </button>
-            </a>
-          </div>
+            <div className="hero-buttons">
+              <a href={isSignedIn ? "/community" : "/signup"} className="explore-btn">
+                {isSignedIn ? "Open your community" : "Join the club"} <span className="btn-emoji">♟</span>
+              </a>
+            </div>
 
           {/* Quick Metrics Strip — Live from API */}
           <div className="hero-quick-stats">
@@ -957,39 +752,43 @@ const HomePage = () => {
               </span>
               <span className="hero-stat-lbl">Championships &amp; Arenas</span>
             </div>
-            <div className="hero-stat-divider" />
-            <div className="hero-stat-item">
-              <span className="hero-stat-num">
-                {liveStats.matches != null && liveStats.matches > 0
-                  ? <CountUp end={liveStats.matches} suffix="+" />
-                  : <CountUp end={500} suffix="+" />}
-              </span>
-              <span className="hero-stat-lbl">Games Played</span>
-            </div>
-            <div className="hero-stat-divider" />
-            <div className="hero-stat-item">
-              <span className="hero-stat-num">🥇 1st</span>
-              <span className="hero-stat-lbl">Inter-Uni Girls</span>
-            </div>
           </div>
 
-          {/* Hero Slideshow Navigation Dots */}
-          <div className="hero-slide-dots" aria-label="Slideshow slide navigation">
-            {heroSlides.map((_, i) => (
+          {/* Hero Slide Navigation Dots */}
+          <div className="hero-slide-dots" role="tablist" aria-label="Hero background image selector">
+            {heroSlides.map((_, idx) => (
               <button
-                key={i}
-                className={`hero-dot ${i === heroIndex ? "active" : ""}`}
-                onClick={() => setHeroIndex(i)}
-                aria-label={`Go to slide ${i + 1}`}
+                key={idx}
+                type="button"
+                className={`hero-dot${idx === heroIndex ? " active" : ""}`}
+                onClick={() => setHeroIndex(idx)}
+                aria-label={`Slide ${idx + 1}`}
+                aria-current={idx === heroIndex ? "true" : undefined}
               />
             ))}
           </div>
-        </div>
 
-        {/* Scroll indicator */}
-        <a className="scroll-indicator" href="#news" aria-label="Scroll down">
-          <ChevronDown size={28} strokeWidth={1.8} />
-        </a>
+          </div>
+
+          {/* Hero Slide Navigation Chevrons */}
+          <button
+            type="button"
+            className="hero-nav-btn hero-nav-prev"
+            onClick={() => setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)}
+            aria-label="Previous tournament photo"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <button
+            type="button"
+            className="hero-nav-btn hero-nav-next"
+            onClick={() => setHeroIndex((prev) => (prev + 1) % heroSlides.length)}
+            aria-label="Next tournament photo"
+          >
+            <ChevronRight size={22} />
+          </button>
+
+        </div>
       </section>
 
       {/* 🔴 Live Running Tournament Banner */}
@@ -1073,37 +872,34 @@ const HomePage = () => {
         </section>
       )}
 
-      <div className="section-divider" />
-
-      {/* Player of the Month Spotlight */}
-      {/* <section className="potm-section" id="spotlight">
-        <div className="potm-glass-card">
-          <div className="potm-badge">
-            <Sparkles size={14} />
-            <span>Player of the season</span>
-          </div>
-          <div className="potm-content">
-            <div className="potm-image-wrapper">
-              <img src="/Winners/AbdelrahmanMohamed.png" alt="Abdelrahman Mohamed" className="potm-image" />
-              <div className="potm-rating-badge">2000+ Rating</div>
-            </div>
-            <div className="potm-details">
-              <h2 className="potm-name">Abdelrahman Mohamed</h2>
-              <div className="potm-signature">
-                <span className="potm-label">Signature Opening:</span>
-                <span className="potm-value">Bishop's Opening, Berlin Defense (1.e4 e5 2.Bc4 Nf6 3.Qf3)</span>
-              </div>
-               <blockquote className="potm-quote">
-                "Preparation in the opening is key, but adaptability in the middlegame is what truly wins tournaments."
-              </blockquote> 
-              <div className="potm-achievements">
-                <span className="potm-achievement-tag">🥇 5x Champion</span>
-                <span className="potm-achievement-tag">⚡ Blitz Specialist</span>
-              </div>
-            </div>
-          </div>
+      {/* Club Pillars Section */}
+      <section className="pillars-section">
+        <div className="pillars-header">
+          <span className="pillars-badge">⚔️ The ZC Chess Experience</span>
+          <h2>Find your place in the club</h2>
+          <p>Compete, improve your game, and represent Zewail City.</p>
         </div>
-      </section> */}
+        <div className="pillars-grid">
+          <a href="/tournaments" className="pillar-card premium-card">
+            <div className="pillar-icon-box">🏆</div>
+            <h3>Play &amp; compete</h3>
+            <p>Join Swiss, blitz, and knockout tournaments.</p>
+            <span className="pillar-link-label">Explore tournaments <span aria-hidden="true">→</span></span>
+          </a>
+          <a href="/puzzlechallenge" className="pillar-card premium-card">
+            <div className="pillar-icon-box">🧠</div>
+            <h3>Build your skills</h3>
+            <p>Practice tactics and sharpen your decision-making.</p>
+            <span className="pillar-link-label">Train with puzzles <span aria-hidden="true">→</span></span>
+          </a>
+          <a href="/history?tab=events" className="pillar-card premium-card">
+            <div className="pillar-icon-box">🏛️</div>
+            <h3>Represent ZC</h3>
+            <p>See the teams and events that take ZC beyond campus.</p>
+            <span className="pillar-link-label">Explore club history <span aria-hidden="true">→</span></span>
+          </a>
+        </div>
+      </section>
 
       <div className="section-divider" />
 
@@ -1190,366 +986,12 @@ const HomePage = () => {
 
       <div className="section-divider" />
 
-      {/* Grandmaster Legacy Feature */}
-      <section className="gm-legacy-section" id="grandmaster-legacy">
-        <div className="gm-legacy-header">
-          <div className="gm-legacy-badge">
-            <span>♞</span>
-            <span>Once Upon a Board</span>
-          </div>
-          <h2>Grandmasters Came to Zewail City</h2>
-          <p className="gm-legacy-subtitle">
-            Our club has hosted unforgettable chess moments with Adham Fawzy and Shahenda Wafa, inspiring students through live masterclasses and simultaneous exhibitions.
-          </p>
-        </div>
-
-        <div className="gm-legacy-showcase">
-          <div className="gm-legacy-feature-image">
-            <img
-              src="/Images/Tournaments/2018-2019/shahenda-adham.jpg"
-              alt="Adham Fawzy and Shahenda Wafa visiting Zewail City Chess Club"
-            />
-            <div className="gm-legacy-image-caption">
-              <span>2018</span>
-              <strong>A day the board felt bigger</strong>
-            </div>
-          </div>
-
-          <div className="gm-legacy-guests">
-            <article className="gm-guest-card gm-guest-card--adham">
-              <img src="/Images/Tournaments/2018-2019/adhamfawzy.jpg" alt="Adham Fawzy" />
-              <div>
-                <span className="gm-guest-role">Grandmaster Guest</span>
-                <h3>Adham Fawzy</h3>
-                <p>Led a landmark simultaneous exhibition against 16 Zewail City students.</p>
-              </div>
-            </article>
-            <article className="gm-guest-card gm-guest-card--shahenda">
-              <img src="/Images/Tournaments/2018-2019/shahenda.jpg" alt="Shahenda Wafa" />
-              <div>
-                <span className="gm-guest-role">Women&apos;s Grandmaster</span>
-                <h3>Shahenda Wafa</h3>
-                <p>Joined an historic simultaneous exhibition with 20 Zewail City players.</p>
-              </div>
-            </article>
-            <a href="/history?tab=events" className="gm-legacy-link">
-              Explore the full story <ExternalLink size={14} />
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
-      {/* Winners Section — Balanced Podium Showcase */}
-      <section className="winners-section" id="winners">
-        <div className="winners-section-header">
-          <div className="winners-badge">
-            <Award size={14} />
-            <span>Championship Honors</span>
-          </div>
-          <h2>Recent Tournament Winners</h2>
-          <p className="winners-subtitle">
-            Celebrating the champions and top performers across our latest flagship tournaments.
-          </p>
-        </div>
-
-        {/* 📱 Mobile Select Dropdown (hidden on desktop) */}
-        <div className="winners-mobile-select-wrapper">
-          <div className="winners-mobile-select-inner">
-            <span className="winners-mobile-select-icon">{activeTournament.icon}</span>
-            <select
-              className="winners-mobile-select-native"
-              value={activeTournamentIndex}
-              onChange={(e) => setActiveTournamentIndex(Number(e.target.value))}
-              aria-label="Select Tournament"
-            >
-              {recentTournaments.map((t, idx) => (
-                <option key={t.id} value={idx}>
-                  {t.icon} {t.name}
-                </option>
-              ))}
-            </select>
-            <span className="winners-mobile-select-chevron">▾</span>
-          </div>
-        </div>
-
-        {/* Desktop Segmented Selector for Tournaments */}
-        <div className="tournament-pills-scroll-wrapper winners-desktop-pills">
-          <div className="tournament-pills-bar">
-            {recentTournaments.map((t, idx) => (
-              <button
-                key={t.id}
-                className={`tournament-pill-btn ${idx === activeTournamentIndex ? "active" : ""}`}
-                onClick={() => setActiveTournamentIndex(idx)}
-              >
-                <span className="pill-icon">{t.icon}</span>
-                <span className="pill-title">{t.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-
-        {/* Active Tournament Info Header (Desktop) */}
-        <div className="active-tournament-banner winners-desktop-banner">
-          <div className="active-tournament-meta">
-            <span className="active-tournament-badge">{activeTournament.badge}</span>
-            <h3 className="active-tournament-title">{activeTournament.name}</h3>
-          </div>
-          <div className="active-tournament-details">
-            <span><Calendar size={13} style={{ marginRight: "4px", verticalAlign: "middle" }} />{activeTournament.date}</span>
-            <span><MapPin size={13} style={{ marginRight: "4px", verticalAlign: "middle" }} />{activeTournament.location}</span>
-          </div>
-        </div>
-
-        {/* Balanced Podium Showcase Grid */}
-        <div className={`podium-showcase-grid ${activeTournament.isTeam ? "podium-showcase-grid--teams" : ""}`}>
-          {activeTournament.winners.map((winner, wIdx) => {
-            const isGold = winner.medal === "gold";
-            const isSilver = winner.medal === "silver";
-            const isTeamCard = !!(activeTournament.isTeam || winner.members);
-
-            return (
-              <div
-                key={wIdx}
-                className={`podium-card podium-card--${winner.medal} ${isGold ? "podium-card--gold" : ""} ${isTeamCard ? "podium-card--team" : ""}`}
-              >
-                <div className="podium-card-main">
-                  <div
-                    className={`podium-avatar-wrapper ${isTeamCard ? "podium-avatar-wrapper--team" : ""}`}
-                    style={isTeamCard && winner.logoBg ? { background: winner.logoBg } : {}}
-                  >
-                    <img
-                      src={winner.image}
-                      alt={winner.name}
-                      className="podium-avatar"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/Icons/unknown.png";
-                      }}
-                    />
-                    <span className={`podium-medal-badge badge-${winner.medal}`}>
-                      {isGold ? "🥇" : isSilver ? "🥈" : "🥉"}
-                    </span>
-                  </div>
-
-                  <div className="podium-info">
-                    <div className="podium-tag-row">
-                      <span className={`podium-tag tag-${winner.medal}`}>{winner.place}</span>
-                    </div>
-                    <h4 className="podium-name">{winner.name}</h4>
-                    {!isTeamCard && <p className="podium-detail">{winner.detail}</p>}
-                  </div>
-                </div>
-
-                {isTeamCard && winner.members && (
-                  <div className="podium-team-roster">
-                    <div className="podium-roster-header">
-                      <Users size={12} className="podium-roster-icon" />
-                      <span>Squad Roster</span>
-                    </div>
-                    <div className="podium-members-list">
-                      {winner.members.map((member, mIdx) => (
-                        <div key={mIdx} className="podium-member-chip">
-                          <div className="podium-member-chip-left">
-                            <img
-                              src={member.image}
-                              alt={member.name}
-                              className="podium-member-avatar"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = "/Icons/unknown.png";
-                              }}
-                            />
-                            <span className="podium-member-name">{member.name}</span>
-                          </div>
-                          <span className="podium-member-board">{member.board}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="winners-cta-row">
-          <a href="/history?tab=halloffame" className="explore-hall-btn">
-            🏆 Explore Full Hall of Fame &amp; Past Champions →
-          </a>
-          <a href="/history?tab=events" className="explore-archives-btn">
-            📜 View Complete Tournament Archives
-          </a>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
-      {/* 🧠 Interactive Tactician Section
-      <section className="tactician-section">
-        <div className="tactician-card glass-panel">
-          <div className="tactician-header">
-            <div className="tactician-title-badge">
-              <Zap size={15} />
-              <span>Tactician's Corner</span>
-            </div>
-            <div className="tactician-tabs">
-              <button
-                className={`tactician-tab-btn ${activeTacticianTab === "quote" ? "active" : ""}`}
-                onClick={() => setActiveTacticianTab("quote")}
-              >
-                <Award size={13} /> Grandmaster Wisdom
-              </button>
-              <button
-                className={`tactician-tab-btn ${activeTacticianTab === "tip" ? "active" : ""}`}
-                onClick={() => setActiveTacticianTab("tip")}
-              >
-                <Lightbulb size={13} /> Opening Strategy
-              </button>
-              <button
-                className="tactician-shuffle-btn"
-                onClick={() => {
-                  if (activeTacticianTab === "quote") {
-                    setQuoteIndex((prev) => (prev + 1) % quotesList.length);
-                  } else {
-                    setTipIndex((prev) => (prev + 1) % tipsList.length);
-                  }
-                }}
-                title="Shuffle insight"
-                aria-label="Next insight"
-              >
-                <RefreshCw size={13} />
-                <span>Next</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="tactician-content">
-            {activeTacticianTab === "quote" ? (
-              <blockquote className="tactician-quote">
-                <p>"{quotesList[quoteIndex].text}"</p>
-                <cite>— {quotesList[quoteIndex].author}</cite>
-              </blockquote>
-            ) : (
-              <div className="tactician-tip">
-                <h4>{tipsList[tipIndex].title}</h4>
-                <p>{tipsList[tipIndex].desc}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section> */}
-
-      <div className="section-divider" />
-
-      {/* Club Pillars Section */}
-      <section className="pillars-section">
-        <div className="pillars-header">
-          <span className="pillars-badge">⚔️ The ZC Chess Experience</span>
-          <h2>Built for Tacticians, Champions &amp; Enthusiasts</h2>
-          <p>Whether you're looking to master openings, compete in speed arenas, or represent ZC in national leagues.</p>
-        </div>
-        <div className="pillars-grid">
-          <div className="pillar-card premium-card">
-            <div className="pillar-icon-box">🏆</div>
-            <h3>Championship Arenas</h3>
-            <p>From the King's Quest Swiss series to nocturnal Ramadan Knockouts and fast-paced Esports Blitz tournaments.</p>
-          </div>
-          <div className="pillar-card premium-card">
-            <div className="pillar-icon-box">🧠</div>
-            <h3>Tactical Training</h3>
-            <p>Grandmaster simultaneous exhibitions, weekly puzzle battles, and masterclasses by top campus tacticians.</p>
-          </div>
-          <div className="pillar-card premium-card">
-            <div className="pillar-icon-box">🏛️</div>
-            <h3>Inter-University Glory</h3>
-            <p>Official delegations representing Zewail City at AAST, Nile University, and Egyptian university leagues.</p>
-          </div>
-        </div>
-      </section>
-
-      <div className="section-divider" />
-
       {/* 👥 ZC Chess Club Community — Interactive Member Roster & Social Feed */}
       <section className="tacticians-section" id="players">
-        <div className="tacticians-header">
-          <div className="tacticians-badge">
-            <Users size={14} />
-            <span>ZC Chess Community</span>
-          </div>
-          <h2>ZC Chess Club Community</h2>
-          <p className="tacticians-subtitle">
-            Connect with fellow campus chess players, follow your peers, challenge members to 1-on-1 matches, and celebrate tournament champions!
-          </p>
+        <div className="players-follow-heading">
+          <h3>Players to follow</h3>
+          <a href="/community">Explore <span aria-hidden="true">›</span></a>
         </div>
-
-        {/* Live Club Activity & Winner Feed */}
-        {clubActivity.length > 0 && (
-          <div className="club-activity-feed-wrapper">
-            <div className="activity-feed-pill">
-              <span className="live-dot" />
-              <span className="feed-title">Club Feed</span>
-            </div>
-            <div className="activity-feed-slider">
-              {clubActivity.map((act, i) => (
-                <div key={act.id || i} className="activity-feed-chip">
-                  <span className={`act-type-tag ${act.type}`}>
-                    {act.badge}
-                  </span>
-                  <span className="act-title">{act.title}</span>
-                  <span className="act-desc">{act.description}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Filter Tabs */}
-       {/* Desktop Filter Tabs */}
-        <div className="tacticians-filter-bar tacticians-desktop-filter-bar">
-          <button
-            className={`tactician-filter-btn ${tacticiansFilter === "all" ? "active" : ""}`}
-            onClick={() => setTacticiansFilter("all")}
-          >
-            All Members ({campusTacticians.length})
-          </button>
-          <button
-            className={`tactician-filter-btn ${tacticiansFilter === "champions" ? "active" : ""}`}
-            onClick={() => setTacticiansFilter("champions")}
-          >
-            🏆 Campus Champions ({campusTacticians.filter(t => t.isChampion).length})
-          </button>
-          <button
-            className={`tactician-filter-btn ${tacticiansFilter === "leaders" ? "active" : ""}`}
-            onClick={() => setTacticiansFilter("leaders")}
-          >
-            👑 Club Leadership ({campusTacticians.filter(t => t.isLeader).length})
-          </button>
-          <button
-            className={`tactician-filter-btn ${tacticiansFilter === "competitors" ? "active" : ""}`}
-            onClick={() => setTacticiansFilter("competitors")}
-          >
-            ⚡ Active Players ({campusTacticians.filter(t => t.isActivePlayer).length})
-          </button>
-        </div>
-
-        {/* Mobile Filter Select */}
-        <div className="tacticians-mobile-select">
-          <select
-            value={tacticiansFilter}
-            onChange={(e) => setTacticiansFilter(e.target.value)}
-            aria-label="Filter community members"
-          >
-            <option value="all">All Members ({campusTacticians.length})</option>
-            <option value="champions">🏆 Campus Champions ({campusTacticians.filter(t => t.isChampion).length})</option>
-            <option value="leaders">👑 Club Leadership ({campusTacticians.filter(t => t.isLeader).length})</option>
-            <option value="competitors">⚡ Active Players ({campusTacticians.filter(t => t.isActivePlayer).length})</option>
-          </select>
-        </div>
-
-        {/* Tacticians Grid (Showcase 3-6 preview members on Homepage) */}
         <div className="tacticians-grid">
           {displayedTacticians.length > 0 ? (
             displayedTacticians.map((player, idx) => {
@@ -1569,150 +1011,115 @@ const HomePage = () => {
                         onError={(e) => { e.target.src = "/Icons/unknown.png"; }}
                       />
                     </div>
-
                     <div className="tactician-header-meta">
-                      {isSelf ? (
-                        <span className="tactician-badge-pill self-pill">✨ You</span>
-                      ) : (
+                      {isSelf ? <span className="tactician-badge-pill self-pill">✨ You</span> : (
                         <span className={`tactician-badge-pill ${player.role === 'president' ? 'president' : player.role === 'vice_president' ? 'vice-president' : player.role === 'admin' ? 'admin' : ''}`}>
                           {player.badge}
                         </span>
                       )}
-                      {player.email && (
-                        <span
-                          className="tactician-email-chip"
-                          onClick={(e) => handleCopyEmail(player.email, e)}
-                          title={`Click to copy ${player.email}`}
-                        >
-                          <Mail size={11} />
-                          <span>{player.email.split('@')[0]}</span>
-                          {copiedEmail === player.email ? <Check size={10} className="copy-ok" /> : <Copy size={10} />}
-                        </span>
-                      )}
+                      {player.email && <span className="tactician-email-chip" onClick={(e) => handleCopyEmail(player.email, e)} title={`Click to copy ${player.email}`}>
+                        <Mail size={11} /><span>{player.email.split('@')[0]}</span>{copiedEmail === player.email ? <Check size={10} className="copy-ok" /> : <Copy size={10} />}
+                      </span>}
                     </div>
                   </div>
-
                   <div className="tactician-body">
-                    <div className="tactician-title-row">
-                      <h3 className="tactician-name">{player.name}</h3>
-                      {isAdmin && (
-                        <a
-                          href={`/profile?email=${encodeURIComponent(player.email)}`}
-                          className="tactician-card-admin-pill"
-                          onClick={(e) => e.stopPropagation()}
-                          title="Admin Controls"
-                        >
-                          <Crown size={11} /> Admin
-                        </a>
-                      )}
-                    </div>
+                    <div className="tactician-title-row"><h3 className="tactician-name">{player.name}</h3>{isAdmin && <a href={`/profile?email=${encodeURIComponent(player.email)}`} className="tactician-card-admin-pill" onClick={(e) => e.stopPropagation()} title="Admin Controls"><Crown size={11} /> Admin</a>}</div>
                     <p className="tactician-title">{player.title}</p>
-
-                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && (
-                      <div className="tactician-club-roles-row">
-                        {player.clubRoles.map((cr, cIdx) => (
-                          <span key={cIdx} className="tactician-club-role-chip" title={`${cr.position} of ${cr.department}`}>
-                            {cr.position === "President" || cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Executive High Board", "High Board").replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {(player.fideRating > 0 || player.chessComRating > 0 || player.lichessRating > 0) && (
-                      <div className="tactician-ratings-row" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', margin: '4px 0 2px' }}>
-                        {player.fideRating > 0 && <span className="admin-rating-chip fide" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FIDE {player.fideRating}</span>}
-                        {player.chessComRating > 0 && <span className="admin-rating-chip chesscom" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>C.com {player.chessComRating}</span>}
-                        {player.lichessRating > 0 && <span className="admin-rating-chip lichess" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Lichess {player.lichessRating}</span>}
-                      </div>
-                    )}
-
-                    <div className="tactician-opening-box">
-                      <span className="opening-label">Fav. Opening:</span>
-                      <span className="opening-val">{player.favOpening || player.opening || "Flexible"}</span>
-                    </div>
+                    {Array.isArray(player.clubRoles) && player.clubRoles.length > 0 && <div className="tactician-club-roles-row">{player.clubRoles.map((cr, cIdx) => <span key={cIdx} className="tactician-club-role-chip" title={`${cr.position} of ${cr.department}`}>{cr.position === "President" || cr.position === "Head" ? "👑" : "✨"} {cr.position} ({cr.department.replace("Executive High Board", "High Board").replace("Tournament Organizing Committee", "OC").replace("Human Resources", "HR").replace("Public Relations", "PR").replace("Multimedia & Design", "Media").replace("Training & Masterclasses", "Trainer").replace("Trainee Development Pathway", "Trainee")})</span>)}</div>}
+                    {(player.fideRating > 0 || player.chessComRating > 0 || player.lichessRating > 0) && <div className="tactician-ratings-row" style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', margin: '4px 0 2px' }}>{player.fideRating > 0 && <span className="admin-rating-chip fide" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FIDE {player.fideRating}</span>}{player.chessComRating > 0 && <span className="admin-rating-chip chesscom" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.3)' }}>C.com {player.chessComRating}</span>}{player.lichessRating > 0 && <span className="admin-rating-chip lichess" style={{ fontSize: '0.72rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Lichess {player.lichessRating}</span>}</div>}
+                    <div className="tactician-opening-box"><span className="opening-label">Fav. Opening:</span><span className="opening-val">{player.favOpening || player.opening || "Flexible"}</span></div>
                   </div>
-
-                  <div className="tactician-card-footer" onClick={(e) => e.stopPropagation()}>
-                    {isSelf ? (
-                      <a
-                        href="/profile"
-                        className="tactician-self-profile-btn"
-                        title="Manage your profile and view your challenge invitations"
-                      >
-                        <User size={14} />
-                        <span>Manage My Profile</span>
-                      </a>
-                    ) : (
-                      <>
-                        <button
-                          className={`tactician-cheer-btn ${cheerBursts[player.name] ? "bursting" : ""}`}
-                          onClick={(e) => handleQuickCheer(player.name, player.email, e)}
-                          title="Send a cheer to this player"
-                        >
-                          <Heart size={14} className={cheerBursts[player.name] ? "fill-heart" : ""} />
-                          <span>{(player.email && tacticianCheers[player.email.toLowerCase()] !== undefined) ? tacticianCheers[player.email.toLowerCase()] : (tacticianCheers[player.name] ?? player.cheers ?? 0)}</span>
-                        </button>
-
-                        <button
-                          className={`tactician-follow-btn ${followingState[(player.email || '').trim().toLowerCase()] ? "active" : ""}`}
-                          onClick={(e) => handleToggleFollow(player.email, player.name, e)}
-                          title={followingState[(player.email || '').trim().toLowerCase()] ? "Following" : "Follow"}
-                        >
-                          {followingState[(player.email || '').trim().toLowerCase()] ? (
-                            <>
-                              <UserCheck size={13} />
-                              <span>Following</span>
-                            </>
-                          ) : (
-                            <>
-                              <UserPlus size={13} />
-                              <span>Follow</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          className="tactician-challenge-direct-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenTacticianModal(player);
-                          }}
-                          title={`Challenge ${player.name} to a 1-on-1 match`}
-                        >
-                          <Swords size={13} />
-                          <span>Duel</span>
-                        </button>
-
-                        <a
-                          href={`/profile?email=${encodeURIComponent(player.email)}`}
-                          className="tactician-connect-btn"
-                          title="View Full Profile & Dossier"
-                        >
-                          <span>Profile</span>
-                          <ExternalLink size={12} />
-                        </a>
-                      </>
-                    )}
-                  </div>
+                  {isSelf ? <div className="tactician-card-footer" onClick={(e) => e.stopPropagation()}><a href="/profile" className="tactician-self-profile-btn" title="Manage your profile and view your challenge invitations"><User size={14} /><span>Manage My Profile</span></a></div> : <div className="tactician-card-footer follow-card-footer" onClick={(e) => e.stopPropagation()}><button type="button" aria-pressed={Boolean(followingState[(player.email || '').trim().toLowerCase()])} aria-label={`${followingState[(player.email || '').trim().toLowerCase()] ? "Unfollow" : "Follow"} ${player.name}`} className={`tactician-suggestion-follow ${followingState[(player.email || '').trim().toLowerCase()] ? "active" : ""}`} onClick={(e) => handleToggleFollow(player.email, player.name, e)}>{followingState[(player.email || '').trim().toLowerCase()] ? <><UserCheck size={15} /> Following</> : <><UserPlus size={15} /> Follow</>}</button></div>}
                 </div>
               );
             })
-          ) : (
-            <div className="empty-tacticians-notice glass-panel" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 20px", color: "#94a3b8" }}>
-              <p style={{ fontSize: "1.1rem", marginBottom: "8px", color: "#f8fafc" }}>No registered tacticians in this category.</p>
-              <p style={{ fontSize: "0.9rem" }}>Players will automatically appear here once they create their website account!</p>
-            </div>
-          )}
+          ) : <div className="empty-tacticians-notice glass-panel" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px 20px", color: "#94a3b8" }}><p style={{ fontSize: "1.1rem", marginBottom: "8px", color: "#f8fafc" }}>No registered tacticians in this category.</p><p style={{ fontSize: "0.9rem" }}>Players will automatically appear here once they create their website account!</p></div>}
         </div>
 
-        {/* Explore Full Community CTA */}
-        <div className="community-explore-cta-container">
-          <a href="/community" className="btn-explore-full-community">
-            <Users size={18} />
-            <span>Explore Full Community &amp; Member Directory ({registeredUsers.length}) ➔</span>
+        <section className="community-engagement-card" aria-label="Popular community posts">
+          <div className="community-engagement-heading">
+            <div><span className="community-eyebrow">Community</span><h3>Popular posts</h3></div>
+            {loggedInEmail && <span className="community-level-pill">Level {Math.floor(Math.sqrt(xpPoints / 100)) + 1} · {xpPoints} XP</span>}
+          </div>
+          {loggedInEmail && <form className="community-post-composer" onSubmit={publishCommunityPost}>
+            <label className="sr-only" htmlFor="community-post-draft">Share with the club</label>
+            <textarea id="community-post-draft" value={postDraft} onChange={event => setPostDraft(event.target.value.slice(0, 500))} maxLength={500} rows={2} placeholder="Share a chess moment, question, or club update…" />
+            <div className="community-composer-footer"><span>{postDraft.length}/500 · +5 XP for sharing</span><button type="submit" disabled={!postDraft.trim() || postBusy}>{postBusy ? "Posting…" : "Post"}</button></div>
+          </form>}
+          {postError && <p className="community-post-error" role="status">{postError}</p>}
+          {communityPosts.length ? <div className="community-post-list">{communityPosts.slice(0, 2).map(post => <article className="community-post-card" key={post._id}>
+            <div className="community-post-author">{post.authorAvatar ? <img src={post.authorAvatar} alt="" /> : <span>{(post.authorName || "C").slice(0, 1).toUpperCase()}</span>}<div><strong>{post.authorName}</strong><small>{new Date(post.createdAt).toLocaleDateString()}</small></div></div>
+            <p>{post.content}</p>
+            <button type="button" className={`community-post-like ${post.likedByViewer ? "liked" : ""}`} onClick={() => togglePostLike(post)} aria-label={`${post.likedByViewer ? "Unlike" : "Like"} post, ${post.likes?.length || 0} likes`}><Heart size={16} fill={post.likedByViewer ? "currentColor" : "none"} /> {post.likes?.length || 0} · {post.likedByViewer ? "Liked" : "Like"}</button>
+          </article>)}</div> : <p className="community-post-empty">No posts yet. Share the first club update.</p>}
+        </section>
+
+      </section>
+
+      <div className="section-divider" />
+
+      {/* Visiting chess champions */}
+      <section className="gm-legacy-section" id="grandmaster-legacy">
+        <div className="gm-legacy-header">
+          <div className="gm-legacy-badge">
+            <span>♞</span>
+            <span>Once Upon a Board</span>
+          </div>
+          <h2>A GM and WGM at Zewail City</h2>
+          <p className="gm-legacy-subtitle">
+            Adham Fawzy and Shahenda Wafa brought top-level chess to campus through masterclasses and simultaneous exhibitions.
+          </p>
+        </div>
+
+        <div className="gm-legacy-showcase">
+          <a
+            className="gm-legacy-event-link"
+            href="/history?tab=events"
+            aria-label="View the 2018 History event featuring Adham Fawzy and Shahenda Wafa"
+          >
+            <div className="gm-legacy-feature-image">
+              <img
+                src="/Images/Tournaments/2018-2019/shahenda-adham.jpg"
+                alt="Adham Fawzy and Shahenda Wafa visiting Zewail City Chess Club"
+              />
+              <div className="gm-legacy-image-caption">
+                <span>Zewail City · 2018</span>
+                <strong>Masterclasses &amp; simultaneous exhibitions</strong>
+              </div>
+            </div>
           </a>
+
+          <div className="gm-legacy-guests">
+            <article className="gm-guest-card gm-guest-card--adham">
+              <img src="/Images/Tournaments/2018-2019/adham-fawzy-profile.png" alt="Adham Fawzy" />
+              <div>
+                <span className="gm-guest-role">Grandmaster · GM</span>
+                <h3>Adham Fawzy</h3>
+                <p>Played a simultaneous exhibition with Zewail City students.</p>
+                <a className="gm-fide-link" href="https://ratings.fide.com/profile/10613129" target="_blank" rel="noreferrer" aria-label="View Adham Fawzy's official FIDE profile">
+                  Official FIDE profile <ExternalLink size={13} aria-hidden="true" />
+                </a>
+              </div>
+            </article>
+            <article className="gm-guest-card gm-guest-card--shahenda">
+              <img src="/Images/Tournaments/2018-2019/shahenda-wafa-profile.png" alt="Shahenda Wafa" />
+              <div>
+                <span className="gm-guest-role">Woman Grandmaster · WGM</span>
+                <h3>Shahenda Wafa</h3>
+                <p>Shared her experience in a campus exhibition.</p>
+                <a className="gm-fide-link" href="https://ratings.fide.com/profile/10609962" target="_blank" rel="noreferrer" aria-label="View Shahenda Wafa's official FIDE profile">
+                  Official FIDE profile <ExternalLink size={13} aria-hidden="true" />
+                </a>
+              </div>
+            </article>
+            <a href="/history?tab=events" className="gm-legacy-link">
+              Explore the full story <ExternalLink size={14} />
+            </a>
+          </div>
         </div>
       </section>
+
+      <div className="section-divider" />
 
       {/* ♟️ Interactive Player Profile & Challenge Modal */}
       {tacticianModalOpen && selectedTactician && (
@@ -1933,32 +1340,35 @@ const HomePage = () => {
       {/* Gallery Section */}
       <section className="gallery-section" id="gallery">
         <div className="gallery-section-header">
-          <div className="gallery-badge">
-            <Images size={14} />
-            <span>Moments &amp; Memories</span>
+          <div className="gallery-heading-copy">
+            <div className="gallery-badge">
+              <Images size={14} />
+              <span>Moments &amp; Memories</span>
+            </div>
+            <h2>Photo Gallery</h2>
+            <p className="gallery-subtitle">A few moments from club life, across the years.</p>
           </div>
-          <h2>Photo Gallery</h2>
-          <p className="gallery-subtitle">
-            Snapshots of intense campus showdowns, podium trophies, and collaborative chess sessions at Zewail City. Click any photo to expand.
-          </p>
+          <a className="gallery-archive-link" href="/history?tab=events">View event archive <span aria-hidden="true">→</span></a>
         </div>
         <div className="gallery-grid">
-          {galleryImages.map((url, i) => (
-            <div
+          {galleryImages.map((moment, i) => (
+            <button
               key={i}
               className="gallery-card premium-card"
+              type="button"
               onClick={() => setActiveLightboxIndex(i)}
-              style={{ cursor: "pointer" }}
+              aria-label={`View ${moment.title}, ${moment.detail}`}
             >
               <div
                 className="gallery-image"
-                style={{ backgroundImage: `url(${url})` }}
+                style={{ backgroundImage: `url(${moment.src})` }}
               >
-                <div className="gallery-hover-overlay">
-                  <span className="gallery-zoom-badge">🔍 View Moment</span>
+                <div className="gallery-card-caption">
+                  <strong>{moment.title}</strong>
+                  <span>{moment.detail}</span>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -1986,8 +1396,8 @@ const HomePage = () => {
 
             <div className="lightbox-image-wrapper">
               <img
-                src={galleryImages[activeLightboxIndex]}
-                alt={`ZC Chess Club Moment ${activeLightboxIndex + 1}`}
+                src={galleryImages[activeLightboxIndex].src}
+                alt={`${galleryImages[activeLightboxIndex].title} · ${galleryImages[activeLightboxIndex].detail}`}
                 className="lightbox-img"
               />
             </div>
@@ -2005,7 +1415,7 @@ const HomePage = () => {
                 Moment {activeLightboxIndex + 1} of {galleryImages.length}
               </span>
               <p className="lightbox-caption">
-                Zewail City Chess Club Championship Moments &amp; Campus Memories
+                {galleryImages[activeLightboxIndex].title} · {galleryImages[activeLightboxIndex].detail}
               </p>
             </div>
           </div>

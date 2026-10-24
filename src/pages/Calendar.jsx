@@ -6,7 +6,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { FALL_2025_TOURNAMENT } from "../utils/knockoutHistoricalData";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 /**
  * Helper to determine round label based on round number and bracket type

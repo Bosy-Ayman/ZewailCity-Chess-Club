@@ -4,7 +4,7 @@ import Footer from "../components/Footer";
 import { safeFetchJson } from "../utils/api";
 import "./Tournaments.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 export default function Tournaments() {
   const [sidebarOpen, setSidebarOpen] = useState(false);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { X, Home, Users, Trophy, MoreHorizontal, Sun, Moon } from "lucide-react";
 import "./Header.css";
 import LoginModal from "./LoginModal";
 import GlobalWinnerAlert from "./GlobalWinnerAlert";
@@ -8,7 +8,7 @@ import WinnerCelebrationModal from "./WinnerCelebrationModal";
 import { safeFetchJson, safeSetLocalStorage, compressBase64Image } from "../utils/api";
 import { chessAudio } from "../utils/chessAudio";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 const deriveAuthorityRoleFromClubRoles = (clubRoles, fallbackRole = 'member') => {
   if (Array.isArray(clubRoles) && clubRoles.length > 0) {
@@ -48,7 +48,8 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(false);
   const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen;
   const toggleSidebar = externalToggleSidebar || (() => setInternalSidebarOpen(prev => !prev));
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem("zcThemeMode") === "light" ? "light" : "dark");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem("adminToken"));
   const [userRole, setUserRole] = useState(() => localStorage.getItem("userRole") || null);
@@ -72,6 +73,12 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   const [soundActive, setSoundActive] = useState(() => chessAudio.isSoundEnabled());
   const prevUnreadRef = useRef(-1);
   const location = useLocation();
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    document.documentElement.style.colorScheme = themeMode;
+    localStorage.setItem("zcThemeMode", themeMode);
+  }, [themeMode]);
 
   const getDestinationLabel = (link) => {
     if (!link || link === '/' || link === '#' || link.trim() === '') return null;
@@ -237,10 +244,31 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
   };
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    const drawerIsOpen = isMobile && (isLoggedIn ? userDrawerOpen : sidebarOpen);
+    if (!drawerIsOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (isLoggedIn) setUserDrawerOpen(false);
+        else if (externalToggleSidebar) externalToggleSidebar();
+        else setInternalSidebarOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobile, isLoggedIn, userDrawerOpen, sidebarOpen, externalToggleSidebar]);
 
   useEffect(() => {
     const sendHeartbeat = () => {
@@ -607,7 +635,45 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
             )}
           </>
         )}
+
+        <button
+          type="button"
+          className="theme-toggle-btn"
+          onClick={() => setThemeMode((current) => current === "dark" ? "light" : "dark")}
+          aria-label={`Switch to ${themeMode === "dark" ? "light" : "dark"} theme`}
+          title={`Switch to ${themeMode === "dark" ? "light" : "dark"} theme`}
+        >
+          {themeMode === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+          <span className="theme-toggle-label">{themeMode === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
       </header>
+
+      {isMobile && (
+        <nav className="mobile-bottom-nav" aria-label="Primary navigation">
+          <NavLink to="/" end className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? "is-active" : ""}`}>
+            <Home size={20} aria-hidden="true" />
+            <span>Home</span>
+          </NavLink>
+          <NavLink to="/community" className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? "is-active" : ""}`}>
+            <Users size={20} aria-hidden="true" />
+            <span>Community</span>
+          </NavLink>
+          <NavLink to="/tournaments" className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? "is-active" : ""}`}>
+            <Trophy size={20} aria-hidden="true" />
+            <span>Tournaments</span>
+          </NavLink>
+          <button
+            type="button"
+            className={`mobile-bottom-nav-item ${((isLoggedIn && userDrawerOpen) || (!isLoggedIn && sidebarOpen) || !["/", "/community", "/tournaments"].includes(location.pathname)) ? "is-active" : ""}`}
+            onClick={() => isLoggedIn ? setUserDrawerOpen(true) : toggleSidebar()}
+            aria-label="Open more navigation links"
+            aria-expanded={isLoggedIn ? userDrawerOpen : sidebarOpen}
+          >
+            <MoreHorizontal size={21} aria-hidden="true" />
+            <span>More</span>
+          </button>
+        </nav>
+      )}
 
       {/* ==============================
           GUEST MOBILE SIDEBAR
@@ -629,18 +695,20 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
 
             {/* Nav Links */}
             <nav className="mobile-sidebar-nav">
-              {NAV_ITEMS.map(({ to, label, icon, end, badge }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  onClick={toggleSidebar}
-                  className={({ isActive }) =>
-                    `mobile-sidebar-link ${isActive ? "mobile-sidebar-link--active" : ""}`
-                  }
-                >
-                  <span className="mobile-sidebar-link-icon">{icon}</span>
-                  <span style={{ flex: 1 }}>{label}</span>
+              <div className="mobile-menu-section-label">Account</div>
+              <NavLink to="/profile" onClick={toggleSidebar} className={({ isActive }) => `mobile-sidebar-link ${isActive ? "mobile-sidebar-link--active" : ""}`}>
+                <span className="mobile-sidebar-link-icon">👤</span><span>My Profile</span>
+              </NavLink>
+              <div className="mobile-menu-section-label">Chess Activities</div>
+              {NAV_ITEMS.filter(({ to }) => ["/puzzlechallenge", "/calendar", "/history"].includes(to)).map(({ to, label, icon }) => (
+                <NavLink key={to} to={to} onClick={toggleSidebar} className={({ isActive }) => `mobile-sidebar-link ${isActive ? "mobile-sidebar-link--active" : ""}`}>
+                  <span className="mobile-sidebar-link-icon">{icon}</span><span>{label === "History" ? "History & Archives" : label}</span>
+                </NavLink>
+              ))}
+              <div className="mobile-menu-section-label">Club</div>
+              {NAV_ITEMS.filter(({ to }) => ["/clubroles", "/about", "/contact"].includes(to)).map(({ to, label, icon, badge }) => (
+                <NavLink key={to} to={to} onClick={toggleSidebar} className={({ isActive }) => `mobile-sidebar-link ${isActive ? "mobile-sidebar-link--active" : ""}`}>
+                  <span className="mobile-sidebar-link-icon">{icon}</span><span style={{ flex: 1 }}>{label === "About" ? "About Us" : label === "Contact" ? "Contact Us" : label}</span>
                   {badge && <span className="mobile-nav-badge">{badge}</span>}
                 </NavLink>
               ))}
@@ -741,13 +809,10 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
 
             {/* Navigation Links */}
             <nav className="drawer-links">
-              <div className="drawer-section-label">Navigation</div>
+              <div className="drawer-section-label">Main Destinations</div>
 
               <Link to="/" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">🏠</span> Home
-              </Link>
-              <Link to="/profile" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/profile" ? "drawer-link--active" : ""}`}>
-                <span className="drawer-link-icon">👤</span> My Profile
               </Link>
               <Link to="/community" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/community" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">👥</span>
@@ -757,6 +822,11 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
               <Link to="/tournaments" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/tournaments" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">🏆</span> Tournaments
               </Link>
+              <div className="drawer-section-label">Account</div>
+              <Link to="/profile" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/profile" ? "drawer-link--active" : ""}`}>
+                <span className="drawer-link-icon">👤</span> My Profile
+              </Link>
+              <div className="drawer-section-label">Chess Activities</div>
               <Link to="/puzzlechallenge" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/puzzlechallenge" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">🧩</span> Puzzles
               </Link>
@@ -766,6 +836,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
               <Link to="/history" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/history" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">📜</span> History & Archives
               </Link>
+              <div className="drawer-section-label">Club</div>
               <Link to="/clubroles" onClick={closeUserDrawer} className={`drawer-link ${location.pathname === "/clubroles" ? "drawer-link--active" : ""}`}>
                 <span className="drawer-link-icon">✨</span>
                 <span style={{ flex: 1 }}>Club Roles</span>
@@ -891,6 +962,7 @@ const Header = ({ sidebarOpen: externalSidebarOpen, toggleSidebar: externalToggl
 
             {/* Footer: Logout */}
             <div className="drawer-footer">
+              <div className="drawer-section-label">Account Actions</div>
               <button className="logout-btn-drawer" onClick={handleHeaderLogout}>
                 <span>🚪</span> Log Out
               </button>

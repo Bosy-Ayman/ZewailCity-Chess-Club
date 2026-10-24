@@ -1,7 +1,7 @@
 .calendar-edit-container {
   padding: 40px;
   text-align: center;
-  color: white;
+  color: #F5F6FF;
 }
 
 /*-------- Calendar Header----------- */
@@ -16,7 +16,7 @@
   max-width: 800px;
 }
 .calendar-header button {
-  background: #f3c144;
+  background: #7C3AED;
   border: none;
   color: #232018;
   font-size: 18px;
@@ -54,7 +54,7 @@
   background: #3b372c;
 }
 .day-cell.today {
-  border: 2px solid #f3c144;
+  border: 2px solid #7C3AED;
   background-color: #3b372c;
 }
 .day-cell.empty {
@@ -63,7 +63,7 @@
 
 .date-num {
   font-weight: bold;
-  color: #f3c144;
+  color: #C4B5FD;
   margin-bottom: 4px;
 }
 
@@ -86,14 +86,14 @@
 
 .more-events {
   font-size: 11px;
-  color: #f3c144;
+  color: #C4B5FD;
 }
 
 /* ------------------Modal / Day Details------------ */
 .day-details-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(18, 10, 36,0.7);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -108,13 +108,13 @@
   max-width: 550px;
   width: 90%;
   text-align: left;
-  box-shadow: 0 0 10px #00000080;
+  box-shadow: 0 0 10px rgba(18, 10, 36, 0.5);
   max-height: 80vh;
   overflow-y: auto;
 }
 
 .day-details h3 {
-  color: #f3c144;
+  color: #C4B5FD;
   margin-bottom: 15px;
 }
 
@@ -130,7 +130,7 @@
 }
 
 .event-detail-card p {
-  color: #f3c144;
+  color: #C4B5FD;
   font-size: 13px;
   margin: 4px 0;
 }
@@ -138,7 +138,7 @@
 .event-detail-card .event-location {
   font-style: italic;
   font-size: 12px;
-  color: #f3c144cc;
+  color: #C4B5FDcc;
 }
 
 .event-detail-card button {
@@ -147,7 +147,7 @@
   border-radius: 6px;
   border: none;
   background-color: #ff4d4d;
-  color: white;
+  color: #F5F6FF;
   font-size: 12px;
   cursor: pointer;
 }
@@ -178,7 +178,7 @@
   border: none;
   font-size: 14px;
   background-color: #393428;
-  color: white;
+  color: #F5F6FF;
 }
 
 .add-event-form textarea {
@@ -208,27 +208,27 @@
   flex: 1; /* equal width buttons */
   padding: 10px 16px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #f3c144, #e0b120);
+  background: linear-gradient(135deg, #7C3AED, #e0b120);
   border: none;
   color: #232018;
   font-weight: bold;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+  box-shadow: 0 3px 6px rgba(18, 10, 36,0.3);
   transition: all 0.2s ease-in-out;
 }
 
 .add-event-form button:hover,
 .close-btn:hover {
-  background: linear-gradient(135deg, #e0b120, #f3c144);
+  background: linear-gradient(135deg, #e0b120, #7C3AED);
   transform: translateY(-2px);
-  box-shadow: 0 5px 10px rgba(0,0,0,0.4);
+  box-shadow: 0 5px 10px rgba(18, 10, 36,0.4);
 }
 
 .add-event-form button:active,
 .close-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 4px rgba(18, 10, 36,0.3);
 }
 
 /* ==========================
@@ -242,7 +242,7 @@
   border: none;
   font-size: 24px;
   font-weight: bold;
-  color: #f3c144;
+  color: #C4B5FD;
   cursor: pointer;
   transition: color 0.2s ease-in-out, transform 0.2s ease;
   z-index: 10;
@@ -270,12 +270,12 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #f3c144;
+  background-color: #7C3AED;
 }
 
 .more-dot {
   font-size: 10px;
-  color: #f3c144;
+  color: #C4B5FD;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -384,4 +384,7 @@
     font-size: 0.7rem;
   }
 }
+
+
+
 

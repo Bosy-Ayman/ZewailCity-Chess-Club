@@ -39,6 +39,7 @@ const isAdminEmail = (email) => {
 };
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // --- Middlewares ---
 app.use(cors({
@@ -406,6 +407,7 @@ const UserSchema = new mongoose.Schema({
   }],
   verified: { type: Boolean, default: false },
   cheers: { type: Number, default: 0 },
+  xpPoints: { type: Number, default: 0 },
   clubRoles: [{
     department: { type: String },
     position: { type: String },
@@ -425,6 +427,16 @@ const UserSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model('User', UserSchema, 'users');
+
+const CommunityPostSchema = new mongoose.Schema({
+  authorEmail: { type: String, required: true, index: true },
+  authorName: { type: String, default: 'Club member' },
+  authorAvatar: { type: String, default: '' },
+  content: { type: String, required: true, maxlength: 500 },
+  likes: [{ type: String }],
+  createdAt: { type: Date, default: Date.now, index: true }
+});
+const CommunityPost = mongoose.model('CommunityPost', CommunityPostSchema, 'communityposts');
 
 // --- Notification Schema & Model ---
 const NotificationSchema = new mongoose.Schema({
@@ -2097,6 +2109,8 @@ app.get('/api/profile', async (req, res) => {
       linkedHistoricalName: user.linkedHistoricalName || "",
       verified: user.verified || false,
       cheers: user.cheers || 0,
+      xpPoints: user.xpPoints || 0,
+      level: Math.floor(Math.sqrt((user.xpPoints || 0) / 100)) + 1,
       createdAt: user.createdAt || null,
       followersCount: Math.max(followersList.length, (user.followers || []).length),
       followingCount: Math.max(followingList.length, (user.following || []).length),
@@ -2190,7 +2204,7 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
       const newTargetFollowers = Array.from(new Set([...(targetUser.followers || []).map(f => (f || '').trim().toLowerCase()).filter(Boolean), cleanFollower]));
       const newFollowerFollowing = Array.from(new Set([...(followerUser.following || []).map(f => (f || '').trim().toLowerCase()).filter(Boolean), cleanTarget]));
       await User.updateOne({ _id: targetUser._id }, { $set: { followers: newTargetFollowers } });
-      await User.updateOne({ _id: followerUser._id }, { $set: { following: newFollowerFollowing } });
+      const updatedFollower = await User.findOneAndUpdate({ _id: followerUser._id }, { $set: { following: newFollowerFollowing }, $inc: { xpPoints: 2 } }, { new: true });
 
       // Notify the target that someone followed them
       await createNotification({
@@ -2207,6 +2221,8 @@ app.post('/api/users/follow', express.json(), async (req, res) => {
         success: true,
         isFollowing: true,
         followersCount: newTargetFollowers.length,
+        xpPoints: updatedFollower?.xpPoints || followerUser.xpPoints || 2,
+        level: Math.floor(Math.sqrt((updatedFollower?.xpPoints || 2) / 100)) + 1,
         message: `Now following ${targetUser.name || cleanTarget}`
       });
     }
@@ -2248,8 +2264,17 @@ app.post('/api/users/cheer', express.json(), async (req, res) => {
 
     if (!updatedUser) return res.status(404).json({ error: 'User not found' });
 
-    // Optional: notify the person being cheered
     const cleanTargetEmail = updatedUser.email ? updatedUser.email.toLowerCase() : '';
+    let cheererXp = null;
+    if (cheererEmail && cleanTargetEmail && cheererEmail.toLowerCase().trim() !== cleanTargetEmail) {
+      cheererXp = await User.findOneAndUpdate(
+        { email: new RegExp(`^${cheererEmail.trim().toLowerCase().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') },
+        { $inc: { xpPoints: 1 } },
+        { new: true }
+      );
+    }
+
+    // Optional: notify the person being cheered
     if (cheererEmail && cleanTargetEmail && cheererEmail.toLowerCase() !== cleanTargetEmail) {
       await createNotification({
         recipientEmail: cleanTargetEmail,
@@ -2262,7 +2287,7 @@ app.post('/api/users/cheer', express.json(), async (req, res) => {
       });
     }
 
-    res.json({ success: true, cheers: updatedUser.cheers || 0 });
+    res.json({ success: true, cheers: updatedUser.cheers || 0, xpPoints: cheererXp?.xpPoints });
   } catch (err) {
     res.status(500).json({ error: 'Failed to cheer', details: err.message });
   }
@@ -2435,6 +2460,57 @@ app.get('/api/community/stats', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats', details: err.message });
+  }
+});
+
+// Community posts: newest and most liked posts are ranked first.
+app.get('/api/community/posts', async (req, res) => {
+  try {
+    const viewerEmail = (req.query.viewerEmail || '').trim().toLowerCase();
+    const posts = await CommunityPost.find({}).sort({ createdAt: -1 }).limit(100).lean();
+    posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(posts.slice(0, 20).map(post => ({ ...post, likedByViewer: !!viewerEmail && (post.likes || []).some(email => email.toLowerCase() === viewerEmail) })));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch community posts', details: err.message });
+  }
+});
+
+app.post('/api/community/posts', async (req, res) => {
+  try {
+    const authorEmail = (req.body.authorEmail || '').trim().toLowerCase();
+    const content = (req.body.content || '').trim();
+    if (!authorEmail || !content) return res.status(400).json({ error: 'Sign in and write a post first.' });
+    if (content.length > 500) return res.status(400).json({ error: 'Posts must be 500 characters or fewer.' });
+    const author = await User.findOne({ email: new RegExp(`^${authorEmail.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') });
+    if (!author) return res.status(404).json({ error: 'Club member not found.' });
+    const post = await CommunityPost.create({ authorEmail, authorName: author.name || authorEmail, authorAvatar: author.profileImage || '', content });
+    const updatedAuthor = await User.findByIdAndUpdate(author._id, { $inc: { xpPoints: 5 } }, { new: true });
+    res.status(201).json({ ...post.toObject(), likedByViewer: false, xpPoints: updatedAuthor?.xpPoints || 5 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to publish post', details: err.message });
+  }
+});
+
+app.post('/api/community/posts/:id/like', async (req, res) => {
+  try {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Sign in to react to a post.' });
+    const post = await CommunityPost.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post not found.' });
+    const actor = await User.findOne({ email: new RegExp(`^${email.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i') });
+    if (!actor) return res.status(404).json({ error: 'Club member not found.' });
+    const alreadyLiked = (post.likes || []).some(like => like.toLowerCase() === email);
+    if (alreadyLiked) {
+      post.likes = post.likes.filter(like => like.toLowerCase() !== email);
+      await post.save();
+      return res.json({ liked: false, likes: post.likes.length, xpPoints: actor.xpPoints || 0 });
+    }
+    post.likes.addToSet(email);
+    await post.save();
+    const updatedActor = await User.findByIdAndUpdate(actor._id, { $inc: { xpPoints: 1 } }, { new: true });
+    res.json({ liked: true, likes: post.likes.length, xpPoints: updatedActor?.xpPoints || 1 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update reaction', details: err.message });
   }
 });
 
@@ -6353,7 +6429,7 @@ app.post('/api/puzzle-tournaments/:id/broadcast-winner', express.json(), async (
 
 // --- Start server ---
 if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  app.listen(PORT, HOST, () => console.log(`Server running on http://${HOST}:${PORT}`));
 }
 
 module.exports = app;

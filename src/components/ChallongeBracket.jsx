@@ -4,7 +4,7 @@ import { getPlayerAvatarUrl } from "../utils/api";
 import { findCommonFreeSlots, findNearOverlapSlots, getNextDateForDay, UNIVERSAL_CAMPUS_SLOTS } from "../utils/availabilityMatcher";
 import "./ChallongeBracket.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 // Fixed geometric layout constants for pixel-perfect bracket geometry
 const CARD_WIDTH = 390;

@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import "./Profile.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 export const FIDE_TITLE_NAMES = {
   GM: "Grandmaster (GM)",
@@ -1362,13 +1362,27 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                       <span>Edit Profile & Ratings</span>
                     </button>
 
-                    <button 
-                      className="btn-hero-action secondary"
-                      onClick={() => handleCopy(window.location.href, 'share')}
-                    >
-                      {copiedField === 'share' ? <Check size={16} /> : <Share2 size={16} />}
-                      <span>{copiedField === 'share' ? "Link Copied!" : "Share Profile"}</span>
-                    </button>
+                    <details className="profile-actions-more">
+                      <summary>More <span aria-hidden="true">⋯</span></summary>
+                      <div className="profile-actions-more-panel">
+                        <button 
+                          className="btn-hero-action secondary"
+                          onClick={() => handleCopy(window.location.href, 'share')}
+                        >
+                          {copiedField === 'share' ? <Check size={16} /> : <Share2 size={16} />}
+                          <span>{copiedField === 'share' ? "Link Copied!" : "Share Profile"}</span>
+                        </button>
+                        {isAdmin && (
+                          <button 
+                            className={`btn-hero-action admin-btn ${activeTab === 'admin' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('admin')}
+                          >
+                            <Crown size={16} />
+                            <span>Admin Controls</span>
+                          </button>
+                        )}
+                      </div>
+                    </details>
                   </>
                 ) : (
                   <>
@@ -1390,43 +1404,42 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                       )}
                     </button>
 
-                    {/* Direct Challenge Button */}
-                    <button 
-                      className="btn-hero-action challenge-btn"
-                      onClick={() => setChallengeModalOpen(true)}
-                    >
-                      <Swords size={16} />
-                      <span>Challenge ⚔️</span>
-                    </button>
-
-                    {/* Cheer Button */}
-                    <button 
-                      className={`btn-hero-action cheer-btn ${cheered ? 'cheered' : ''}`}
-                      onClick={handleSendCheer}
-                      title="Send Cheers"
-                    >
-                      <Heart size={16} fill={cheered ? "#ef4444" : "none"} color={cheered ? "#ef4444" : "currentColor"} />
-                      <span>{cheerCount} Cheers</span>
-                    </button>
-
-                    {/* Admin Switch Tab */}
-                    {isAdmin && (
-                      <button 
-                        className={`btn-hero-action admin-btn ${activeTab === 'admin' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('admin')}
-                      >
-                        <Crown size={16} />
-                        <span>Admin Controls</span>
-                      </button>
-                    )}
-
-                    <button 
-                      className="btn-hero-action secondary"
-                      onClick={() => handleCopy(window.location.href, 'share')}
-                    >
-                      {copiedField === 'share' ? <Check size={16} /> : <Share2 size={16} />}
-                      <span>{copiedField === 'share' ? "Link Copied!" : "Share"}</span>
-                    </button>
+                    <details className="profile-actions-more">
+                      <summary>More <span aria-hidden="true">⋯</span></summary>
+                      <div className="profile-actions-more-panel">
+                        <button 
+                          className="btn-hero-action challenge-btn"
+                          onClick={() => setChallengeModalOpen(true)}
+                        >
+                          <Swords size={16} />
+                          <span>Challenge ⚔️</span>
+                        </button>
+                        <button 
+                          className={`btn-hero-action cheer-btn ${cheered ? 'cheered' : ''}`}
+                          onClick={handleSendCheer}
+                          title="Send Cheers"
+                        >
+                          <Heart size={16} fill={cheered ? "#C4B5FD" : "none"} color={cheered ? "#C4B5FD" : "currentColor"} />
+                          <span>{cheerCount} Cheers</span>
+                        </button>
+                        {isAdmin && (
+                          <button 
+                            className={`btn-hero-action admin-btn ${activeTab === 'admin' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('admin')}
+                          >
+                            <Crown size={16} />
+                            <span>Admin Controls</span>
+                          </button>
+                        )}
+                        <button 
+                          className="btn-hero-action secondary"
+                          onClick={() => handleCopy(window.location.href, 'share')}
+                        >
+                          {copiedField === 'share' ? <Check size={16} /> : <Share2 size={16} />}
+                          <span>{copiedField === 'share' ? "Link Copied!" : "Share"}</span>
+                        </button>
+                      </div>
+                    </details>
                   </>
                 )}
               </div>
@@ -2067,9 +2080,9 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                                 borderRadius: "10px",
                                 fontSize: "0.7rem",
                                 fontWeight: 700,
-                                background: "rgba(139,92,246,0.15)",
+                                background: "rgba(124, 58, 237, 0.15)",
                                 color: "#a78bfa",
-                                border: "1px solid rgba(139,92,246,0.3)"
+                                border: "1px solid rgba(124, 58, 237, 0.3)"
                               }}>
                                 🧩 Puzzle Arena
                               </span>
@@ -2248,9 +2261,9 @@ const deriveAuthorityRoleFromClubRoles = (roles) => {
                                 borderRadius: "10px",
                                 fontSize: "0.7rem",
                                 fontWeight: 700,
-                                background: (ht.category || "tournament") === "puzzle" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.15)",
+                                background: (ht.category || "tournament") === "puzzle" ? "rgba(124, 58, 237, 0.15)" : "rgba(59,130,246,0.15)",
                                 color: (ht.category || "tournament") === "puzzle" ? "#a78bfa" : "#60a5fa",
-                                border: (ht.category || "tournament") === "puzzle" ? "1px solid rgba(139,92,246,0.3)" : "1px solid rgba(59,130,246,0.3)"
+                                border: (ht.category || "tournament") === "puzzle" ? "1px solid rgba(124, 58, 237, 0.3)" : "1px solid rgba(59,130,246,0.3)"
                               }}>
                                 {categoryLabel}
                               </span>

@@ -10,7 +10,7 @@ import { chessAudio } from "../utils/chessAudio";
 import { generateWinnerCertificate } from "../utils/certificateGenerator";
 import "./PuzzleChallenge.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 export default function PuzzleChallenge() {
   const [sidebarOpen, setSidebarOpen] = useState(false);

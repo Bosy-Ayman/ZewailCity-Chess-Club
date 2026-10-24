@@ -1,10 +1,10 @@
 /* src/pages/ApplicationForm.css */
 
 .form-page-wrapper {
-    background-color: #181611; /* Dark background */
+    background-color: var(--background, #000000); /* Dark background */
     min-height: 100vh;
     font-family: Montserrat, Inter, sans-serif;
-    color: white;
+    color: #FFFFFF;
 }
 
 .form-container {
@@ -32,13 +32,13 @@
     padding: 2rem;
     margin-bottom: 2rem;
     border-radius: 1rem;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 8px rgba(18, 10, 36, 0.3);
 }
 
 .form-section h2 {
     font-size: 1.5rem;
     margin-bottom: 1rem;
-    color: white;
+    color: #F5F6FF;
     border-bottom: 2px solid #36332b;
     padding-bottom: 0.5rem;
 }
@@ -184,3 +184,5 @@
         border-radius: 0.6rem;
     }
 }
+
+

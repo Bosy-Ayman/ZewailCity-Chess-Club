@@ -1,10 +1,10 @@
-/* ============================================================= */
+﻿/* ============================================================= */
 /* MODAL STYLES                                                  */
 /* ============================================================= */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(18, 10, 36, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -20,7 +20,7 @@
   max-width: 800px;
   max-height: 90vh;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 40px rgba(18, 10, 36, 0.6);
   animation: modalPop 0.3s ease-out;
 }
 
@@ -61,7 +61,7 @@
 }
 
 .modal-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(245, 246, 255, 0.1);
   color: var(--text-white);
 }
 
@@ -73,7 +73,7 @@
 
 .modal-body pre {
   margin: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(18, 10, 36, 0.3);
   padding: 20px;
   border-radius: 10px;
   font-size: 14.5px;
@@ -90,7 +90,7 @@
 .view-button {
   padding: 9px 16px;
   background: var(--highlight);
-  color: #fff;
+  color: #F5F6FF;
   border: none;
   border-radius: 10px;
   font-size: 14px;
@@ -119,12 +119,12 @@
 }
 
 .app-mobile-card {
-  background: linear-gradient(135deg, rgba(32, 28, 20, 0.95) 0%, rgba(20, 18, 14, 0.98) 100%);
-  border: 1px solid rgba(243, 193, 68, 0.25);
-  border-left: 4px solid #f3c144;
+  background: linear-gradient(135deg, rgba(32, 28, 20, 0.95) 0%, rgba(18, 14, 26, 0.98) 100%);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  border-left: 4px solid #7C3AED;
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px rgba(18, 10, 36, 0.5);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -135,7 +135,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(245, 246, 255, 0.08);
   padding-bottom: 10px;
 }
 
@@ -149,13 +149,13 @@
   margin: 0;
   font-size: 1.15rem;
   font-weight: 800;
-  color: #fff;
+  color: #F5F6FF;
 }
 
 .app-mobile-role-pill {
   font-size: 0.76rem;
   font-weight: 800;
-  color: #f3c144;
+  color: #C4B5FD;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -163,8 +163,8 @@
 .app-mobile-dept-badge {
   font-size: 0.72rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(245, 246, 255, 0.08);
+  border: 1px solid rgba(245, 246, 255, 0.15);
   color: #d5cfc2;
   padding: 3px 8px;
   border-radius: 6px;
@@ -219,9 +219,9 @@
   justify-content: center;
   gap: 8px;
   padding: 12px 16px;
-  background: rgba(243, 193, 68, 0.15);
-  border: 1px solid rgba(243, 193, 68, 0.4);
-  color: #f3c144;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  color: #C4B5FD;
   border-radius: 10px;
   font-weight: 800;
   font-size: 0.9rem;
@@ -232,9 +232,9 @@
 }
 
 .app-mobile-view-btn:hover {
-  background: #f3c144;
+  background: #7C3AED;
   color: #12100d;
-  box-shadow: 0 4px 14px rgba(243, 193, 68, 0.3);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -257,5 +257,8 @@
     padding: 16px;
   }
 }
+
+
+
 
 

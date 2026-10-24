@@ -1,8 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import './theme-overrides.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+
+const savedTheme = localStorage.getItem("zcThemeMode") === "light" ? "light" : "dark";
+document.documentElement.dataset.theme = savedTheme;
+document.documentElement.style.colorScheme = savedTheme;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import "./OnlinePresenceWidget.css";
 import { safeFetchJson } from "../utils/api";
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 // Helper to derive a clean session ID for guest or logged in user
 function getOrCreateSessionId() {

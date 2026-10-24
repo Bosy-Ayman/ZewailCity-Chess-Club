@@ -33,7 +33,7 @@ const ApplicationForm = ({ title, department, roleDescription, roleSpecificConte
       return;
     }
 
-    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
     fetch(`${API_BASE}/api/profile?email=${email}&viewerEmail=${email}`)
       .then(res => res.json())
       .then(data => {
@@ -92,7 +92,7 @@ const handleSubmit = async (e) => {
   };
 
   try {
-    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+    const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
     const response = await fetch(`${API_BASE}/api/applications`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

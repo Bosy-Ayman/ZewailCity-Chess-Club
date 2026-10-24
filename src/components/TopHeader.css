@@ -1,4 +1,4 @@
-.top-header {
+﻿.top-header {
   display: flex;
   align-items: center;
   
@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: white;
+  color: #F5F6FF;
 }
 
 .logo-icon {
@@ -39,7 +39,7 @@
 
 .hamburger {
   display: block;
-  color: white;
+  color: #F5F6FF;
   font-size: 1.5rem;
   cursor: pointer;
 }
@@ -54,7 +54,7 @@
     gap: 32px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: white;
+    color: #F5F6FF;
   }
 
   .hamburger {
@@ -66,7 +66,10 @@
   display: flex;
   flex-direction: column;
   background-color: #27241b;
-  color: white;
+  color: #F5F6FF;
   padding: 16px 20px;
   gap: 16px;
 }
+
+
+

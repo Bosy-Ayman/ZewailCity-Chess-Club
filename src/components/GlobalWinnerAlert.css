@@ -11,10 +11,10 @@
   max-width: 680px;
   width: calc(100% - 32px);
   background: linear-gradient(135deg, rgba(38, 30, 16, 0.96) 0%, rgba(20, 17, 12, 0.98) 100%);
-  border: 1.5px solid rgba(243, 193, 68, 0.55);
+  border: 1.5px solid rgba(124, 58, 237, 0.55);
   border-radius: 16px;
   padding: 10px 16px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 25px rgba(243, 193, 68, 0.25);
+  box-shadow: 0 12px 36px rgba(18, 10, 36, 0.75), 0 0 25px rgba(124, 58, 237, 0.25);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -35,8 +35,8 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
 
 .global-winner-alert-bar:hover {
   transform: translateX(-50%) translateY(-2px);
-  border-color: rgba(243, 193, 68, 0.85);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.85), 0 0 35px rgba(243, 193, 68, 0.4);
+  border-color: rgba(124, 58, 237, 0.85);
+  box-shadow: 0 16px 42px rgba(18, 10, 36, 0.85), 0 0 35px rgba(124, 58, 237, 0.4);
 }
 
 @keyframes floatDownAlert {
@@ -56,7 +56,7 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #f3c144, #fff, #f3c144, transparent);
+  background: linear-gradient(90deg, transparent, #7C3AED, #F5F6FF, #7C3AED, transparent);
   border-radius: 16px 16px 0 0;
 }
 
@@ -70,7 +70,7 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
 
 .global-winner-trophy {
   font-size: 1.5rem;
-  filter: drop-shadow(0 0 8px rgba(243, 193, 68, 0.6));
+  filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.6));
   animation: trophyShimmer 2.5s infinite ease-in-out;
   flex-shrink: 0;
 }
@@ -90,8 +90,8 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
   height: 42px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #f3c144;
-  box-shadow: 0 0 10px rgba(243, 193, 68, 0.5);
+  border: 2px solid #7C3AED;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
 }
 
 .global-winner-crown {
@@ -99,7 +99,7 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
   top: -10px;
   right: -6px;
   font-size: 0.95rem;
-  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.8));
+  filter: drop-shadow(0 1px 4px rgba(18, 10, 36, 0.8));
 }
 
 .global-winner-text-wrap {
@@ -116,9 +116,9 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
 }
 
 .global-winner-type-tag {
-  background: rgba(243, 193, 68, 0.18);
-  border: 1px solid rgba(243, 193, 68, 0.35);
-  color: #f3c144;
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  color: #C4B5FD;
   font-size: 0.68rem;
   font-weight: 800;
   padding: 1px 6px;
@@ -156,13 +156,13 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
 }
 
 .global-winner-headline strong {
-  color: #f3c144;
+  color: #C4B5FD;
   font-weight: 800;
 }
 
 .global-winner-headline em {
   font-style: normal;
-  color: #ffffff;
+  color: #F5F6FF;
 }
 
 .global-winner-actions {
@@ -173,7 +173,7 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
 }
 
 .global-winner-view-btn {
-  background: linear-gradient(135deg, #f7ce68 0%, #f3c144 60%, #c99522 100%);
+  background: linear-gradient(135deg, #a78bfa 0%, #7C3AED 60%, #c99522 100%);
   color: #12100d;
   border: none;
   font-size: 0.8rem;
@@ -182,13 +182,13 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 3px 10px rgba(243, 193, 68, 0.35);
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.35);
   transition: all 0.2s ease;
 }
 
 .global-winner-view-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 5px 14px rgba(243, 193, 68, 0.55);
+  box-shadow: 0 5px 14px rgba(124, 58, 237, 0.55);
 }
 
 .global-winner-dismiss-btn {
@@ -312,3 +312,6 @@ body:has(.home-admin-ribbon) .global-winner-alert-bar,
     font-size: 0.68rem;
   }
 }
+
+
+

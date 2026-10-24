@@ -12,9 +12,9 @@ const ApplicationsTable = () => {
   const [selectedData, setSelectedData] = useState(null);
 
   useEffect(() => {
-    // Dev: localhost; Prod: your backend Vercel URL
+    // In development, use the frontend origin so the dev server's API proxy handles the request.
     const API_BASE = process.env.NODE_ENV === 'development'
-      ? 'http://localhost:5000'
+      ? window.location.origin
       : 'https://zc-chess-club.vercel.app';  // ← Replace with your actual backend URL
 
     const fetchApplications = async () => {

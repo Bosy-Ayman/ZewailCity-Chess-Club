@@ -1,8 +1,8 @@
 .edit-profile-page {
-  background-color: #181611;
+  background-color: var(--background, #000000);
   min-height: 100vh;
   font-family: Montserrat, Inter, sans-serif;
-  color: white;
+  color: #FFFFFF;
   display: flex;
   flex-direction: column;
 }
@@ -11,9 +11,10 @@
   max-width: 480px;
   margin: 2rem auto 4rem auto;
   padding: 2rem;
-  background-color: #23221f;
-  border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+  background-color: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
 }
 
 .edit-profile-container h2 {
@@ -36,7 +37,7 @@
   border: none;
   outline: none;
   background-color: #2d2b28;
-  color: white;
+  color: #F5F6FF;
   transition: background-color 0.2s ease;
 }
 
@@ -72,7 +73,7 @@
 
 .save-button {
   background-color: #4caf50;
-  color: white;
+  color: #F5F6FF;
 }
 
 .save-button:hover {
@@ -81,7 +82,7 @@
 
 .cancel-button {
   background-color: #777;
-  color: white;
+  color: #F5F6FF;
 }
 
 .cancel-button:hover {
@@ -104,3 +105,6 @@
     width: 100%;
   }
 }
+
+
+

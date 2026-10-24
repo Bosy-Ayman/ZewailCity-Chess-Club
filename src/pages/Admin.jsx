@@ -9,7 +9,7 @@ import "./Admin.css";
 import { safeFetchJson, compressImage } from "../utils/api";
 
 // API Base URL - works for both local and production
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
 
 // Human-readable labels for every role-specific field
 const ROLE_QUESTION_LABELS = {
@@ -187,6 +187,7 @@ export default function AdminDashboard() {
   const [inquiries, setInquiries] = useState([]);
   const [tournamentFeedback, setTournamentFeedback] = useState([]);
   const [feedbackTournamentFilter, setFeedbackTournamentFilter] = useState("all");
+  const [majorsTournamentFilter, setMajorsTournamentFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -2378,12 +2379,11 @@ const PrettyRoleData = ({ data }) => {
                             </div>
                           </div>
 
-                          {/* Graph 4: Participant Majors Bar Chart */}
+                          {/* Graph 4: Feedback Respondent Majors Bar Chart */}
                           <div className="feedback-analytics-card">
-                            <h3 className="analytics-card-title">🎓 Participant Academic Majors</h3>
+                            <h3 className="analytics-card-title">🎓 Respondent Majors (Feedback)</h3>
                             <div className="analytics-bars-container">
                               {(() => {
-                                // Match respondent emails to registered player majors or user profile majors
                                 const userMajorMap = {};
                                 users.forEach(u => {
                                   if (u.email && u.major) userMajorMap[u.email.toLowerCase()] = u.major;
@@ -2394,7 +2394,6 @@ const PrettyRoleData = ({ data }) => {
                                   const email = (f.email || "").toLowerCase();
                                   let major = userMajorMap[email];
                                   if (!major) {
-                                    // Check tournament playersList
                                     const matchedTourney = tournaments.find(t => (t.title || "") === f.tournamentTitle);
                                     if (matchedTourney && Array.isArray(matchedTourney.playersList)) {
                                       const pObj = matchedTourney.playersList.find(p => p.name === f.playerName || (p.email && p.email.toLowerCase() === email));
@@ -2430,6 +2429,153 @@ const PrettyRoleData = ({ data }) => {
                               })()}
                             </div>
                           </div>
+                        </div>
+
+                        {/* ═══════ FULL-WIDTH: Tournament Participant Demographics (ALL participants, not just feedback) ═══════ */}
+                        <div className="participant-demographics-section">
+                          <div className="demographics-header">
+                            <div>
+                              <h3 className="demographics-title">📊 Tournament Participant Demographics</h3>
+                              <p className="demographics-subtitle">Major distribution based on <strong>all registered participants</strong>, not just feedback respondents.</p>
+                            </div>
+                            <select
+                              value={majorsTournamentFilter}
+                              onChange={(e) => setMajorsTournamentFilter(e.target.value)}
+                              className="demographics-select"
+                            >
+                              <option value="all">All Tournaments</option>
+                              {tournaments.filter(t => Array.isArray(t.playersList) && t.playersList.length > 0).map(t => (
+                                <option key={t._id} value={t._id}>{t.title} ({t.playersList.length} players)</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {(() => {
+                            // Get tournaments to analyze
+                            const tourneysToAnalyze = majorsTournamentFilter === "all"
+                              ? tournaments.filter(t => Array.isArray(t.playersList) && t.playersList.length > 0)
+                              : tournaments.filter(t => t._id === majorsTournamentFilter && Array.isArray(t.playersList) && t.playersList.length > 0);
+
+                            if (tourneysToAnalyze.length === 0) {
+                              return (
+                                <div style={{ textAlign: "center", padding: "30px 20px", color: "#8e8677" }}>
+                                  <span style={{ fontSize: "2rem", display: "block", marginBottom: "6px" }}>📭</span>
+                                  <p className="empty-message">No tournaments with registered participants found.</p>
+                                </div>
+                              );
+                            }
+
+                            // Count majors across ALL participants in selected tournaments
+                            const majorCounts = {};
+                            let totalParticipants = 0;
+                            tourneysToAnalyze.forEach(t => {
+                              (t.playersList || []).forEach(p => {
+                                const major = p.major || "General / Undecided";
+                                majorCounts[major] = (majorCounts[major] || 0) + 1;
+                                totalParticipants++;
+                              });
+                            });
+
+                            const sortedMajors = Object.entries(majorCounts).sort((a, b) => b[1] - a[1]);
+                            const maxCount = sortedMajors.length > 0 ? sortedMajors[0][1] : 1;
+
+                            // Color palette for the major bars
+                            const majorColors = [
+                              { bg: "linear-gradient(90deg, #805ad5, #b794f4)", shadow: "rgba(183, 148, 244, 0.35)" },
+                              { bg: "linear-gradient(90deg, #3182ce, #63b3ed)", shadow: "rgba(99, 179, 237, 0.35)" },
+                              { bg: "linear-gradient(90deg, #38a169, #68d391)", shadow: "rgba(104, 211, 145, 0.35)" },
+                              { bg: "linear-gradient(90deg, #d4a32a, #f3c144)", shadow: "rgba(243, 193, 68, 0.35)" },
+                              { bg: "linear-gradient(90deg, #e53e3e, #fc8181)", shadow: "rgba(252, 129, 129, 0.35)" },
+                              { bg: "linear-gradient(90deg, #dd6b20, #fbd38d)", shadow: "rgba(251, 211, 141, 0.35)" },
+                              { bg: "linear-gradient(90deg, #319795, #81e6d9)", shadow: "rgba(129, 230, 217, 0.35)" },
+                              { bg: "linear-gradient(90deg, #d53f8c, #fbb6ce)", shadow: "rgba(251, 182, 206, 0.35)" },
+                            ];
+
+                            return (
+                              <>
+                                {/* Summary stats */}
+                                <div className="demographics-stats-row">
+                                  <div className="demographics-stat-pill">
+                                    <span className="demographics-stat-num">{totalParticipants}</span>
+                                    <span className="demographics-stat-label">Total Participants</span>
+                                  </div>
+                                  <div className="demographics-stat-pill">
+                                    <span className="demographics-stat-num">{sortedMajors.length}</span>
+                                    <span className="demographics-stat-label">Unique Majors</span>
+                                  </div>
+                                  <div className="demographics-stat-pill">
+                                    <span className="demographics-stat-num">{tourneysToAnalyze.length}</span>
+                                    <span className="demographics-stat-label">{majorsTournamentFilter === "all" ? "Tournaments" : "Tournament"}</span>
+                                  </div>
+                                </div>
+
+                                {/* Horizontal bar chart */}
+                                <div className="demographics-chart">
+                                  {sortedMajors.map(([majorName, count], idx) => {
+                                    const pct = totalParticipants > 0 ? (count / totalParticipants) * 100 : 0;
+                                    const barPct = (count / maxCount) * 100;
+                                    const color = majorColors[idx % majorColors.length];
+                                    return (
+                                      <div key={majorName} className="demographics-bar-row">
+                                        <span className="demographics-bar-label" title={majorName}>{majorName}</span>
+                                        <div className="demographics-bar-track">
+                                          <div
+                                            className="demographics-bar-fill"
+                                            style={{ width: `${barPct}%`, background: color.bg, boxShadow: `0 0 10px ${color.shadow}` }}
+                                          >
+                                            <span className="demographics-bar-inner-val">{count}</span>
+                                          </div>
+                                        </div>
+                                        <span className="demographics-bar-pct">{pct.toFixed(1)}%</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Per-tournament breakdown table (only when "All Tournaments" is selected) */}
+                                {majorsTournamentFilter === "all" && tourneysToAnalyze.length > 1 && (
+                                  <div className="demographics-breakdown">
+                                    <h4 className="demographics-breakdown-title">📋 Per-Tournament Major Breakdown</h4>
+                                    <div className="demographics-table-wrapper">
+                                      <table className="demographics-table">
+                                        <thead>
+                                          <tr>
+                                            <th>Tournament</th>
+                                            {sortedMajors.map(([m]) => (
+                                              <th key={m} title={m}>{m.length > 12 ? m.slice(0, 10) + "…" : m}</th>
+                                            ))}
+                                            <th>Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {tourneysToAnalyze.map(t => {
+                                            const tMajorCounts = {};
+                                            (t.playersList || []).forEach(p => {
+                                              const m = p.major || "General / Undecided";
+                                              tMajorCounts[m] = (tMajorCounts[m] || 0) + 1;
+                                            });
+                                            return (
+                                              <tr key={t._id}>
+                                                <td className="demographics-table-tourney">{t.title}</td>
+                                                {sortedMajors.map(([m]) => (
+                                                  <td key={m} style={{ textAlign: "center", color: tMajorCounts[m] ? "#f3c144" : "#5a5347" }}>
+                                                    {tMajorCounts[m] || "—"}
+                                                  </td>
+                                                ))}
+                                                <td style={{ textAlign: "center", fontWeight: 800, color: "#f3c144" }}>
+                                                  {(t.playersList || []).length}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
 
                         <div className="tournament-feedback-admin-list">
@@ -2561,9 +2707,6 @@ const PrettyRoleData = ({ data }) => {
                       <thead>
                         <tr>
                           <th>Applicant</th>
-                          <th>Email</th>
-                          <th>ID</th>
-                          <th>Major & Batch</th>
                           <th>Department</th>
                           <th>Applied Role</th>
                           <th>Status</th>
@@ -2574,9 +2717,6 @@ const PrettyRoleData = ({ data }) => {
                         {applications.map((app) => (
                           <tr key={app._id}>
                             <td className="strong">{app.name}</td>
-                            <td>{app.email}</td>
-                            <td>{app.idNumber}</td>
-                            <td>{app.major} (Batch {app.batch})</td>
                             <td>{app.department}</td>
                             <td className="strong">{app.roleTitle}</td>
                             <td>
@@ -2608,8 +2748,6 @@ const PrettyRoleData = ({ data }) => {
                         </div>
                         <div style={{ fontSize: "0.85rem", color: "#bab19c", margin: "8px 0", lineHeight: "1.5" }}>
                           <div>Role: <strong style={{ color: "#f3c144" }}>{app.roleTitle}</strong> ({app.department})</div>
-                          <div>Email: {app.email}</div>
-                          <div>Major: {app.major} (Batch {app.batch})</div>
                         </div>
                         <button 
                           className="view-btn mobile-full-btn" 

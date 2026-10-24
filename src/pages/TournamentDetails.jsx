@@ -87,7 +87,7 @@ export default function TournamentDetails() {
   const queryParams = new URLSearchParams(window.location.search);
   const tournamentId = queryParams.get("id");
 
-  const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+  const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === "production" ? "" : window.location.origin);
   const feedbackDismissalKey = tournamentId && loggedInUserEmail
     ? `zc-tournament-feedback-dismissed:${tournamentId}:${loggedInUserEmail}`
     : "";
@@ -3499,8 +3499,8 @@ const formatSwissResult = (result) => {
                       <button
                         onClick={() => setViewMode("table")}
                         style={{
-                          background: viewMode === "table" ? "#f3c144" : "transparent",
-                          color: viewMode === "table" ? "#15120c" : "#b5afa1",
+                          background: viewMode === "table" ? "var(--accent-royal)" : "transparent",
+                          color: viewMode === "table" ? "#ffffff" : "var(--muted-foreground)",
                           border: "none",
                           padding: "6px 14px",
                           borderRadius: "6px",
