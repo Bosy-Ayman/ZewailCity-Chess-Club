@@ -21,7 +21,7 @@ This is the Zewail City Chess Club's all-in-one platform: members sign up, build
 ---
 
 ## ✨ Features Implemented
-
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/bosy-ayman/zewailcity-chess-club?utm_source=readme&utm_medium=badge)
 ### 👤 Accounts & Profiles
 - Email/password sign-up and login (`bcryptjs` password hashing + JWT sessions)
 - Google Sign-In (`google-auth-library`)
